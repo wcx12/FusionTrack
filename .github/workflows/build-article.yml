@@ -1,0 +1,44 @@
+name: Build article PDF
+
+on:
+  push:
+    paths:
+      - "article_content/**"
+      - ".github/workflows/build-article.yml"
+  pull_request:
+    paths:
+      - "article_content/**"
+      - ".github/workflows/build-article.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install TeX Live packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            latexmk \
+            biber \
+            texlive-xetex \
+            texlive-lang-chinese \
+            texlive-latex-recommended \
+            texlive-latex-extra \
+            texlive-fonts-recommended \
+            texlive-pictures \
+            texlive-bibtex-extra
+
+      - name: Build PDF
+        working-directory: article_content
+        run: latexmk -xelatex -interaction=nonstopmode -file-line-error main.tex
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: article-pdf
+          path: article_content/main.pdf
