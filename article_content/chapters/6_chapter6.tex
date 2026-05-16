@@ -1,0 +1,48 @@
+\chapter{System Implementation and Integrated Demonstration}
+
+\section{Implementation Environment}
+This chapter presents a concise implementation and demonstration of the framework developed in the preceding chapters. The prototype connects three main functions: TF-VPR-based optical reference retrieval in Chapter 3, multimodal entity-level fusion in Chapter 4, and behavior analysis in Chapter 5. Its purpose is not to introduce another algorithm, but to show how the modules are organized into a complete workflow.
+
+The system is implemented as an offline processing prototype. Its inputs are modality-specific target positions and trajectory fragments. All observations are converted into the unified target-centered representation introduced in Chapter 2, which records position, time, source modality, confidence, and validity state. After this conversion, different sensing sources can enter the same fusion and visualization process.
+
+\section{Implementation of Key Modules}
+The optical preparation module follows Chapter 3. Ordinary optical observations are converted into target centers or trajectory fragments directly. For coordinate-missing optical images, TF-VPR retrieves Top-\(k\) coordinate-known references and provides a constrained candidate set for downstream target association. In this way, coordinate-missing optical observations can be connected to the existing trajectory system without treating VPR as direct coordinate estimation.
+
+The fusion module follows the role defined in Chapter 4. It first associates target positions from different modalities within the same frame or a short time window, and then connects fused candidates across consecutive frames. A target that can be continuously associated is treated as more reliable, while a target that fails to obtain temporal support is gradually weakened.
+
+The existence update and noise-suppression module is used in the demonstration. If a candidate point is not associated for ten consecutive frames, the system removes it as noise. The remaining fused targets can then be passed to the behavior analysis module in Chapter 5 for route, speed, shape, and group-relation analysis.
+
+\section{System Workflow}
+The runtime workflow is straightforward. The system reads target positions from different modalities, converts them into unified target records, performs spatial association within each frame, performs temporal association between adjacent frames, removes candidates that remain unmatched for ten consecutive frames, and outputs the remaining fused target set. When behavior analysis is required, this fused set is further organized into trajectories and sent to the anomaly analysis module described in Chapter 5.
+
+\section{Integrated Demonstration}
+The integrated demonstration uses a recorded visualization to show the target fusion process. The display is divided into several visual regions. The two panels on the left represent target positions obtained from two different modalities. These panels show that each modality observes a set of candidate object positions, but the observations are not yet fused. Because each modality may contain missed detections, localization error, or isolated false points, using either panel alone is not sufficient for stable target understanding.
+
+The large panel on the right shows the fused result. In this panel, color depth represents the existence state of a candidate target. A darker color indicates that the target has been continuously supported by association evidence and is therefore more likely to be a real persistent object. This visual design is consistent with the temporal association rule described above. When a target can be associated across adjacent frames, its existence state is maintained; when it fails to be associated, its reliability decreases.
+
+Some cross-shaped points disappear during the demonstration. This disappearance is not a display error, but the result of the noise-suppression rule. If a point cannot be associated for ten consecutive frames, the system regards it as an unreliable detection and removes it from the maintained fused target set. This behavior reflects the logic of the implemented fusion module: spatial association first combines the two modalities within a frame, and temporal association then checks whether the fused candidate remains consistent over time.
+
+The lower-right part of the visualization further illustrates the filtering result. The image with a white border indicates the points removed at a certain moment, while the image without the white border shows the remaining target positions after these removed points have been erased. This comparison makes the effect of the filtering rule more direct. The retained points correspond to candidates with stronger temporal continuity, whereas the removed points correspond to detections that fail to obtain enough cross-frame support.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Interpretation of the integrated demonstration display.}
+  \label{tab:chapter6-demo-display}
+  \begin{tabular}{p{0.28\linewidth}p{0.62\linewidth}}
+    \toprule
+    Display region & Meaning \\
+    \midrule
+    Left two panels & Target positions obtained from two different modalities before fusion. \\
+    Right large panel & Fused target result after spatial and temporal association. Darker color indicates higher existence confidence. \\
+    Removed points & Candidate points removed because they are not associated for ten consecutive frames. \\
+    Lower-right comparison & White-bordered view marks removed points, while the view without the border shows the remaining positions after filtering. \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+This demonstration verifies the main implementation logic rather than introducing a new quantitative experiment. The quantitative and methodological evidence has already been discussed in Chapters 3, 4, and 5. Here, the purpose is to show that the modules can be connected in a coherent workflow: modality-specific observations are first displayed separately, spatial association produces a fused frame-level result, temporal association maintains persistent targets, and long-term unmatched points are removed as noise. The final output is a cleaner fused target set that can support subsequent trajectory-level and behavior-level analysis.
+
+\section{Chapter Summary}
+This chapter presented a simplified implementation description and an integrated demonstration of the proposed system. The implementation connects the TF-VPR-based optical reference retrieval module, the multimodal target fusion module, and the behavior analysis module into a single processing workflow. In the demonstrated fusion process, target positions from two modalities are first associated spatially, then associated temporally across consecutive frames. Candidate targets that persist across frames obtain stronger existence evidence, while points that fail to be associated for ten consecutive frames are removed as noise.
+
+Compared with the preceding method chapters, this chapter intentionally avoids additional complex modeling. Its main function is to explain how the earlier modules are used together and how the video demonstration should be interpreted. The demonstration shows that the system can transform separate modality-specific target positions into a cleaner fused target result, which provides the necessary input for subsequent trajectory analysis and behavior understanding.

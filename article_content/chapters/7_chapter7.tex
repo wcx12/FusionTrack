@@ -1,0 +1,28 @@
+\chapter{Conclusion and Future Work}
+
+\section{Summary of the Thesis}
+This thesis studied multimodal target trajectory completion, fusion, and behavior analysis under incomplete and heterogeneous observations. The central difficulty is that different sensing sources may describe the same physical target with inconsistent coordinate availability, sampling density, attribute form, and reliability. Direct aggregation under these conditions can lead to unstable target identities and noisy behavior interpretation. To address this problem, the thesis developed a progressive framework that links optical reference retrieval, multimodal entity fusion, and behavior analysis within a unified processing route.
+
+At the data-organization level, the framework establishes a unified target-centered representation for heterogeneous observations. Optical, electromagnetic, SAR, thermal, and trajectory-based sources are described through position, motion, attributes, confidence, and validity information. This representation provides a common interface for connecting the subsequent processing modules.
+
+For coordinate-missing optical images, the framework uses TF-VPR as the optical reference retrieval module. Rather than estimating geographic coordinates directly from a single query image, the module retrieves coordinate-known reference images. The retrieved Top-\(k\) references provide scene-level anchors for downstream target association, allowing coordinate-missing optical observations to enter the trajectory system.
+
+At the fusion stage, multimodal target fusion is formulated as an entity-level registration problem. Completed trajectories from different modalities are encoded into entity embeddings, refined through multi-set graph matching, and merged through reliability-aware fusion. The resulting representation combines trajectory information, modality-specific attributes, and confidence information at the target-entity level.
+
+The fused entities then support behavior analysis. Individual behavior is described through route, speed, and shape features, while group behavior is modeled through dynamic spatiotemporal relations. Evidence from individual and group levels is integrated into anomaly scores, event decisions, and regional situation heatmaps.
+
+Taken together, the thesis provides a coherent technical route from incomplete multimodal observations to fused target representation and behavior-level interpretation. Its main value lies in connecting optical reference retrieval, entity-level fusion, and behavior analysis into a consistent framework that can organize heterogeneous evidence and support interpretable target understanding.
+
+\section{Limitations}
+Several limitations remain. The optical completion stage still depends on the quality of both reference retrieval and downstream target association. TF-VPR provides scene-level candidate references, but target-level correspondence may remain uncertain under large viewpoint changes, occlusion, weak target appearance, or inaccurate detections.
+
+The fusion and behavior-analysis modules are also constrained by the coverage and quality of upstream trajectories. When all modalities are severely incomplete or entity embeddings are weak, graph matching and reliability-aware fusion may still produce uncertain correspondences. Group-level behavior evaluation is further limited by the lack of complete anomaly annotations, so some results rely on ranking analysis and qualitative inspection.
+
+The current system remains a research prototype. It verifies the feasibility of the overall pipeline, but real-time processing, large-scale data management, automatic parameter adaptation, and long-term deployment stability still require further work.
+
+\section{Future Work}
+Future work should strengthen both the technical modules and the evaluation basis of the framework. Optical trajectory completion could be improved by combining scene-level VPR retrieval with more explicit target-level matching. Object appearance, local geometry, temporal consistency, and detection confidence could be jointly used after Top-\(k\) retrieval.
+
+More complete multimodal datasets are also needed. Such datasets should include cross-modal target identities, incomplete trajectory segments, coordinate-missing optical images, and behavior anomaly annotations. They would support more direct evaluation of optical completion, entity registration, fusion quality, and behavior analysis within the same benchmark.
+
+For practical deployment, the framework should propagate calibrated uncertainty across modules and incorporate richer semantic and group context into behavior analysis. The system also needs more efficient retrieval, incremental graph matching, streaming anomaly analysis, and stable long-sequence visualization to support long-term operation.

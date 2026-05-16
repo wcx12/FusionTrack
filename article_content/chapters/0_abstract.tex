@@ -1,0 +1,11 @@
+\begin{abstract}
+本文围绕基于多模态数据的目标融合与行为分析系统设计展开研究。针对复杂场景中单一观测手段信息不完整、目标身份难以保持一致以及群体行为理解不足等问题，本文综合利用光学图像、电磁观测数据、合成孔径雷达图像及相关轨迹信息，构建从目标轨迹接入、跨模态目标融合到行为异常分析的完整技术流程，以提高复杂环境下目标表征、目标关联和态势理解的可靠性。
+系统框架主要包括四个部分。首先，针对缺少地理坐标的光学图像，引入基于视觉地点识别的参考图像检索方法，并结合后续跨图像目标关联，使图像平面中的目标观测能够接入已有轨迹体系。其次，面向多源观测中存在的缺失、异步和噪声问题，建立统一的数据表示与时空图建模方式，为后续跨模态处理提供结构化输入。再次，构建基于轨迹编码和多集合图匹配的多模态目标融合方法，通过实体级配准实现不同观测源之间的目标对应和信息融合。最后，在融合后的目标轨迹基础上进行个体行为和群体行为分析，利用异常检测、群体时空一致性建模和态势热力图生成等方法输出可解释的行为分析结果。
+实验与分析表明，所设计的各功能模块能够分别支持无坐标光学图像的参考检索、多模态目标实体配准以及基于融合轨迹的行为异常分析。本文的研究为复杂场景下多源目标数据的统一组织、可靠融合和高层行为理解提供了一种系统化实现思路。
+\end{abstract}
+
+\begin{abstractEn}
+This thesis studies the design of a target fusion and behavior analysis system based on multimodal data. The research focuses on integrating optical imagery, electromagnetic observation data, SAR imagery, and related trajectory information to improve target representation, target association, and group behavior understanding in complex scenes.
+The overall framework consists of four major stages. First, for optical images without geographic coordinates, a reference image retrieval and trajectory access procedure is designed based on visual place recognition and cross-image target association, so that pixel-level target observations can be connected to the existing trajectory system. Second, unified data representation and spatiotemporal graph modeling are introduced to handle missing, asynchronous, and noisy multimodal observations. Third, a multimodal target fusion method is constructed through trajectory encoding and multi-set graph matching, enabling entity-level registration and fusion across heterogeneous sources. Fourth, behavior analysis is performed on the fused target data through individual anomaly detection, group spatiotemporal consistency modeling, and situation heatmap generation.
+The experiments and analyses show that the proposed modules can support reference retrieval for coordinate-missing optical images, entity-level multimodal target registration, and behavior anomaly analysis based on fused trajectories. This thesis provides a systematic implementation route for organizing, fusing, and interpreting multisource target data in complex scenes.
+\end{abstractEn}
