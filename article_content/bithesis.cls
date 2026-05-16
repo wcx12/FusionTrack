@@ -864,11 +864,15 @@
 
   \bool_if:NTF \l__bithesis_arial_as_title_font_bool {
     % 手动指定时要加载 Arial
-    \newfontfamily\arialfamily{Arial}
+    \IfFontExistsTF{Arial}
+      { \newfontfamily\arialfamily{Arial} }
+      { \newfontfamily\arialfamily{Liberation Sans} }
   } {
     % 即使未指定，本科全英文专业模板的声明也需要 Arial
     \__bithesis_if_thesis_int_type:nT {3} {
-      \newfontfamily\arialfamily{Arial}
+      \IfFontExistsTF{Arial}
+        { \newfontfamily\arialfamily{Arial} }
+        { \newfontfamily\arialfamily{Liberation Sans} }
     }
   }
   % 无论中英文，封面都可能需要细黑体。
