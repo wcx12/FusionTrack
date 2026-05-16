@@ -25,6 +25,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             latexmk \
             biber \
+            fonts-liberation2 \
+            fonts-texgyre \
             texlive-xetex \
             texlive-lang-chinese \
             texlive-latex-recommended \
@@ -33,6 +35,7 @@ jobs:
             texlive-pictures \
             texlive-plain-generic \
             texlive-bibtex-extra
+          fc-cache -f
 
       - name: Build PDF
         working-directory: article_content
