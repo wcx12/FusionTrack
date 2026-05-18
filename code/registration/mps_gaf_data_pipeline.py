@@ -41,6 +41,7 @@ class MPSGAFDataConfig:
     train_category_file: Optional[str] = None
     val_category_file: Optional[str] = None
     test_category_file: Optional[str] = None
+    seed: int = 0
 
 
 class Compose:
@@ -270,12 +271,20 @@ class RepeatPerReferenceDataset(Dataset):
         base_dataset: Dataset,
         transforms: Optional[Callable[[Dict], Dict]],
         num_sources: int,
+        dynamic_epoch: bool = False,
+        base_seed: int = 0,
     ) -> None:
         self.base = base_dataset
         self.transforms = transforms
         self.num_sources = int(num_sources)
+        self.dynamic_epoch = bool(dynamic_epoch)
+        self.base_seed = int(base_seed)
+        self.epoch = 0
         if self.num_sources < 1:
             raise ValueError("num_sources must be positive")
+
+    def set_epoch(self, epoch: int) -> None:
+        self.epoch = int(epoch)
 
     def __len__(self) -> int:
         return len(self.base) * self.num_sources
@@ -288,8 +297,11 @@ class RepeatPerReferenceDataset(Dataset):
         sample = copy.deepcopy(sample)
         base_idx = int(sample["idx"])
 
-        sample["seed_ref"] = ref_idx
-        sample["seed_src"] = ref_idx * self.num_sources + source_idx
+        epoch_value = self.epoch if self.dynamic_epoch else 0
+        epoch_seed = self.base_seed + epoch_value * 1_000_003
+
+        sample["seed_ref"] = epoch_seed + ref_idx
+        sample["seed_src"] = epoch_seed + len(self.base) + ref_idx * self.num_sources + source_idx
         sample["group_ref_idx"] = ref_idx
         sample["multi_src_k"] = source_idx
         sample["idx"] = base_idx * self.num_sources + source_idx
@@ -379,13 +391,18 @@ class GroupedBatchSampler(Sampler[List[int]]):
         self.groups_per_batch = int(groups_per_batch)
         self.shuffle_groups = bool(shuffle_groups)
         self.seed = seed
+        self.epoch = 0
         if self.groups_per_batch < 1:
             raise ValueError("groups_per_batch must be positive")
+
+    def set_epoch(self, epoch: int) -> None:
+        self.epoch = int(epoch)
 
     def __iter__(self) -> Iterator[List[int]]:
         group_indices = np.arange(len(self.dataset.base))
         if self.shuffle_groups:
-            rng = np.random.RandomState(self.seed)
+            seed = None if self.seed is None else int(self.seed) + self.epoch
+            rng = np.random.RandomState(seed)
             rng.shuffle(group_indices)
 
         for start in range(0, len(group_indices), self.groups_per_batch):
@@ -480,8 +497,20 @@ def get_train_datasets(config: MPSGAFDataConfig) -> tuple[RepeatPerReferenceData
         categories=_read_categories(config.val_category_file),
     )
     return (
-        RepeatPerReferenceDataset(train_base, train_transforms, config.num_sources_per_ref),
-        RepeatPerReferenceDataset(val_base, val_transforms, config.num_sources_per_ref),
+        RepeatPerReferenceDataset(
+            train_base,
+            train_transforms,
+            config.num_sources_per_ref,
+            dynamic_epoch=True,
+            base_seed=config.seed,
+        ),
+        RepeatPerReferenceDataset(
+            val_base,
+            val_transforms,
+            config.num_sources_per_ref,
+            dynamic_epoch=False,
+            base_seed=config.seed,
+        ),
     )
 
 
@@ -498,7 +527,13 @@ def get_test_dataset(config: MPSGAFDataConfig) -> RepeatPerReferenceDataset:
         subset="test",
         categories=_read_categories(config.test_category_file),
     )
-    return RepeatPerReferenceDataset(test_base, test_transforms, config.num_sources_per_ref)
+    return RepeatPerReferenceDataset(
+        test_base,
+        test_transforms,
+        config.num_sources_per_ref,
+        dynamic_epoch=False,
+        base_seed=config.seed,
+    )
 
 
 def make_grouped_dataloader(
