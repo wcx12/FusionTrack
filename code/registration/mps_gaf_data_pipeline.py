@@ -429,7 +429,14 @@ def get_transforms(
             RandomJitter(),
             ShufflePoints(),
         ]
-        test_transforms = [SetDeterministic()] + train_transforms
+        test_transforms = [
+            SetDeterministic(),
+            SplitSourceRef(),
+            RandomTransformSE3Euler(rot_mag=rot_mag, trans_mag=trans_mag),
+            Resampler(num_points),
+            RandomJitter(),
+            ShufflePoints(),
+        ]
     elif noise_type == "crop":
         train_transforms = [
             SplitSourceRef(),
@@ -439,7 +446,15 @@ def get_transforms(
             RandomJitter(),
             ShufflePoints(),
         ]
-        test_transforms = [SetDeterministic()] + train_transforms
+        test_transforms = [
+            SetDeterministic(),
+            SplitSourceRef(),
+            RandomCrop(partial_p_keep),
+            RandomTransformSE3Euler(rot_mag=rot_mag, trans_mag=trans_mag),
+            Resampler(num_points),
+            RandomJitter(),
+            ShufflePoints(),
+        ]
     else:
         raise ValueError(f"Unsupported noise_type: {noise_type}")
 
