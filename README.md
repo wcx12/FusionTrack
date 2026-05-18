@@ -12,8 +12,11 @@ the manuscript source, visualization outputs, and placeholders for project code.
   `article_content/main.tex` and uploads the generated PDF as an artifact.
 - `visualization_results/`: exported figures and demonstration videos used to
   show system behavior and analysis results.
-- `code/`: project source-code directory. It includes algorithm code organized
-  by task, including VPR, registration, and anomaly-detection modules.
+- `code/`: project source-code directory organized by task. It currently
+  includes TF-VPR code under `code/vpr/`, MPS-GAF registration code under
+  `code/registration/`, and individual anomaly-detection code under
+  `code/anomaly_detection/individual/`. The group anomaly-detection folder is
+  reserved for future code.
 
 ## Build the Article Locally
 

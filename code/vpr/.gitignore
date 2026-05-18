@@ -1,0 +1,12 @@
+datasets/
+data/
+logs/
+runs/
+test/
+checkpoints/
+weights/
+*.pth
+*.pt
+*.ckpt
+__pycache__/
+*.py[cod]
