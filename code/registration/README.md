@@ -66,3 +66,7 @@ python mps_gaf_run.py \
 The grouped data loader is required for both training and evaluation.  Do not
 replace it with a plain `DataLoader(batch_size=...)`, because the model assumes
 that `num_sources_per_ref` adjacent rows belong to the same reference group.
+
+During training, source/reference augmentations are regenerated every epoch by
+updating the dataset epoch seed.  Validation and test datasets remain
+deterministic so metrics are comparable across runs.
