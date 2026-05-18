@@ -80,6 +80,7 @@ def build_configs(args: argparse.Namespace) -> Tuple[MPSGAFDataConfig, MPSGAFCon
         train_category_file=args.train_category_file,
         val_category_file=args.val_category_file,
         test_category_file=args.test_category_file,
+        seed=args.seed,
     )
     model_config = MPSGAFConfig(
         features=tuple(args.features),
@@ -278,6 +279,11 @@ def train(args: argparse.Namespace) -> None:
         start_epoch = load_checkpoint(args.checkpoint, model, optimizer, map_location=device)
 
     for epoch in range(start_epoch, args.epochs):
+        if hasattr(train_dataset, "set_epoch"):
+            train_dataset.set_epoch(epoch)
+        if hasattr(train_loader.batch_sampler, "set_epoch"):
+            train_loader.batch_sampler.set_epoch(epoch)
+
         model.train()
         running_loss = 0.0
         for step, batch in enumerate(train_loader, start=1):
