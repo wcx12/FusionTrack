@@ -38,7 +38,7 @@ class MPSGAFConfig:
     feat_dim: int = 96
     radius: float = 0.3
     num_neighbors: int = 64
-    num_sources: int = 4
+    num_sources: int = 10
     num_sk_iter: int = 5
     no_slack: bool = False
 
