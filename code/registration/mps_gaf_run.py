@@ -57,6 +57,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num_train_iter", type=int, default=1)
     parser.add_argument("--num_eval_iter", type=int, default=5)
     parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--max_train_steps", type=int, default=None, help="Optional smoke-test limit for train batches")
+    parser.add_argument("--max_eval_batches", type=int, default=None, help="Optional smoke-test limit for eval batches")
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--wt_inliers", type=float, default=1e-2)
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
@@ -150,13 +152,14 @@ def evaluate_model(
     loader: Iterable[Dict],
     device: torch.device,
     num_iter: int,
+    max_batches: int | None = None,
 ) -> Dict[str, float]:
     model.eval()
     all_rot = []
     all_trans = []
     all_chamfer = []
 
-    for batch in loader:
+    for batch_idx, batch in enumerate(loader, start=1):
         batch = move_to_device(batch, device)
         pred_transforms, _ = model(batch, num_iter=num_iter)
         pred = pred_transforms[-1]
@@ -166,6 +169,11 @@ def evaluate_model(
         all_rot.append(rotation_error_deg(pred, gt).detach().cpu())
         all_trans.append(torch.norm(pred[:, :3, 3] - gt[:, :3, 3], dim=1).detach().cpu())
         all_chamfer.append(chamfer_distance(transformed_src, batch["points_ref"][..., :3]).detach().cpu())
+        if max_batches is not None and batch_idx >= max_batches:
+            break
+
+    if not all_rot:
+        raise RuntimeError("Evaluation loader produced no batches")
 
     rot = torch.cat(all_rot)
     trans = torch.cat(all_trans)
@@ -286,7 +294,9 @@ def train(args: argparse.Namespace) -> None:
 
         model.train()
         running_loss = 0.0
+        steps_run = 0
         for step, batch in enumerate(train_loader, start=1):
+            steps_run = step
             batch = move_to_device(batch, device)
             optimizer.zero_grad(set_to_none=True)
             pred_transforms, endpoints = model(batch, num_iter=args.num_train_iter)
@@ -294,12 +304,22 @@ def train(args: argparse.Namespace) -> None:
             losses["total"].backward()
             optimizer.step()
             running_loss += float(losses["total"].detach().cpu())
+            if args.max_train_steps is not None and step >= args.max_train_steps:
+                break
+        if steps_run == 0:
+            raise RuntimeError("Training loader produced no batches")
 
-        metrics = evaluate_model(model, val_loader, device=device, num_iter=args.num_eval_iter)
+        metrics = evaluate_model(
+            model,
+            val_loader,
+            device=device,
+            num_iter=args.num_eval_iter,
+            max_batches=args.max_eval_batches,
+        )
         checkpoint_path = save_checkpoint(output_dir, model, optimizer, epoch + 1, args)
         summary = {
             "epoch": epoch + 1,
-            "train_loss": running_loss / max(1, len(train_loader)),
+            "train_loss": running_loss / steps_run,
             "validation": metrics,
             "checkpoint": str(checkpoint_path),
         }
@@ -327,7 +347,13 @@ def evaluate(args: argparse.Namespace) -> None:
 
     model = MPSGAFRegistration(model_config).to(device)
     load_checkpoint(args.checkpoint, model, map_location=device)
-    metrics = evaluate_model(model, test_loader, device=device, num_iter=args.num_eval_iter)
+    metrics = evaluate_model(
+        model,
+        test_loader,
+        device=device,
+        num_iter=args.num_eval_iter,
+        max_batches=args.max_eval_batches,
+    )
     (output_dir / "eval_summary.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     print(json.dumps(metrics, indent=2))
 
