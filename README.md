@@ -12,8 +12,8 @@ the manuscript source, visualization outputs, and placeholders for project code.
   `article_content/main.tex` and uploads the generated PDF as an artifact.
 - `visualization_results/`: exported figures and demonstration videos used to
   show system behavior and analysis results.
-- `code/`: project source-code directory. It is currently kept as a placeholder
-  for future implementation files.
+- `code/`: project source-code directory. It includes algorithm code organized
+  by task, including VPR, registration, and anomaly-detection modules.
 
 ## Build the Article Locally
 
