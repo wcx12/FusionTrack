@@ -744,8 +744,8 @@ class MPSGAFRegistration(nn.Module):
                 )
 
             groups = batch_size // self.num_sources
-            feat_src_grouped = feat_src_self.view(groups, self.num_sources, *feat_src_self.shape[1:])
-            feat_ref_grouped = feat_ref_self.view(groups, self.num_sources, *feat_ref_self.shape[1:])
+            feat_src_grouped = feat_src_self.reshape(groups, self.num_sources, *feat_src_self.shape[1:])
+            feat_ref_grouped = feat_ref_self.reshape(groups, self.num_sources, *feat_ref_self.shape[1:])
             shared_ref = feat_ref_grouped[:, 0]
 
             src_cross_grouped, ref_cross = self.group_fusion.fuse_group(feat_src_grouped, shared_ref)
