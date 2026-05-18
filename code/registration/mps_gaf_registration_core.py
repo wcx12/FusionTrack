@@ -19,6 +19,7 @@ group share the same target point set and contain different source variants.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any, Dict, Optional, Sequence, Tuple
 
 import numpy as np
@@ -41,6 +42,18 @@ class MPSGAFConfig:
     num_sources: int = 10
     num_sk_iter: int = 5
     no_slack: bool = False
+    fusion_mode: str = "full"
+    fusion_start_iter: int = 1
+    enable_self_corr: bool = True
+    self_corr_mode: str = "replace"
+    self_corr_logit_init: float = -8.0
+    freeze_self_corr_gate: bool = False
+    fusion_logit_init: float = -4.0
+    freeze_fusion_gate: bool = False
+    svd_weight_mode: str = "row_sum"
+    svd_weight_power: float = 1.0
+    svd_topk_fraction: float = 1.0
+    learned_svd_logit_init: float = 2.0
 
 
 def _cfg(config: Optional[Any], name: str, default: Any) -> Any:
@@ -596,12 +609,19 @@ class GatedAdaptiveFusion(nn.Module):
         self,
         source_features: torch.Tensor,
         target_features: torch.Tensor,
+        include_target_source: bool = True,
+        include_source_source: bool = True,
+        update_target: bool = True,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Fuse one target and a group of source feature sets.
 
         Args:
             source_features: B_group x N_sources x N_src x C.
             target_features: B_group x N_ref x C.
+            include_target_source: Whether sources receive messages from the target.
+            include_source_source: Whether each source also receives messages
+                from the other sources in the same group.
+            update_target: Whether the shared target receives messages from sources.
 
         Returns:
             Enhanced source features and enhanced target features.
@@ -609,55 +629,105 @@ class GatedAdaptiveFusion(nn.Module):
 
         _, num_sources, _, _ = source_features.shape
 
-        target_messages = []
-        target_logits = []
-        for source_idx in range(num_sources):
-            msg_ts, weights_ts = self.cross(target_features, source_features[:, source_idx], k=self.k)
-            _, weights_st = self.cross(source_features[:, source_idx], target_features, k=self.k)
-            stats = self._pair_stats(target_features, source_features[:, source_idx], weights_ts, weights_st)
-            target_messages.append(msg_ts)
-            target_logits.append(self.gate_mlp(stats))
+        if update_target:
+            target_messages = []
+            target_logits = []
+            for source_idx in range(num_sources):
+                msg_ts, weights_ts = self.cross(target_features, source_features[:, source_idx], k=self.k)
+                _, weights_st = self.cross(source_features[:, source_idx], target_features, k=self.k)
+                stats = self._pair_stats(target_features, source_features[:, source_idx], weights_ts, weights_st)
+                target_messages.append(msg_ts)
+                target_logits.append(self.gate_mlp(stats))
 
-        target_agg, _ = self._competitive_fuse(target_messages, target_logits)
-        target_enhanced = self.post(target_agg + target_features)
+            target_agg, _ = self._competitive_fuse(target_messages, target_logits)
+            target_enhanced = self.post(target_agg + target_features)
+        else:
+            target_enhanced = target_features
 
         enhanced_sources = []
         for source_idx in range(num_sources):
             messages = []
             logits = []
 
-            msg_st, weights_st = self.cross(source_features[:, source_idx], target_enhanced, k=self.k)
-            _, weights_ts = self.cross(target_enhanced, source_features[:, source_idx], k=self.k)
-            stats = self._pair_stats(source_features[:, source_idx], target_enhanced, weights_st, weights_ts)
-            messages.append(msg_st)
-            logits.append(self.gate_mlp(stats))
-
-            for other_idx in range(num_sources):
-                if other_idx == source_idx:
-                    continue
-                msg_ss, weights_ss = self.cross(
-                    source_features[:, source_idx],
-                    source_features[:, other_idx],
-                    k=self.k,
-                )
-                _, weights_ss_back = self.cross(
-                    source_features[:, other_idx],
-                    source_features[:, source_idx],
-                    k=self.k,
-                )
-                stats = self._pair_stats(
-                    source_features[:, source_idx],
-                    source_features[:, other_idx],
-                    weights_ss,
-                    weights_ss_back,
-                )
-                messages.append(msg_ss)
+            if include_target_source:
+                msg_st, weights_st = self.cross(source_features[:, source_idx], target_enhanced, k=self.k)
+                _, weights_ts = self.cross(target_enhanced, source_features[:, source_idx], k=self.k)
+                stats = self._pair_stats(source_features[:, source_idx], target_enhanced, weights_st, weights_ts)
+                messages.append(msg_st)
                 logits.append(self.gate_mlp(stats))
 
-            source_agg, _ = self._competitive_fuse(messages, logits)
-            enhanced_sources.append(self.post(source_agg + source_features[:, source_idx]))
+            if include_source_source:
+                for other_idx in range(num_sources):
+                    if other_idx == source_idx:
+                        continue
+                    msg_ss, weights_ss = self.cross(
+                        source_features[:, source_idx],
+                        source_features[:, other_idx],
+                        k=self.k,
+                    )
+                    _, weights_ss_back = self.cross(
+                        source_features[:, other_idx],
+                        source_features[:, source_idx],
+                        k=self.k,
+                    )
+                    stats = self._pair_stats(
+                        source_features[:, source_idx],
+                        source_features[:, other_idx],
+                        weights_ss,
+                        weights_ss_back,
+                    )
+                    messages.append(msg_ss)
+                    logits.append(self.gate_mlp(stats))
+
+            if messages:
+                source_agg, _ = self._competitive_fuse(messages, logits)
+                enhanced_sources.append(self.post(source_agg + source_features[:, source_idx]))
+            else:
+                enhanced_sources.append(source_features[:, source_idx])
 
         return torch.stack(enhanced_sources, dim=1), target_enhanced
+
+
+class SVDInlierWeightHead(nn.Module):
+    """Point-wise learned reliability head for weighted SVD estimation."""
+
+    def __init__(self, feat_dim: int, logit_init: float = 2.0) -> None:
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(feat_dim * 3 + 4, feat_dim),
+            nn.GELU(),
+            nn.LayerNorm(feat_dim),
+            nn.Linear(feat_dim, 1),
+        )
+        nn.init.zeros_(self.net[-1].weight)
+        nn.init.constant_(self.net[-1].bias, float(logit_init))
+
+    def forward(
+        self,
+        feat_src: torch.Tensor,
+        feat_ref: torch.Tensor,
+        perm_matrix: torch.Tensor,
+        xyz_src_t: torch.Tensor,
+        weighted_ref: torch.Tensor,
+    ) -> torch.Tensor:
+        row_sum = torch.sum(perm_matrix, dim=2, keepdim=True)
+        matched_feat = perm_matrix @ feat_ref / (row_sum + EPS)
+        row_max = torch.amax(perm_matrix, dim=2, keepdim=True)
+        confidence = (1.0 - row_entropy(perm_matrix)).clamp_min(0.0).unsqueeze(-1)
+        geom_residual = torch.linalg.norm(weighted_ref - xyz_src_t, dim=-1, keepdim=True)
+        features = torch.cat(
+            (
+                feat_src,
+                matched_feat,
+                torch.abs(feat_src - matched_feat),
+                row_sum,
+                row_max,
+                confidence,
+                geom_residual,
+            ),
+            dim=-1,
+        )
+        return self.net(features).squeeze(-1)
 
 
 class MPSGAFRegistration(nn.Module):
@@ -672,15 +742,47 @@ class MPSGAFRegistration(nn.Module):
         radius = float(_cfg(config, "radius", default_config.radius))
         num_neighbors = int(_cfg(config, "num_neighbors", default_config.num_neighbors))
         num_sk_iter = int(_cfg(config, "num_sk_iter", default_config.num_sk_iter))
+        fusion_mode = str(_cfg(config, "fusion_mode", default_config.fusion_mode))
+        fusion_start_iter = int(_cfg(config, "fusion_start_iter", default_config.fusion_start_iter))
+        self_corr_mode = str(_cfg(config, "self_corr_mode", default_config.self_corr_mode))
+        self_corr_logit_init = float(_cfg(config, "self_corr_logit_init", default_config.self_corr_logit_init))
+        freeze_self_corr_gate = bool(_cfg(config, "freeze_self_corr_gate", default_config.freeze_self_corr_gate))
+        fusion_logit_init = float(_cfg(config, "fusion_logit_init", default_config.fusion_logit_init))
+        freeze_fusion_gate = bool(_cfg(config, "freeze_fusion_gate", default_config.freeze_fusion_gate))
+        svd_weight_mode = str(_cfg(config, "svd_weight_mode", default_config.svd_weight_mode))
+        svd_weight_power = float(_cfg(config, "svd_weight_power", default_config.svd_weight_power))
+        svd_topk_fraction = float(_cfg(config, "svd_topk_fraction", default_config.svd_topk_fraction))
+        learned_svd_logit_init = float(
+            _cfg(config, "learned_svd_logit_init", default_config.learned_svd_logit_init)
+        )
 
         fallback_sources = _cfg(config, "num_sources_per_ref", default_config.num_sources)
         num_sources = int(_cfg(config, "num_sources", fallback_sources))
         if num_sources < 1:
             raise ValueError("num_sources must be positive")
+        if fusion_mode not in {"none", "self_only", "target_only", "source_source_only", "full"}:
+            raise ValueError(f"Unsupported fusion_mode: {fusion_mode}")
+        if self_corr_mode not in {"replace", "residual"}:
+            raise ValueError(f"Unsupported self_corr_mode: {self_corr_mode}")
+        if svd_weight_mode not in {"row_sum", "rowmax", "entropy", "mutual", "learned", "learned_entropy"}:
+            raise ValueError(f"Unsupported svd_weight_mode: {svd_weight_mode}")
+        if fusion_start_iter < 0:
+            raise ValueError("fusion_start_iter must be non-negative")
+        if svd_weight_power <= 0:
+            raise ValueError("svd_weight_power must be positive")
+        if not 0 < svd_topk_fraction <= 1:
+            raise ValueError("svd_topk_fraction must be in (0, 1]")
 
         self.num_sources = num_sources
         self.add_slack = not bool(_cfg(config, "no_slack", default_config.no_slack))
         self.num_sk_iter = num_sk_iter
+        self.fusion_mode = fusion_mode
+        self.fusion_start_iter = fusion_start_iter
+        self.enable_self_corr = bool(_cfg(config, "enable_self_corr", default_config.enable_self_corr))
+        self.self_corr_mode = self_corr_mode
+        self.svd_weight_mode = svd_weight_mode
+        self.svd_weight_power = svd_weight_power
+        self.svd_topk_fraction = svd_topk_fraction
 
         self.weights_net = ParameterPredictionNet()
         self.feat_extractor = PointFeatureEncoder(
@@ -698,6 +800,12 @@ class MPSGAFRegistration(nn.Module):
         )
         self.group_fusion = GatedAdaptiveFusion(c_in=feat_dim)
         self.feature_fuse = nn.Linear(in_features=2 * feat_dim, out_features=feat_dim)
+        self.svd_inlier_head = SVDInlierWeightHead(feat_dim=feat_dim, logit_init=learned_svd_logit_init)
+        self.self_corr_logit = nn.Parameter(
+            torch.tensor(self_corr_logit_init),
+            requires_grad=not freeze_self_corr_gate,
+        )
+        self.fusion_logit = nn.Parameter(torch.tensor(fusion_logit_init), requires_grad=not freeze_fusion_gate)
 
     @staticmethod
     def compute_affinity(
@@ -708,6 +816,52 @@ class MPSGAFRegistration(nn.Module):
         if isinstance(alpha, float):
             return -beta[:, None, None] * (feat_distance - alpha)
         return -beta[:, None, None] * (feat_distance - alpha[:, None, None])
+
+    def compute_svd_weights(
+        self,
+        perm_matrix: torch.Tensor,
+        feat_src: Optional[torch.Tensor] = None,
+        feat_ref: Optional[torch.Tensor] = None,
+        xyz_src_t: Optional[torch.Tensor] = None,
+        weighted_ref: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        row_sum = torch.sum(perm_matrix, dim=2)
+        if self.svd_weight_mode == "row_sum":
+            weights = row_sum
+            logits = None
+        elif self.svd_weight_mode == "rowmax":
+            row_max = torch.amax(perm_matrix, dim=2)
+            weights = row_sum * row_max
+            logits = None
+        elif self.svd_weight_mode == "entropy":
+            confidence = 1.0 - row_entropy(perm_matrix)
+            weights = row_sum * confidence.clamp_min(0.0)
+            logits = None
+        elif self.svd_weight_mode == "mutual":
+            row_max, ref_idx = torch.max(perm_matrix, dim=2)
+            ref_max = torch.amax(perm_matrix, dim=1)
+            ref_conf = torch.gather(ref_max, 1, ref_idx)
+            weights = row_sum * row_max * ref_conf
+            logits = None
+        else:
+            if feat_src is None or feat_ref is None or xyz_src_t is None or weighted_ref is None:
+                raise ValueError("learned SVD weighting requires features and current geometry")
+            logits = self.svd_inlier_head(feat_src, feat_ref, perm_matrix, xyz_src_t, weighted_ref)
+            gate = torch.sigmoid(logits)
+            if self.svd_weight_mode == "learned_entropy":
+                confidence = (1.0 - row_entropy(perm_matrix)).clamp_min(0.0)
+                weights = row_sum * confidence * gate
+            else:
+                weights = row_sum * gate
+
+        weights = weights.clamp_min(EPS).pow(self.svd_weight_power)
+        if self.svd_topk_fraction < 1.0:
+            keep = max(3, math.ceil(weights.shape[1] * self.svd_topk_fraction))
+            keep = min(keep, weights.shape[1])
+            _, top_idx = torch.topk(weights, keep, dim=1)
+            mask = torch.zeros_like(weights).scatter_(1, top_idx, 1.0)
+            weights = weights * mask
+        return weights, logits
 
     def forward(
         self,
@@ -724,37 +878,78 @@ class MPSGAFRegistration(nn.Module):
         all_gamma = []
         all_perm_matrices = []
         all_weighted_ref = []
+        all_svd_weights = []
+        all_svd_logits = []
         all_beta = []
         all_alpha = []
 
-        for _ in range(num_iter):
+        for iter_idx in range(num_iter):
             beta, alpha = self.weights_net([xyz_src_t, xyz_ref])
 
             feat_src = self.feat_extractor(xyz_src_t, norm_src_t)
             feat_ref = self.feat_extractor(xyz_ref, norm_ref)
 
-            feat_src_self = self.self_corr(feat_src)
-            feat_ref_self = self.self_corr(feat_ref)
+            if self.fusion_mode == "none" or iter_idx < self.fusion_start_iter:
+                feat_src_final = feat_src
+                feat_ref_final = feat_ref
+            else:
+                if self.enable_self_corr:
+                    feat_src_self = self.self_corr(feat_src)
+                    feat_ref_self = self.self_corr(feat_ref)
+                    if self.self_corr_mode == "replace":
+                        feat_src_corr = feat_src_self
+                        feat_ref_corr = feat_ref_self
+                    else:
+                        self_corr_scale = torch.sigmoid(self.self_corr_logit)
+                        feat_src_corr = F.normalize(
+                            feat_src + self_corr_scale * (feat_src_self - feat_src),
+                            dim=-1,
+                            eps=EPS,
+                        )
+                        feat_ref_corr = F.normalize(
+                            feat_ref + self_corr_scale * (feat_ref_self - feat_ref),
+                            dim=-1,
+                            eps=EPS,
+                        )
+                else:
+                    feat_src_corr = feat_src
+                    feat_ref_corr = feat_ref
 
-            batch_size = feat_src_self.shape[0]
-            if batch_size % self.num_sources != 0:
-                raise ValueError(
-                    "Batch size must be a multiple of num_sources. "
-                    f"Got batch_size={batch_size}, num_sources={self.num_sources}."
-                )
+                if self.fusion_mode == "self_only":
+                    feat_src_final = F.normalize(feat_src_corr, dim=-1, eps=EPS)
+                    feat_ref_final = F.normalize(feat_ref_corr, dim=-1, eps=EPS)
+                else:
+                    batch_size = feat_src_corr.shape[0]
+                    if batch_size % self.num_sources != 0:
+                        raise ValueError(
+                            "Batch size must be a multiple of num_sources. "
+                            f"Got batch_size={batch_size}, num_sources={self.num_sources}."
+                        )
 
-            groups = batch_size // self.num_sources
-            feat_src_grouped = feat_src_self.reshape(groups, self.num_sources, *feat_src_self.shape[1:])
-            feat_ref_grouped = feat_ref_self.reshape(groups, self.num_sources, *feat_ref_self.shape[1:])
-            shared_ref = feat_ref_grouped[:, 0]
+                    groups = batch_size // self.num_sources
+                    feat_src_grouped = feat_src_corr.reshape(groups, self.num_sources, *feat_src_corr.shape[1:])
+                    feat_ref_grouped = feat_ref_corr.reshape(groups, self.num_sources, *feat_ref_corr.shape[1:])
+                    shared_ref = feat_ref_grouped[:, 0]
 
-            src_cross_grouped, ref_cross = self.group_fusion.fuse_group(feat_src_grouped, shared_ref)
-            ref_cross_repeated = ref_cross.unsqueeze(1).expand(-1, self.num_sources, -1, -1)
-            feat_src_cross = src_cross_grouped.reshape(batch_size, *src_cross_grouped.shape[2:])
-            feat_ref_cross = ref_cross_repeated.reshape(batch_size, *ref_cross_repeated.shape[2:])
+                    src_cross_grouped, ref_cross = self.group_fusion.fuse_group(
+                        feat_src_grouped,
+                        shared_ref,
+                        include_target_source=self.fusion_mode in {"target_only", "full"},
+                        include_source_source=self.fusion_mode in {"source_source_only", "full"},
+                        update_target=self.fusion_mode in {"target_only", "full"},
+                    )
+                    ref_cross_repeated = ref_cross.unsqueeze(1).expand(-1, self.num_sources, -1, -1)
+                    feat_src_cross = src_cross_grouped.reshape(batch_size, *src_cross_grouped.shape[2:])
+                    feat_ref_cross = ref_cross_repeated.reshape(batch_size, *ref_cross_repeated.shape[2:])
 
-            feat_src_final = self.feature_fuse(torch.cat((feat_src_self, feat_src_cross), dim=-1))
-            feat_ref_final = self.feature_fuse(torch.cat((feat_ref_self, feat_ref_cross), dim=-1))
+                    fusion_scale = torch.sigmoid(self.fusion_logit)
+                    feat_src_delta = self.feature_fuse(torch.cat((feat_src_corr, feat_src_cross), dim=-1))
+                    feat_src_final = F.normalize(feat_src + fusion_scale * feat_src_delta, dim=-1, eps=EPS)
+                    if self.fusion_mode == "source_source_only":
+                        feat_ref_final = feat_ref
+                    else:
+                        feat_ref_delta = self.feature_fuse(torch.cat((feat_ref_corr, feat_ref_cross), dim=-1))
+                        feat_ref_final = F.normalize(feat_ref + fusion_scale * feat_ref_delta, dim=-1, eps=EPS)
 
             feat_distance = match_features(feat_src_final, feat_ref_final)
             affinity = self.compute_affinity(beta, feat_distance, alpha=alpha)
@@ -762,14 +957,23 @@ class MPSGAFRegistration(nn.Module):
             log_perm_matrix = sinkhorn(affinity, n_iters=self.num_sk_iter, slack=self.add_slack)
             perm_matrix = torch.exp(log_perm_matrix)
             weighted_ref = perm_matrix @ xyz_ref / (torch.sum(perm_matrix, dim=2, keepdim=True) + EPS)
+            svd_weights, svd_logits = self.compute_svd_weights(
+                perm_matrix,
+                feat_src=feat_src_final,
+                feat_ref=feat_ref_final,
+                xyz_src_t=xyz_src_t,
+                weighted_ref=weighted_ref,
+            )
 
-            transform = compute_rigid_transform(xyz_src, weighted_ref, weights=torch.sum(perm_matrix, dim=2))
+            transform = compute_rigid_transform(xyz_src, weighted_ref, weights=svd_weights)
             xyz_src_t, norm_src_t = transform_se3(transform.detach(), xyz_src, norm_src)
 
             transforms.append(transform)
             all_gamma.append(torch.exp(affinity))
             all_perm_matrices.append(perm_matrix)
             all_weighted_ref.append(weighted_ref)
+            all_svd_weights.append(svd_weights)
+            all_svd_logits.append(svd_logits)
             all_beta.append(_to_numpy(beta))
             all_alpha.append(_to_numpy(alpha))
 
@@ -777,6 +981,8 @@ class MPSGAFRegistration(nn.Module):
             "perm_matrices_init": all_gamma,
             "perm_matrices": all_perm_matrices,
             "weighted_ref": all_weighted_ref,
+            "svd_weights": all_svd_weights,
+            "svd_logits": all_svd_logits,
             "beta": np.stack(all_beta, axis=0),
             "alpha": np.stack(all_alpha, axis=0),
         }
@@ -795,6 +1001,7 @@ __all__ = [
     "SelfGraphCorrelation",
     "CrossGraphCorrelation",
     "GatedAdaptiveFusion",
+    "SVDInlierWeightHead",
     "sinkhorn",
     "compute_rigid_transform",
     "match_features",
