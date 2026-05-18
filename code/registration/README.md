@@ -50,6 +50,26 @@ python mps_gaf_run.py \
   --epochs 400
 ```
 
+## One-Batch Smoke Test
+
+This checks data loading, grouped batching, model forward, loss, backward, one
+optimizer step, validation forward, and checkpoint writing without running a
+full experiment.
+
+```bash
+python mps_gaf_run.py \
+  --mode train \
+  --dataset_path /path/to/modelnet40_ply_hdf5_2048 \
+  --output_dir runs/mps_gaf_smoke \
+  --noise_type crop \
+  --num_sources_per_ref 10 \
+  --groups_per_batch 1 \
+  --epochs 1 \
+  --max_train_steps 1 \
+  --max_eval_batches 1 \
+  --device cpu
+```
+
 ## Evaluation
 
 ```bash
