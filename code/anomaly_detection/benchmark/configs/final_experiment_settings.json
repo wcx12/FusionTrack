@@ -80,6 +80,18 @@
   "local_benchmark_methods": {
     "individual": {
       "fusiontrack_individual_nn": {"train_epochs": null, "n_neighbors": 1},
+      "fusiontrack_individual_ensemble": {
+        "train_epochs": null,
+        "n_neighbors": 1,
+        "components": ["nearest_feature_rank", "lof_novelty_rank", "isolation_forest_rank"],
+        "weights": {
+          "nearest_feature_rank": 0.4,
+          "lof_novelty_rank": 0.35,
+          "isolation_forest_rank": 0.25
+        },
+        "seed": 42,
+        "contamination": 0.05
+      },
       "fusiontrack_individual_context": {"train_epochs": null, "n_neighbors": 1},
       "individual_iforest": {"train_epochs": null, "contamination": 0.05, "seed": 42},
       "individual_lof": {"train_epochs": null, "contamination": 0.05, "seed": 42},
@@ -95,6 +107,25 @@
         "train_epochs": null,
         "n_neighbors": 3,
         "model": "standardized_group_feature_knn"
+      },
+      "fusiontrack_group_hybrid": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.6,
+          "graph_rank": 0.2,
+          "temporal_profile_rank": 0.2
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        }
       },
       "fusiontrack_group_graph": {
         "train_epochs": null,
@@ -187,7 +218,7 @@
         "fusiontrack_group_temporal_knn full-coverage group run"
       ]
     },
-    "latest_completed_official_run": {
+      "latest_completed_official_run": {
       "date": "2026-05-22",
       "source_revision": "b3b8599",
       "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_official_20260522",
@@ -226,6 +257,48 @@
         "num_duplicate_score_keys": 0,
         "num_missing_score_keys": 0,
         "num_extra_score_keys": 0
+      }
+    },
+    "latest_completed_method_update_run": {
+      "date": "2026-05-22",
+      "source_revision": "b3b8599 plus local enhanced-method patch",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_methods_20260522",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "scope": [
+        "strict individual validation matrix with fusiontrack_individual_ensemble",
+        "strict group validation matrix with fusiontrack_group_hybrid"
+      ],
+      "best_updated_rows": {
+        "individual": {
+          "method": "fusiontrack_individual_ensemble",
+          "auroc": 0.623752382182887,
+          "auprc": 0.15314710119744618,
+          "f1": 0.2546419098143236,
+          "precision_at_k": 0.15,
+          "recall_at_k": 0.18072289156626506
+        },
+        "group": {
+          "method": "fusiontrack_group_hybrid",
+          "auroc": 0.6921766889101103,
+          "auprc": 0.08155060646072547,
+          "f1": 0.1935483870967742,
+          "precision_at_k": 0.15,
+          "recall_at_k": 0.17045454545454544
+        }
+      }
+    },
+    "latest_completed_long_budget_official_run": {
+      "date": "2026-05-22",
+      "source_revision": "b3b8599 plus official-runner scripts",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_convergence_20260522",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "epoch_cap": 50,
+      "statuses": {
+        "official_lmtad_50_individual": "converged",
+        "official_tranad_50_individual": "max-budget-not-converged",
+        "official_tranad_50_group": "max-budget-not-converged",
+        "official_anomaly_transformer_50_individual": "max-budget-not-converged",
+        "official_anomaly_transformer_50_group": "max-budget-not-converged"
       }
     }
   },

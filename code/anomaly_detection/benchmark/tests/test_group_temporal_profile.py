@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fusiontrack.group_temporal_profile import (
     fit_group_temporal_knn,
+    run_group_hybrid_fusiontrack,
     run_group_temporal_knn,
 )
 
@@ -76,6 +77,31 @@ def test_anomalous_group_window_scores_higher_than_stable_window() -> None:
 
     assert scores_by_window["broken"] > scores_by_window["stable"]
     assert scores_by_window["broken"] > 0.0
+
+
+def test_group_hybrid_combines_prediction_graph_and_temporal_profile() -> None:
+    rows = run_group_hybrid_fusiontrack(
+        _train_windows(),
+        [_stable_window("stable"), _anomalous_window("broken")],
+        n_neighbors=3,
+        prediction_weight=0.8,
+        graph_weight=0.1,
+        temporal_weight=0.1,
+    )
+
+    scores_by_window = {}
+    for row in rows:
+        scores_by_window.setdefault(row["metadata"]["window_id"], row["score"])
+
+    assert scores_by_window["broken"] > scores_by_window["stable"]
+    for row in rows:
+        assert row["source"] == "fusiontrack_group_hybrid"
+        assert set(row["component_scores"]) >= {
+            "prediction_residual_rank",
+            "graph_rank",
+            "temporal_profile_rank",
+        }
+        assert row["metadata"]["method"] == "fusiontrack_group_hybrid"
 
 
 def test_outputs_object_window_schema_and_preserves_sample_id() -> None:

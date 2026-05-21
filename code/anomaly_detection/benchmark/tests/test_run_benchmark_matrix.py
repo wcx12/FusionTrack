@@ -159,8 +159,22 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
                         "n_neighbors": 1,
                     },
                     {
+                        "name": "fusiontrack_group_hybrid",
+                        "task": "fusiontrack_group_hybrid",
+                        "train_windows": str(train_group_windows_path),
+                        "score_windows": str(group_windows_path),
+                        "n_neighbors": 1,
+                    },
+                    {
                         "name": "fusiontrack_individual",
                         "task": "fusiontrack_individual",
+                        "train_jsonl": str(train_trajectories_path),
+                        "score_jsonl": str(trajectories_path),
+                        "n_neighbors": 1,
+                    },
+                    {
+                        "name": "fusiontrack_individual_ensemble",
+                        "task": "fusiontrack_individual_ensemble",
                         "train_jsonl": str(train_trajectories_path),
                         "score_jsonl": str(trajectories_path),
                         "n_neighbors": 1,
@@ -227,7 +241,9 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
         "existing",
         "group_temporal_autoencoder",
         "fusiontrack_group_temporal_knn",
+        "fusiontrack_group_hybrid",
         "fusiontrack_individual",
+        "fusiontrack_individual_ensemble",
         "fusiontrack_individual_context",
         "individual_complementary",
         "individual_trajectory_lm_ngram",
@@ -235,6 +251,8 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
     ]
     assert (output_dir / "scores" / "group_prediction.jsonl").exists()
     assert (output_dir / "scores" / "fusiontrack_group_temporal_knn.jsonl").exists()
+    assert (output_dir / "scores" / "fusiontrack_group_hybrid.jsonl").exists()
+    assert (output_dir / "scores" / "fusiontrack_individual_ensemble.jsonl").exists()
     assert (output_dir / "scores" / "fusiontrack_individual_context.jsonl").exists()
     assert (output_dir / "scores" / "individual_trajectory_lm_ngram.jsonl").exists()
     assert (output_dir / "scores" / "individual_physics.jsonl").exists()
@@ -256,7 +274,9 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
         "existing",
         "group_temporal_autoencoder",
         "fusiontrack_group_temporal_knn",
+        "fusiontrack_group_hybrid",
         "fusiontrack_individual",
+        "fusiontrack_individual_ensemble",
         "fusiontrack_individual_context",
         "individual_complementary",
         "individual_trajectory_lm_ngram",
@@ -485,6 +505,11 @@ def test_run_benchmark_matrix_help_works_as_direct_script() -> None:
         {
             "name": "fusiontrack_group_temporal_knn",
             "task": "fusiontrack_group_temporal_knn",
+            "n_neighbors": 3,
+        },
+        {
+            "name": "fusiontrack_group_hybrid",
+            "task": "fusiontrack_group_hybrid",
             "n_neighbors": 3,
         },
     ],

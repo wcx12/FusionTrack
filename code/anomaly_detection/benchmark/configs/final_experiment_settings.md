@@ -65,6 +65,7 @@ Every deep baseline in the main table must have one of these statuses:
 | Method | Task | Training budget |
 | --- | --- | --- |
 | `fusiontrack_individual_nn` | individual | no epoch, `n_neighbors=1` |
+| `fusiontrack_individual_ensemble` | individual | no epoch, rank ensemble of nearest-feature, LOF novelty, and Isolation Forest components |
 | `fusiontrack_individual_context` | individual | no epoch, `n_neighbors=1` |
 | `individual_iforest` | individual | no epoch, `contamination=0.05`, `seed=42` |
 | `individual_lof` | individual | no epoch, `contamination=0.05`, `seed=42` |
@@ -75,6 +76,7 @@ Every deep baseline in the main table must have one of these statuses:
 | `group_ocsvm` | group | no epoch, `contamination=0.05`, `seed=42` |
 | `group_temporal_graph_ae_proxy` | group | no deep epoch, `n_components=3`, `seed=42` |
 | `fusiontrack_group_temporal_knn` | group | no epoch, `n_neighbors=3`, standardized group-feature KNN |
+| `fusiontrack_group_hybrid` | group | no epoch, rank fusion of prediction residual, graph cohesion, and temporal-profile components |
 | `fusiontrack_group_graph` | group | no epoch, `k_neighbors=3`, `rho_p=80`, `rho_v=20`, `eta=0.5` |
 
 ## Official Paper Baselines
@@ -127,10 +129,13 @@ Logs are written under `logs/` by default, or under `LOG_ROOT` if that environme
 5. Reran official-source LM-TAD, Pi-DPM, TranAD, Anomaly Transformer, and DCdetector on the remote GPU under revision `b3b8599`.
 6. Regenerated strict official individual and group summaries in `/root/autodl-tmp/fusiontrack_b3b8599_official_20260522`, with zero duplicate, missing, or extra score keys for all main-table official rows.
 7. Reran CETrajAD and confirmed it remains coverage-failed: `770/829` score rows, `59` missing score keys.
+8. Reran the max-budget official-source deep baselines with a 50-epoch cap in `/root/autodl-tmp/fusiontrack_b3b8599_convergence_20260522`. LM-TAD converged by validation loss; TranAD and Anomaly Transformer individual/group remained `max-budget-not-converged`.
+9. Added and reran two enhanced FusionTrack rows in `/root/autodl-tmp/fusiontrack_b3b8599_methods_20260522`: `fusiontrack_individual_ensemble` and `fusiontrack_group_hybrid`, both under strict key matching.
 
 ## Remaining Reruns
 
 1. Keep CETrajAD out of the strict main table unless a full-coverage official-source scorer is implemented.
-2. Extend max-budget-not-converged deep runs if the paper needs final convergence claims instead of reporting the current budget status.
+2. Extend remaining max-budget-not-converged deep runs beyond 50 epochs if the paper needs final convergence claims instead of reporting the current budget status.
 3. Keep old `sample_id`-only group results only as appendix any-window diagnostics.
 4. Rerun any experiment whose metrics show duplicate keys, missing score keys, or extra score keys.
+5. Treat `fusiontrack_group_hybrid` as the current best validation candidate, but document that it uses rank-direction choices fixed in the method config and should be confirmed on an untouched test split or additional seeds before a final paper claim.

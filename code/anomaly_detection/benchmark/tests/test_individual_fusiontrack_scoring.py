@@ -6,7 +6,10 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from fusiontrack.individual_scoring import run_individual_fusiontrack_baseline
+from fusiontrack.individual_scoring import (
+    run_individual_fusiontrack_baseline,
+    run_individual_fusiontrack_ensemble,
+)
 
 
 def _trajectory(track_id: str, centers: list[list[float]]) -> dict:
@@ -38,3 +41,28 @@ def test_individual_fusiontrack_nearest_feature_scores_rank_jump_higher() -> Non
         assert isinstance(row["score"], float)
         assert math.isfinite(row["score"])
         assert row["metadata"]["n_neighbors"] == 1
+
+
+def test_individual_fusiontrack_ensemble_combines_ranked_components() -> None:
+    train = [
+        _trajectory("train_a", [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]]),
+        _trajectory("train_b", [[0.0, 1.0], [1.0, 1.0], [2.0, 1.0], [3.0, 1.0]]),
+        _trajectory("train_c", [[0.0, 2.0], [1.0, 2.0], [2.0, 2.0], [3.0, 2.0]]),
+    ]
+    normal = _trajectory("normal", [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]])
+    jump = _trajectory("jump", [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [25.0, 0.0]])
+
+    rows = run_individual_fusiontrack_ensemble(train, [normal, jump], n_neighbors=1)
+    scores = {row["track_id"]: row["score"] for row in rows}
+
+    assert scores["jump"] > scores["normal"]
+    for row in rows:
+        assert row["source"] == "fusiontrack_individual:ensemble"
+        assert isinstance(row["score"], float)
+        assert math.isfinite(row["score"])
+        assert set(row["component_scores"]) == {
+            "nearest_feature_rank",
+            "lof_novelty_rank",
+            "isolation_forest_rank",
+        }
+        assert row["metadata"]["method"] == "fusiontrack_individual_ensemble"

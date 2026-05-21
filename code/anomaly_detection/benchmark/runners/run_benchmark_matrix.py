@@ -21,8 +21,14 @@ from evaluation.io import load_jsonl, write_jsonl
 from evaluation.reporting import evaluate_score_file, summarize_metric_files
 from fusiontrack.context_aware_individual import run_context_aware_fusiontrack_baseline
 from fusiontrack.group_scoring import score_group_windows
-from fusiontrack.group_temporal_profile import run_group_temporal_knn
-from fusiontrack.individual_scoring import run_individual_fusiontrack_baseline
+from fusiontrack.group_temporal_profile import (
+    run_group_hybrid_fusiontrack,
+    run_group_temporal_knn,
+)
+from fusiontrack.individual_scoring import (
+    run_individual_fusiontrack_baseline,
+    run_individual_fusiontrack_ensemble,
+)
 
 
 SUPPORTED_TASKS = (
@@ -35,9 +41,11 @@ SUPPORTED_TASKS = (
     "group_prediction",
     "group_temporal_autoencoder",
     "fusiontrack_individual",
+    "fusiontrack_individual_ensemble",
     "fusiontrack_individual_context",
     "fusiontrack_group",
     "fusiontrack_group_temporal_knn",
+    "fusiontrack_group_hybrid",
 )
 
 
@@ -227,6 +235,17 @@ def _run_experiment(
             load_jsonl(_resolve_path(_required(experiment, "score_jsonl"), config_dir)),
             n_neighbors=int(experiment.get("n_neighbors", 1)),
         )
+    elif task == "fusiontrack_individual_ensemble":
+        rows = run_individual_fusiontrack_ensemble(
+            load_jsonl(_resolve_path(_required(experiment, "train_jsonl"), config_dir)),
+            load_jsonl(_resolve_path(_required(experiment, "score_jsonl"), config_dir)),
+            n_neighbors=int(experiment.get("n_neighbors", 1)),
+            seed=int(experiment.get("seed", 42)),
+            contamination=float(experiment.get("contamination", 0.05)),
+            nearest_weight=float(experiment.get("nearest_weight", 0.4)),
+            lof_weight=float(experiment.get("lof_weight", 0.35)),
+            iforest_weight=float(experiment.get("iforest_weight", 0.25)),
+        )
     elif task == "fusiontrack_individual_context":
         rows = run_context_aware_fusiontrack_baseline(
             load_jsonl(_resolve_path(_required(experiment, "train_jsonl"), config_dir)),
@@ -250,6 +269,23 @@ def _run_experiment(
             train_windows,
             score_windows,
             n_neighbors=int(experiment.get("n_neighbors", 3)),
+        )
+    elif task == "fusiontrack_group_hybrid":
+        score_windows = load_jsonl(_resolve_path(_required(experiment, "score_windows"), config_dir))
+        train_windows = load_jsonl(_resolve_path(_required(experiment, "train_windows"), config_dir))
+        rows = run_group_hybrid_fusiontrack(
+            train_windows,
+            score_windows,
+            n_neighbors=int(experiment.get("n_neighbors", 3)),
+            k_neighbors=int(experiment.get("k_neighbors", 3)),
+            rho_p=float(experiment.get("rho_p", 80.0)),
+            rho_v=float(experiment.get("rho_v", 20.0)),
+            eta=float(experiment.get("eta", 0.5)),
+            prediction_weight=float(experiment.get("prediction_weight", 0.6)),
+            graph_weight=float(experiment.get("graph_weight", 0.2)),
+            temporal_weight=float(experiment.get("temporal_weight", 0.2)),
+            invert_graph_rank=bool(experiment.get("invert_graph_rank", True)),
+            invert_temporal_rank=bool(experiment.get("invert_temporal_rank", True)),
         )
     else:  # pragma: no cover - guarded by caller
         raise ValueError(f"Unsupported task '{task}'")

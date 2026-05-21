@@ -8,7 +8,9 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from baselines.group_prediction import run_prediction_baseline
 from baselines.group_features import FEATURE_COLUMNS, build_group_feature_table
+from fusiontrack.group_scoring import score_group_windows
 from protocol.schemas import build_sample_id
 
 
@@ -102,6 +104,123 @@ def run_group_temporal_knn(
     return rows
 
 
+def run_group_hybrid_fusiontrack(
+    train_windows: Iterable[dict],
+    score_windows: Iterable[dict],
+    n_neighbors: int = 3,
+    k_neighbors: int = 3,
+    rho_p: float = 80.0,
+    rho_v: float = 20.0,
+    eta: float = 0.5,
+    prediction_weight: float = 0.6,
+    graph_weight: float = 0.2,
+    temporal_weight: float = 0.2,
+    invert_graph_rank: bool = True,
+    invert_temporal_rank: bool = True,
+) -> list[dict[str, Any]]:
+    train_windows = list(train_windows)
+    score_windows = list(score_windows)
+
+    prediction_rows = run_prediction_baseline(score_windows)
+    graph_by_key = _rows_by_key(
+        score_group_windows(
+            score_windows,
+            k_neighbors=k_neighbors,
+            rho_p=rho_p,
+            rho_v=rho_v,
+            eta=eta,
+        )
+    )
+    temporal_by_key = _rows_by_key(
+        run_group_temporal_knn(
+            train_windows,
+            score_windows,
+            n_neighbors=n_neighbors,
+        )
+    )
+
+    keys = [_row_key(row) for row in prediction_rows]
+    prediction_rank = _rank01([row.get("score", 0.0) for row in prediction_rows])
+    graph_rank = _rank01(
+        [
+            graph_by_key.get(key, {}).get("score", 0.0)
+            for key in keys
+        ],
+        inverse=invert_graph_rank,
+    )
+    temporal_rank = _rank01(
+        [
+            temporal_by_key.get(key, {}).get("score", 0.0)
+            for key in keys
+        ],
+        inverse=invert_temporal_rank,
+    )
+
+    weights = np.asarray(
+        [prediction_weight, graph_weight, temporal_weight],
+        dtype=float,
+    )
+    if not np.isfinite(weights).all() or float(weights.sum()) <= 0.0:
+        weights = np.asarray([0.6, 0.2, 0.2], dtype=float)
+    weights = weights / float(weights.sum())
+
+    rows: list[dict[str, Any]] = []
+    for index, row in enumerate(prediction_rows):
+        key = keys[index]
+        graph_row = graph_by_key.get(key, {})
+        temporal_row = temporal_by_key.get(key, {})
+        component_scores = {
+            "prediction_residual_rank": float(prediction_rank[index]),
+            "graph_rank": float(graph_rank[index]),
+            "temporal_profile_rank": float(temporal_rank[index]),
+        }
+        score = (
+            float(weights[0]) * component_scores["prediction_residual_rank"]
+            + float(weights[1]) * component_scores["graph_rank"]
+            + float(weights[2]) * component_scores["temporal_profile_rank"]
+        )
+        rows.append(
+            {
+                "sample_id": str(row["sample_id"]),
+                "window_id": str(row["window_id"]),
+                "sequence": str(row.get("sequence", "")),
+                "track_id": str(row.get("track_id", "")),
+                "frame_start": row.get("frame_start"),
+                "frame_end": row.get("frame_end"),
+                "source": "fusiontrack_group_hybrid",
+                "score": float(score) if np.isfinite(score) else 0.0,
+                "component_scores": component_scores,
+                "metadata": {
+                    "method": "fusiontrack_group_hybrid",
+                    "window_id": str(row["window_id"]),
+                    "n_neighbors": int(n_neighbors),
+                    "k_neighbors": int(k_neighbors),
+                    "rho_p": float(rho_p),
+                    "rho_v": float(rho_v),
+                    "eta": float(eta),
+                    "rank_transforms": {
+                        "prediction_residual_rank": "rank",
+                        "graph_rank": "inverse_rank" if invert_graph_rank else "rank",
+                        "temporal_profile_rank": (
+                            "inverse_rank" if invert_temporal_rank else "rank"
+                        ),
+                    },
+                    "weights": {
+                        "prediction_residual_rank": float(weights[0]),
+                        "graph_rank": float(weights[1]),
+                        "temporal_profile_rank": float(weights[2]),
+                    },
+                    "raw_scores": {
+                        "prediction_residual": float(row.get("score", 0.0) or 0.0),
+                        "graph": float(graph_row.get("score", 0.0) or 0.0),
+                        "temporal_profile": float(temporal_row.get("score", 0.0) or 0.0),
+                    },
+                },
+            }
+        )
+    return rows
+
+
 def _feature_matrix(feature_df: pd.DataFrame) -> pd.DataFrame:
     if feature_df.empty:
         return pd.DataFrame(columns=FEATURE_COLUMNS)
@@ -154,3 +273,26 @@ def _sample_id(obj: dict, sequence: str, track_id: str) -> str:
     if sample_id not in (None, ""):
         return str(sample_id)
     return build_sample_id(sequence, track_id)
+
+
+def _rows_by_key(rows: Iterable[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
+    return {_row_key(row): row for row in rows}
+
+
+def _row_key(row: dict[str, Any]) -> tuple[str, str]:
+    return str(row.get("sample_id", "")), str(row.get("window_id", ""))
+
+
+def _rank01(values: Iterable[float], inverse: bool = False) -> list[float]:
+    array = np.asarray(list(values), dtype=float)
+    if len(array) == 0:
+        return []
+    array = np.where(np.isfinite(array), array, 0.0)
+    if float(np.max(array) - np.min(array)) <= 0.0:
+        return [0.0 for _ in array]
+    order = np.argsort(array, kind="mergesort")
+    ranks = np.empty(len(array), dtype=float)
+    ranks[order] = np.linspace(0.0, 1.0, num=len(array))
+    if inverse:
+        ranks = 1.0 - ranks
+    return [float(value) for value in ranks]
