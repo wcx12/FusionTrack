@@ -174,13 +174,26 @@
       "GPU_ID": 0,
       "SEED": 42,
       "USE_TMUX": 1
+    },
+    "latest_completed_local_matrix_run": {
+      "date": "2026-05-22",
+      "source_revision": "b3b8599",
+      "tmux_session": "fusiontrack_group_knn_b3b8599",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_val/results",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "scope": [
+        "strict individual validation matrix",
+        "strict group validation matrix",
+        "fusiontrack_group_temporal_knn full-coverage group run"
+      ]
     }
   },
   "rerun_requirements": [
-    "Regenerate group labels with sample_id+window_id strict protocol.",
-    "Rerun all group local baselines under group_main_key_fields.",
+    "Completed for local matrices in remote run fusiontrack_group_knn_b3b8599: regenerate group labels with sample_id+window_id strict protocol.",
+    "Completed for local matrices in remote run fusiontrack_group_knn_b3b8599: rerun all group local baselines under group_main_key_fields.",
     "Rerun official group baselines or reconvert their score files so group scores carry top-level window_id.",
     "Keep old sample_id-only group results only as appendix any-window diagnostics.",
-    "Regenerate individual and group matrix configs with require_unique_keys=true and require_score_key_match=true, then rerun any experiment whose metrics show duplicate keys, missing score keys, or extra score keys."
+    "Rerun official-source deep baselines under the convergence policy before making final convergence claims.",
+    "Rerun any experiment whose metrics show duplicate keys, missing score keys, or extra score keys."
   ]
 }

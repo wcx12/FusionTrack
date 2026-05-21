@@ -118,10 +118,16 @@ tmux attach -t fusiontrack_val
 
 Logs are written under `logs/` by default, or under `LOG_ROOT` if that environment variable is set.
 
-## Required Reruns
+## Completed Reruns
 
-1. Regenerate group labels with the strict `sample_id + window_id` protocol.
-2. Rerun all local group baselines under the strict group key.
-3. Rerun or reconvert official group baselines so every score row carries top-level `window_id`.
-4. Keep old `sample_id`-only group results only as appendix any-window diagnostics.
-5. Regenerate individual and group matrix configs with `require_unique_keys=true` and `require_score_key_match=true`, then rerun any experiment whose metrics show duplicate keys, missing score keys, or extra score keys.
+1. Regenerated strict validation protocol on the remote server for revision `b3b8599`.
+2. Reran local individual and group benchmark matrices under strict key matching in `tmux` session `fusiontrack_group_knn_b3b8599`.
+3. Added `fusiontrack_group_temporal_knn` to the generated group matrix and obtained full-coverage group scores.
+4. Verified the generated individual and group summaries have zero duplicate keys, zero missing score keys, and zero extra score keys.
+
+## Remaining Reruns
+
+1. Rerun or reconvert official group baselines so every score row carries top-level `window_id`.
+2. Rerun official-source deep baselines under the convergence policy before making final convergence claims.
+3. Keep old `sample_id`-only group results only as appendix any-window diagnostics.
+4. Rerun any experiment whose metrics show duplicate keys, missing score keys, or extra score keys.
