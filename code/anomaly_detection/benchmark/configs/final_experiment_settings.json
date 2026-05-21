@@ -186,14 +186,56 @@
         "strict group validation matrix",
         "fusiontrack_group_temporal_knn full-coverage group run"
       ]
+    },
+    "latest_completed_official_run": {
+      "date": "2026-05-22",
+      "source_revision": "b3b8599",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_official_20260522",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "parallel_tmux_sessions": [
+        "official_traj_b3b8599",
+        "official_tsad_ind_b3b8599",
+        "official_tsad_group_b3b8599"
+      ],
+      "strict_main_table_methods": {
+        "individual": [
+          "official_lmtad",
+          "official_pidpm",
+          "official_tranad",
+          "official_anomaly_transformer",
+          "official_dcdetector"
+        ],
+        "group": [
+          "official_tranad",
+          "official_anomaly_transformer",
+          "official_dcdetector"
+        ]
+      },
+      "coverage_failed_methods": {
+        "official_cetrajad": {
+          "num_score_rows": 770,
+          "num_label_rows": 829,
+          "num_missing_score_keys": 59,
+          "main_table_eligible": false
+        }
+      },
+      "audit": {
+        "strict_official_individual_rows": 5,
+        "strict_official_group_rows": 3,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      }
     }
   },
   "rerun_requirements": [
     "Completed for local matrices in remote run fusiontrack_group_knn_b3b8599: regenerate group labels with sample_id+window_id strict protocol.",
     "Completed for local matrices in remote run fusiontrack_group_knn_b3b8599: rerun all group local baselines under group_main_key_fields.",
-    "Rerun official group baselines or reconvert their score files so group scores carry top-level window_id.",
+    "Completed for official main-table rows in remote run fusiontrack_b3b8599_official_20260522: rerun official group baselines with top-level window_id and strict key matching.",
     "Keep old sample_id-only group results only as appendix any-window diagnostics.",
-    "Rerun official-source deep baselines under the convergence policy before making final convergence claims.",
+    "Extend max-budget-not-converged official-source deep baselines before making final convergence claims, or report the current convergence status explicitly.",
+    "Keep official CETrajAD out of the strict main table unless a full-coverage official-source scorer is implemented.",
     "Rerun any experiment whose metrics show duplicate keys, missing score keys, or extra score keys."
   ]
 }

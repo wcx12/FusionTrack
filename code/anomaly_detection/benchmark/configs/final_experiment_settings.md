@@ -124,10 +124,13 @@ Logs are written under `logs/` by default, or under `LOG_ROOT` if that environme
 2. Reran local individual and group benchmark matrices under strict key matching in `tmux` session `fusiontrack_group_knn_b3b8599`.
 3. Added `fusiontrack_group_temporal_knn` to the generated group matrix and obtained full-coverage group scores.
 4. Verified the generated individual and group summaries have zero duplicate keys, zero missing score keys, and zero extra score keys.
+5. Reran official-source LM-TAD, Pi-DPM, TranAD, Anomaly Transformer, and DCdetector on the remote GPU under revision `b3b8599`.
+6. Regenerated strict official individual and group summaries in `/root/autodl-tmp/fusiontrack_b3b8599_official_20260522`, with zero duplicate, missing, or extra score keys for all main-table official rows.
+7. Reran CETrajAD and confirmed it remains coverage-failed: `770/829` score rows, `59` missing score keys.
 
 ## Remaining Reruns
 
-1. Rerun or reconvert official group baselines so every score row carries top-level `window_id`.
-2. Rerun official-source deep baselines under the convergence policy before making final convergence claims.
+1. Keep CETrajAD out of the strict main table unless a full-coverage official-source scorer is implemented.
+2. Extend max-budget-not-converged deep runs if the paper needs final convergence claims instead of reporting the current budget status.
 3. Keep old `sample_id`-only group results only as appendix any-window diagnostics.
 4. Rerun any experiment whose metrics show duplicate keys, missing score keys, or extra score keys.
