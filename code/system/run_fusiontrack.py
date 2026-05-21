@@ -13,7 +13,7 @@ if str(MTF_BA_ROOT) not in sys.path:
     sys.path.insert(0, str(MTF_BA_ROOT))
 
 from fusiontrack.config import FusionTrackPaths
-from fusiontrack.pipeline import run_smoke_pipeline
+from fusiontrack.pipeline import build_experiment_report, run_smoke_pipeline
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,21 +26,41 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--skip-extraction", action="store_true")
     parser.add_argument("--device", default="cpu", help="Reserved for full training mode.")
+    parser.add_argument("--result-manifest", type=Path, help="Benchmark result manifest to render.")
+    parser.add_argument("--result-method", help="Method name inside the result manifest.")
+    parser.add_argument("--fused-jsonl", type=Path, help="Fused trajectory JSONL used by the result manifest.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     paths = FusionTrackPaths.defaults(data_root=args.data_root, work_root=args.work_root)
-    if args.mode == "full":
+    if args.result_manifest:
+        summary = build_experiment_report(
+            paths=paths,
+            result_manifest=args.result_manifest,
+            split=args.split,
+            result_method=args.result_method,
+            fused_jsonl=args.fused_jsonl,
+            top_sequences=args.top_sequences,
+        )
+    elif args.mode == "full":
         print("full mode is using the smoke baseline path in this v1 implementation.")
-    summary = run_smoke_pipeline(
-        paths=paths,
-        split=args.split,
-        top_sequences=args.top_sequences,
-        force=args.force,
-        skip_extraction=args.skip_extraction,
-    )
+        summary = run_smoke_pipeline(
+            paths=paths,
+            split=args.split,
+            top_sequences=args.top_sequences,
+            force=args.force,
+            skip_extraction=args.skip_extraction,
+        )
+    else:
+        summary = run_smoke_pipeline(
+            paths=paths,
+            split=args.split,
+            top_sequences=args.top_sequences,
+            force=args.force,
+            skip_extraction=args.skip_extraction,
+        )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 

@@ -34,6 +34,54 @@ def _load_scores(path: Path) -> dict[str, dict[str, Any]]:
         return {row["sample_id"]: row for row in csv.DictReader(f)}
 
 
+def _positive_ground_truth(labels_by_sample: dict[str, list[dict[str, Any]]], sample_id: str) -> list[dict[str, Any]]:
+    labels = []
+    for row in labels_by_sample.get(sample_id, []):
+        if int(row.get("label", 0) or 0) != 1:
+            continue
+        labels.append(
+            {
+                "frame_start": int(row.get("frame_start", 0) or 0),
+                "frame_end": int(row.get("frame_end", 0) or 0),
+                "label": 1,
+                "anomaly_type": str(row.get("anomaly_type", "")),
+                "injection_seed": int(row.get("injection_seed", 0) or 0),
+            }
+        )
+    return labels
+
+
+def _metric_label(key: str) -> str:
+    labels = {
+        "auroc": "AUROC",
+        "auprc": "AUPRC",
+        "f1": "F1",
+        "precision_at_k": "Precision@K",
+        "recall_at_k": "Recall@K",
+    }
+    return labels.get(key, key.replace("_", " ").title())
+
+
+def _format_metric_value(value: Any) -> str:
+    try:
+        return f"{float(value):.3f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _compact_experiment_context(experiment_context: dict[str, Any]) -> dict[str, Any]:
+    if not experiment_context:
+        return {}
+    return {
+        "method_name": experiment_context.get("method_name", ""),
+        "task": experiment_context.get("task", ""),
+        "split": experiment_context.get("split", ""),
+        "seed": experiment_context.get("seed"),
+        "metrics": experiment_context.get("metrics", {}) or {},
+        "summary": experiment_context.get("summary", {}) or {},
+    }
+
+
 def _score_for(trajectory: dict[str, Any], scores: dict[str, dict[str, Any]]) -> float:
     return float(scores.get(trajectory["sample_id"], {}).get("score", 0.0))
 
@@ -205,11 +253,14 @@ def _build_playback_payload(
     background_asset: Path | None,
     background_frames: list[dict[str, Any]],
     scene_size: tuple[int, int] | None,
+    labels_by_sample: dict[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
+    labels_by_sample = labels_by_sample or {}
     ranked = sorted(trajectories, key=lambda item: _score_for(item, scores), reverse=True)
     frame_ids: list[int] = []
     tracks = []
     frame_mass: dict[int, float] = defaultdict(float)
+    ground_truth_segments = []
     max_score = max([_score_for(item, scores) for item in ranked] or [0.0])
     for trajectory in ranked[:80]:
         points = []
@@ -267,6 +318,17 @@ def _build_playback_payload(
             },
             {"key": "confidence", "label": "Confidence drop", "value": round(min(confidence_drop * 2.0, 1.0), 6)},
         ]
+        ground_truth = _positive_ground_truth(labels_by_sample, str(trajectory["sample_id"]))
+        for label in ground_truth:
+            ground_truth_segments.append(
+                {
+                    "sample_id": str(trajectory["sample_id"]),
+                    "track_id": str(trajectory["track_id"]),
+                    "frame_start": label["frame_start"],
+                    "frame_end": label["frame_end"],
+                    "anomaly_type": label["anomaly_type"],
+                }
+            )
         tracks.append(
             {
                 "sequence": sequence,
@@ -286,6 +348,7 @@ def _build_playback_payload(
                 "avg_speed": round(avg_speed, 6),
                 "max_speed": round(max_speed, 6),
                 "reason_breakdown": reason_breakdown,
+                "ground_truth": ground_truth,
                 "points": points,
             }
         )
@@ -306,6 +369,7 @@ def _build_playback_payload(
         "size": {"width": width, "height": height},
         "frame_range": [frame_start, frame_end],
         "tracks": tracks,
+        "ground_truth_segments": ground_truth_segments,
         "timeline": timeline,
     }
 
@@ -480,6 +544,7 @@ def build_visual_report(
     data_root: str | Path,
     output_dir: str | Path,
     top_sequences: int = 5,
+    experiment_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     fused_jsonl = Path(fused_jsonl)
     final_scores_csv = Path(final_scores_csv)
@@ -490,6 +555,8 @@ def build_visual_report(
 
     trajectories = _load_jsonl(fused_jsonl)
     scores = _load_scores(final_scores_csv)
+    experiment_context = experiment_context or {}
+    labels_by_sample = experiment_context.get("labels_by_sample", {}) or {}
     by_sequence: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for trajectory in trajectories:
         by_sequence[str(trajectory["sequence"])].append(trajectory)
@@ -533,6 +600,7 @@ def build_visual_report(
             background_asset,
             background_frames,
             background_size,
+            labels_by_sample,
         )
         _write_playback_payload(playback_payload, playback_path)
         playback_payloads[sequence] = playback_payload
@@ -560,11 +628,40 @@ def build_visual_report(
     max_score = max([float(row.get("score", 0.0)) for row in scored_rows] or [0.0])
     trajectory_by_sample = {trajectory["sample_id"]: trajectory for trajectory in trajectories}
     playback_data_json = json.dumps(playback_payloads, ensure_ascii=True).replace("</", "<\\/")
+    experiment_metrics = experiment_context.get("metrics", {}) or {}
+    metric_keys = ["auroc", "auprc", "f1", "precision_at_k", "recall_at_k"]
+    metric_items_html = "\n".join(
+        f"<div class=\"experiment-metric\"><span>{html.escape(_metric_label(key))}</span>"
+        f"<strong>{html.escape(_format_metric_value(experiment_metrics[key]))}</strong></div>"
+        for key in metric_keys
+        if key in experiment_metrics
+    )
+    experiment_panel_html = ""
+    if experiment_context:
+        method_name = str(experiment_context.get("method_name", "unknown"))
+        task_name = str(experiment_context.get("task", ""))
+        split_name = str(experiment_context.get("split", ""))
+        seed = experiment_context.get("seed")
+        summary = experiment_context.get("summary", {}) or {}
+        experiment_panel_html = (
+            "<section class=\"experiment-panel\">"
+            "<h2>Experiment</h2>"
+            f"<div class=\"experiment-name\">{html.escape(method_name)}</div>"
+            f"<div class=\"experiment-meta\">{html.escape(task_name)} | {html.escape(split_name)}"
+            f"{' | seed ' + html.escape(str(seed)) if seed is not None else ''}</div>"
+            f"<div class=\"experiment-meta\">GT positives: {html.escape(str(summary.get('num_positive_labels', 0)))}</div>"
+            f"<div class=\"experiment-metrics\">{metric_items_html}</div>"
+            "</section>"
+        )
 
     def first_frame_for(row: dict[str, Any]) -> int:
         trajectory = trajectory_by_sample.get(row.get("sample_id", ""))
         frame_points = _trajectory_frame_points(trajectory) if trajectory else []
         return frame_points[0][0] if frame_points else 0
+
+    def label_text_for(row: dict[str, Any]) -> str:
+        labels = _positive_ground_truth(labels_by_sample, row.get("sample_id", ""))
+        return " ".join(label["anomaly_type"] for label in labels if label.get("anomaly_type"))
 
     def target_attrs(row: dict[str, Any]) -> str:
         search_text = " ".join(
@@ -574,6 +671,7 @@ def build_visual_report(
                 row.get("track_id", ""),
                 row.get("category_name", "") or "",
                 row.get("used_sources", ""),
+                label_text_for(row),
             ]
         ).lower()
         return (
@@ -590,7 +688,8 @@ def build_visual_report(
         f"<span class=\"score\">{float(row.get('score', 0.0)):.1f}</span>"
         "<span class=\"target-copy\">"
         f"<strong>{html.escape(row.get('sequence', ''))} / {html.escape(row.get('track_id', ''))}</strong>"
-        f"<small>{html.escape(row.get('category_name', '') or '')} | {html.escape(row.get('used_sources', ''))}</small>"
+        f"<small>{html.escape(row.get('category_name', '') or '')} | {html.escape(row.get('used_sources', ''))}"
+        f"{' | GT: ' + html.escape(label_text_for(row)) if label_text_for(row) else ''}</small>"
         "</span>"
         "</button>"
         for row in scored_rows[:10]
@@ -694,6 +793,25 @@ def build_visual_report(
         `;
       }
 
+      function renderGroundTruth(track) {
+        const labels = track.ground_truth || [];
+        if (!labels.length) {
+          return "";
+        }
+        const rows = labels.map((label) => `
+          <div class="gt-item">
+            <span>${escapeHtml(label.anomaly_type || "anomaly")}</span>
+            <strong>${escapeHtml(label.frame_start)}-${escapeHtml(label.frame_end)}</strong>
+          </div>
+        `).join("");
+        return `
+          <div class="gt-panel">
+            <div class="reason-title">GT anomaly</div>
+            <div class="gt-list">${rows}</div>
+          </div>
+        `;
+      }
+
       function renderTargetDetail(track, data) {
         if (!track) {
           targetDetail.innerHTML = `
@@ -714,6 +832,7 @@ def build_visual_report(
             <div class="metric"><span>Max speed</span><strong>${Number(track.max_speed).toFixed(2)}</strong></div>
           </div>
           ${renderReasonBreakdown(track)}
+          ${renderGroundTruth(track)}
         `;
       }
 
@@ -813,6 +932,7 @@ def build_visual_report(
         ctx.fillRect(0, data.size.height, width, 72);
         ctx.strokeStyle = "#cbd5e1";
         ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+        drawGroundTruthSegments(data, bounds);
         ctx.fillStyle = "rgba(37, 99, 235, 0.42)";
         for (const item of data.timeline) {
           const x = bounds.x + ((item.frame - bounds.start) / bounds.span) * bounds.width;
@@ -826,6 +946,28 @@ def build_visual_report(
         ctx.moveTo(playX, bounds.y - 4);
         ctx.lineTo(playX, bounds.y + bounds.height + 4);
         ctx.stroke();
+      }
+
+      function drawGroundTruthSegments(data, bounds) {
+        const segments = data.ground_truth_segments || [];
+        if (!segments.length) {
+          return;
+        }
+        ctx.fillStyle = "rgba(239, 68, 68, 0.18)";
+        ctx.strokeStyle = "rgba(185, 28, 28, 0.52)";
+        ctx.lineWidth = 1;
+        for (const segment of segments) {
+          const start = Math.max(bounds.start, Number(segment.frame_start || bounds.start));
+          const end = Math.min(bounds.end, Number(segment.frame_end || bounds.end));
+          if (end < bounds.start || start > bounds.end) {
+            continue;
+          }
+          const x0 = bounds.x + ((start - bounds.start) / bounds.span) * bounds.width;
+          const x1 = bounds.x + ((end - bounds.start) / bounds.span) * bounds.width;
+          const width = Math.max(2, x1 - x0);
+          ctx.fillRect(x0, bounds.y, width, bounds.height);
+          ctx.strokeRect(x0, bounds.y, width, bounds.height);
+        }
       }
 
       function drawPlayback() {
@@ -1141,6 +1283,13 @@ def build_visual_report(
     .target-card .score {{ color: #dc2626; font-size: 20px; font-weight: 700; }}
     .target-copy {{ display: grid; gap: 3px; min-width: 0; }}
     .target-copy small {{ color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .experiment-panel {{ margin-top: 0; border-bottom: 1px solid #e1e5eb; padding-bottom: 14px; }}
+    .experiment-name {{ font-weight: 700; color: #172033; overflow-wrap: anywhere; }}
+    .experiment-meta {{ margin-top: 4px; color: #64748b; font-size: 12px; }}
+    .experiment-metrics {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }}
+    .experiment-metric {{ border: 1px solid #e1e5eb; border-radius: 6px; padding: 7px; background: #fbfdff; }}
+    .experiment-metric span {{ display: block; color: #64748b; font-size: 11px; }}
+    .experiment-metric strong {{ display: block; margin-top: 3px; font-size: 15px; }}
     .tabs {{ display: flex; flex-wrap: wrap; gap: 8px; }}
     .tab-button {{ border: 1px solid #cbd5e1; background: white; border-radius: 999px; color: #334155; cursor: pointer; padding: 8px 12px; }}
     .tab-button.active {{ background: #111827; border-color: #111827; color: white; }}
@@ -1163,6 +1312,9 @@ def build_visual_report(
     .reason-copy strong {{ color: #172033; }}
     .reason-bar {{ height: 7px; overflow: hidden; border-radius: 999px; background: #e2e8f0; }}
     .reason-bar span {{ display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2563eb, #ef4444); }}
+    .gt-panel {{ margin-top: 12px; border-top: 1px solid #e1e5eb; padding-top: 10px; }}
+    .gt-list {{ display: grid; gap: 6px; margin-top: 7px; }}
+    .gt-item {{ display: flex; justify-content: space-between; gap: 8px; border: 1px solid #fecaca; border-radius: 6px; padding: 7px 8px; background: #fff7f7; color: #7f1d1d; font-size: 12px; }}
     #frameBadge, #trackReadout {{ color: #475569; font-size: 13px; }}
     .canvas-shell {{ margin-top: 12px; background: #111827; border-radius: 8px; padding: 10px; }}
     canvas {{ display: block; width: 100%; height: auto; background: #e2e8f0; border-radius: 6px; }}
@@ -1225,6 +1377,7 @@ def build_visual_report(
             <input id="minScore" type="range" min="0" max="{max_score:.2f}" value="0" step="0.01">
           </label>
         </div>
+        {experiment_panel_html}
         <section>
           <h2>Sequences</h2>
           <div id="sequenceTabs" class="tabs">{sequence_tabs_html}</div>
@@ -1279,6 +1432,7 @@ def build_visual_report(
         "num_sequences": len(by_sequence),
         "num_trajectories": len(trajectories),
         "num_scores": len(scores),
+        "experiment": _compact_experiment_context(experiment_context),
         "sequence_assets": [
             {key: str(value) if isinstance(value, Path) else value for key, value in asset.items()}
             for asset in sequence_assets

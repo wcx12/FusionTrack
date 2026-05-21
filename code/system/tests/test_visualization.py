@@ -219,3 +219,105 @@ def test_visual_report_writes_index_and_assets(tmp_path: Path) -> None:
     assert 'data-sequence="S1"' in report_html
     assert "Top anomaly table" not in report_html
     assert "File index" not in report_html
+
+
+def test_visual_report_embeds_experiment_context_labels_and_metrics(tmp_path: Path) -> None:
+    fused_jsonl = tmp_path / "fused.jsonl"
+    scores_csv = tmp_path / "scores.csv"
+    report_dir = tmp_path / "report"
+    fused_jsonl.write_text(
+        json.dumps(
+            {
+                "sample_id": "S1:7",
+                "sequence": "S1",
+                "track_id": "7",
+                "category_id": 1,
+                "category_name": "ship",
+                "points": [
+                    {"frame_id": 10, "fused": {"center_xy": [20, 30], "confidence": 0.9}},
+                    {"frame_id": 20, "fused": {"center_xy": [40, 50], "confidence": 0.8}},
+                    {"frame_id": 30, "fused": {"center_xy": [60, 60], "confidence": 0.7}},
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with scores_csv.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["sample_id", "sequence", "track_id", "category_id", "category_name", "score", "used_sources"],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "sample_id": "S1:7",
+                "sequence": "S1",
+                "track_id": "7",
+                "category_id": 1,
+                "category_name": "ship",
+                "score": 0.82,
+                "used_sources": "fusiontrack_individual_nn",
+            }
+        )
+
+    summary = build_visual_report(
+        fused_jsonl=fused_jsonl,
+        final_scores_csv=scores_csv,
+        data_root=tmp_path / "data",
+        output_dir=report_dir,
+        top_sequences=1,
+        experiment_context={
+            "method_name": "fusiontrack_individual_nn",
+            "task": "fusiontrack_individual",
+            "split": "local_smoke_individual",
+            "seed": 42,
+            "metrics": {"auroc": 0.91, "auprc": 0.83, "f1": 0.76},
+            "labels_by_sample": {
+                "S1:7": [
+                    {
+                        "sample_id": "S1:7",
+                        "sequence": "S1",
+                        "track_id": "7",
+                        "frame_start": 12,
+                        "frame_end": 24,
+                        "label": 1,
+                        "anomaly_type": "speed_spike",
+                        "injection_seed": 42,
+                    }
+                ]
+            },
+            "summary": {"num_positive_labels": 1},
+        },
+    )
+
+    assert summary["experiment"]["method_name"] == "fusiontrack_individual_nn"
+    assert "labels_by_sample" not in summary["experiment"]
+    playback = json.loads((report_dir / "assets" / "playback_S1.json").read_text(encoding="utf-8"))
+    track = playback["tracks"][0]
+    assert track["ground_truth"] == [
+        {
+            "frame_start": 12,
+            "frame_end": 24,
+            "label": 1,
+            "anomaly_type": "speed_spike",
+            "injection_seed": 42,
+        }
+    ]
+    assert playback["ground_truth_segments"] == [
+        {
+            "sample_id": "S1:7",
+            "track_id": "7",
+            "frame_start": 12,
+            "frame_end": 24,
+            "anomaly_type": "speed_spike",
+        }
+    ]
+    report_html = (report_dir / "index.html").read_text(encoding="utf-8")
+    assert "Experiment" in report_html
+    assert "fusiontrack_individual_nn" in report_html
+    assert "AUROC" in report_html
+    assert "0.910" in report_html
+    assert "GT anomaly" in report_html
+    assert "speed_spike" in report_html
+    assert "drawGroundTruthSegments" in report_html

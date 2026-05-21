@@ -15,6 +15,7 @@ from mtf_ba.group_interface import (
 )
 
 from fusiontrack.config import FusionTrackPaths
+from fusiontrack.experiment_adapter import load_experiment_result, write_scores_csv
 from fusiontrack.fusion import fuse_observations_csv
 from fusiontrack.group_baseline import score_group_windows_jsonl
 from fusiontrack.score_fusion import fuse_score_records
@@ -60,6 +61,10 @@ def ensure_output_dirs(paths: FusionTrackPaths) -> None:
         paths.report_dir,
     ):
         directory.mkdir(parents=True, exist_ok=True)
+
+
+def _safe_filename(value: str) -> str:
+    return value.replace("/", "_").replace("\\", "_").replace(" ", "_")
 
 
 def extract_vt_tiny_mot(paths: FusionTrackPaths, split: str, force: bool = False) -> Path:
@@ -167,6 +172,50 @@ def run_smoke_pipeline(
         "report": report_summary,
     }
     summary_path = paths.work_root / f"pipeline_summary_{split}.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    summary["summary_path"] = str(summary_path)
+    return summary
+
+
+def build_experiment_report(
+    paths: FusionTrackPaths,
+    result_manifest: str | Path,
+    split: str = "test",
+    result_method: str | None = None,
+    fused_jsonl: str | Path | None = None,
+    top_sequences: int = 5,
+) -> dict[str, Any]:
+    ensure_output_dirs(paths)
+    result = load_experiment_result(result_manifest, method_name=result_method)
+    score_csv = paths.final_dir / f"experiment_scores_{_safe_filename(result.method_name)}.csv"
+    score_summary = write_scores_csv(result, score_csv)
+
+    source_fused_jsonl = Path(fused_jsonl) if fused_jsonl is not None else paths.fused_jsonl(split)
+    if not source_fused_jsonl.exists():
+        raise FileNotFoundError(f"Missing fused trajectories JSONL: {source_fused_jsonl}")
+
+    experiment_context = result.to_report_context()
+    report_summary = build_visual_report(
+        fused_jsonl=source_fused_jsonl,
+        final_scores_csv=score_csv,
+        data_root=paths.data_root,
+        output_dir=paths.report_dir,
+        top_sequences=top_sequences,
+        experiment_context=experiment_context,
+    )
+    summary = {
+        "mode": "experiment_report",
+        "split": split,
+        "data_root": str(paths.data_root),
+        "work_root": str(paths.work_root),
+        "result_manifest": str(result_manifest),
+        "fused_jsonl": str(source_fused_jsonl),
+        "score_export": score_summary,
+        "experiment": report_summary.get("experiment", {}),
+        "report": report_summary,
+    }
+    summary_path = paths.work_root / f"pipeline_summary_{split}_experiment.json"
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     summary["summary_path"] = str(summary_path)
