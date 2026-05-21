@@ -130,6 +130,13 @@ DEFAULT_EXPERIMENTS = {
             "seed": 42,
         },
         {
+            "name": "fusiontrack_group_temporal_knn",
+            "task": "fusiontrack_group_temporal_knn",
+            "train_windows": "group_windows_train.jsonl",
+            "score_windows": "group_windows_val.jsonl",
+            "n_neighbors": 3,
+        },
+        {
             "name": "fusiontrack_group_graph",
             "task": "fusiontrack_group",
             "score_windows": "group_windows_val.jsonl",

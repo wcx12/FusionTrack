@@ -91,6 +91,11 @@
       "group_lof": {"train_epochs": null, "contamination": 0.05, "seed": 42},
       "group_ocsvm": {"train_epochs": null, "contamination": 0.05, "seed": 42},
       "group_temporal_graph_ae_proxy": {"train_epochs": null, "n_components": 3, "seed": 42},
+      "fusiontrack_group_temporal_knn": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "model": "standardized_group_feature_knn"
+      },
       "fusiontrack_group_graph": {
         "train_epochs": null,
         "k_neighbors": 3,

@@ -37,6 +37,13 @@
       "seed": 42
     },
     {
+      "name": "fusiontrack_group_temporal_knn",
+      "task": "fusiontrack_group_temporal_knn",
+      "train_windows": "outputs/protocol/group_windows_train.jsonl",
+      "score_windows": "outputs/protocol/group_windows_val.jsonl",
+      "n_neighbors": 3
+    },
+    {
       "name": "fusiontrack_group_graph",
       "task": "fusiontrack_group",
       "score_windows": "outputs/protocol/group_windows_val.jsonl",

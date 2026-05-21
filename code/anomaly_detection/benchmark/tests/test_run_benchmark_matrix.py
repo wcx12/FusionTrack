@@ -152,6 +152,13 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
                         "seed": 13,
                     },
                     {
+                        "name": "fusiontrack_group_temporal_knn",
+                        "task": "fusiontrack_group_temporal_knn",
+                        "train_windows": str(train_group_windows_path),
+                        "score_windows": str(group_windows_path),
+                        "n_neighbors": 1,
+                    },
+                    {
                         "name": "fusiontrack_individual",
                         "task": "fusiontrack_individual",
                         "train_jsonl": str(train_trajectories_path),
@@ -219,6 +226,7 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
         "group_prediction",
         "existing",
         "group_temporal_autoencoder",
+        "fusiontrack_group_temporal_knn",
         "fusiontrack_individual",
         "fusiontrack_individual_context",
         "individual_complementary",
@@ -226,6 +234,7 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
         "individual_physics",
     ]
     assert (output_dir / "scores" / "group_prediction.jsonl").exists()
+    assert (output_dir / "scores" / "fusiontrack_group_temporal_knn.jsonl").exists()
     assert (output_dir / "scores" / "fusiontrack_individual_context.jsonl").exists()
     assert (output_dir / "scores" / "individual_trajectory_lm_ngram.jsonl").exists()
     assert (output_dir / "scores" / "individual_physics.jsonl").exists()
@@ -246,6 +255,7 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
         "group_prediction",
         "existing",
         "group_temporal_autoencoder",
+        "fusiontrack_group_temporal_knn",
         "fusiontrack_individual",
         "fusiontrack_individual_context",
         "individual_complementary",
@@ -471,6 +481,11 @@ def test_run_benchmark_matrix_help_works_as_direct_script() -> None:
             "name": "group_temporal_autoencoder",
             "task": "group_temporal_autoencoder",
             "n_components": 2,
+        },
+        {
+            "name": "fusiontrack_group_temporal_knn",
+            "task": "fusiontrack_group_temporal_knn",
+            "n_neighbors": 3,
         },
     ],
 )

@@ -21,6 +21,7 @@ from evaluation.io import load_jsonl, write_jsonl
 from evaluation.reporting import evaluate_score_file, summarize_metric_files
 from fusiontrack.context_aware_individual import run_context_aware_fusiontrack_baseline
 from fusiontrack.group_scoring import score_group_windows
+from fusiontrack.group_temporal_profile import run_group_temporal_knn
 from fusiontrack.individual_scoring import run_individual_fusiontrack_baseline
 
 
@@ -36,6 +37,7 @@ SUPPORTED_TASKS = (
     "fusiontrack_individual",
     "fusiontrack_individual_context",
     "fusiontrack_group",
+    "fusiontrack_group_temporal_knn",
 )
 
 
@@ -240,6 +242,14 @@ def _run_experiment(
             rho_p=float(experiment.get("rho_p", float("inf"))),
             rho_v=float(experiment.get("rho_v", float("inf"))),
             eta=float(experiment.get("eta", 0.5)),
+        )
+    elif task == "fusiontrack_group_temporal_knn":
+        score_windows = load_jsonl(_resolve_path(_required(experiment, "score_windows"), config_dir))
+        train_windows = load_jsonl(_resolve_path(_required(experiment, "train_windows"), config_dir))
+        rows = run_group_temporal_knn(
+            train_windows,
+            score_windows,
+            n_neighbors=int(experiment.get("n_neighbors", 3)),
         )
     else:  # pragma: no cover - guarded by caller
         raise ValueError(f"Unsupported task '{task}'")

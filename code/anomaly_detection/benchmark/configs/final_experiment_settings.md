@@ -74,6 +74,7 @@ Every deep baseline in the main table must have one of these statuses:
 | `group_lof` | group | no epoch, `contamination=0.05`, `seed=42` |
 | `group_ocsvm` | group | no epoch, `contamination=0.05`, `seed=42` |
 | `group_temporal_graph_ae_proxy` | group | no deep epoch, `n_components=3`, `seed=42` |
+| `fusiontrack_group_temporal_knn` | group | no epoch, `n_neighbors=3`, standardized group-feature KNN |
 | `fusiontrack_group_graph` | group | no epoch, `k_neighbors=3`, `rho_p=80`, `rho_v=20`, `eta=0.5` |
 
 ## Official Paper Baselines
