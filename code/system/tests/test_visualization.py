@@ -174,8 +174,23 @@ def test_visual_report_writes_index_and_assets(tmp_path: Path) -> None:
     playback = json.loads((report_dir / "assets" / "playback_S1.json").read_text(encoding="utf-8"))
     assert playback["sequence"] == "S1"
     assert playback["background"] == "assets/background_S1.jpg"
+    assert playback["background_frames"] == [
+        {"frame": 0, "src": "assets/background_S1_000000.jpg"},
+        {"frame": 1, "src": "assets/background_S1_000001.jpg"},
+    ]
     assert playback["frame_range"] == [0, 1]
     assert playback["tracks"][0]["score"] == 0.75
+    assert playback["tracks"][0]["duration"] == 2
+    assert playback["tracks"][0]["avg_confidence"] == 0.85
+    assert playback["tracks"][0]["max_modal_offset"] == 3.2
+    assert playback["tracks"][0]["confidence_drop"] == 0.1
+    assert [item["key"] for item in playback["tracks"][0]["reason_breakdown"]] == [
+        "score",
+        "source",
+        "motion",
+        "modal",
+        "confidence",
+    ]
     assert playback["tracks"][0]["points"][1]["frame"] == 1
     report_html = (report_dir / "index.html").read_text(encoding="utf-8")
     assert "FusionTrack" in report_html
@@ -188,6 +203,18 @@ def test_visual_report_writes_index_and_assets(tmp_path: Path) -> None:
     assert 'id="playPause"' in report_html
     assert 'id="frameScrubber"' in report_html
     assert 'id="speedSelect"' in report_html
+    assert 'id="targetDetail"' in report_html
+    assert 'id="demoMode"' in report_html
+    assert 'id="autoTour"' in report_html
+    assert "renderTargetDetail" in report_html
+    assert "renderReasonBreakdown" in report_html
+    assert "backgroundForFrame" in report_html
+    assert "ensureBackgroundForFrame" in report_html
+    assert "handleTimelineClick" in report_html
+    assert "evidence-tab" in report_html
+    assert "data-evidence-panel" in report_html
+    assert "showSequence(initialTarget.dataset.sequence" in report_html
+    assert "demo-mode" in report_html
     assert 'id="lightbox"' in report_html
     assert 'data-sequence="S1"' in report_html
     assert "Top anomaly table" not in report_html

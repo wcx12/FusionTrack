@@ -85,6 +85,50 @@ def _find_background_image(data_root: Path, trajectories: list[dict[str, Any]]) 
     return None
 
 
+def _resolve_rgb_file(data_root: Path, rgb_file: str) -> Path | None:
+    relative = Path(str(rgb_file))
+    for candidate in (
+        data_root / relative,
+        data_root / "test2017" / relative,
+        data_root / "train2017" / relative,
+    ):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _background_frame_candidates(
+    data_root: Path,
+    trajectories: list[dict[str, Any]],
+) -> list[tuple[int, Path]]:
+    by_frame: dict[int, Path] = {}
+    for trajectory in trajectories:
+        for point in trajectory.get("points", []):
+            frame_id = point.get("frame_id")
+            rgb = point.get("rgb")
+            if frame_id is None or not rgb or not rgb.get("file"):
+                continue
+            image_path = _resolve_rgb_file(data_root, str(rgb["file"]))
+            if image_path is not None and int(frame_id) not in by_frame:
+                by_frame[int(frame_id)] = image_path
+    return sorted(by_frame.items(), key=lambda item: item[0])
+
+
+def _select_background_frames(
+    candidates: list[tuple[int, Path]],
+    max_frames: int = 72,
+) -> list[tuple[int, Path]]:
+    if len(candidates) <= max_frames:
+        return candidates
+    if max_frames <= 1:
+        return [candidates[0]]
+    selected_indices = {
+        round(index * (len(candidates) - 1) / (max_frames - 1))
+        for index in range(max_frames)
+    }
+    return [candidates[index] for index in sorted(selected_indices)]
+
+
 def _apply_image_coordinate_axes(ax: Any, background_size: tuple[int, int] | None) -> None:
     if background_size is not None:
         width, height = background_size
@@ -121,16 +165,25 @@ def _copy_background_asset(
     trajectories: list[dict[str, Any]],
     data_root: Path,
     assets_dir: Path,
-) -> tuple[Path | None, tuple[int, int] | None]:
-    background = _find_background_image(data_root, trajectories)
+) -> tuple[Path | None, tuple[int, int] | None, list[dict[str, Any]]]:
+    candidates = _background_frame_candidates(data_root, trajectories)
+    background = candidates[0][1] if candidates else _find_background_image(data_root, trajectories)
     if background is None:
-        return None, None
+        return None, None, []
     suffix = background.suffix.lower() or ".jpg"
     if suffix == ".jpeg":
         suffix = ".jpg"
     output_path = assets_dir / f"background_{_safe_name(sequence)}{suffix}"
     shutil.copy2(background, output_path)
-    return output_path, _image_size(output_path)
+    frame_assets = []
+    for frame_id, frame_path in _select_background_frames(candidates):
+        frame_suffix = frame_path.suffix.lower() or ".jpg"
+        if frame_suffix == ".jpeg":
+            frame_suffix = ".jpg"
+        frame_output = assets_dir / f"background_{_safe_name(sequence)}_{frame_id:06d}{frame_suffix}"
+        shutil.copy2(frame_path, frame_output)
+        frame_assets.append({"frame": frame_id, "path": frame_output})
+    return output_path, _image_size(output_path), frame_assets
 
 
 def _fallback_scene_size(trajectories: list[dict[str, Any]]) -> tuple[int, int]:
@@ -150,6 +203,7 @@ def _build_playback_payload(
     trajectories: list[dict[str, Any]],
     scores: dict[str, dict[str, Any]],
     background_asset: Path | None,
+    background_frames: list[dict[str, Any]],
     scene_size: tuple[int, int] | None,
 ) -> dict[str, Any]:
     ranked = sorted(trajectories, key=lambda item: _score_for(item, scores), reverse=True)
@@ -184,8 +238,38 @@ def _build_playback_payload(
                 }
             )
         row = scores.get(trajectory["sample_id"], {})
+        confidences = [point["confidence"] for point in points]
+        modal_offsets = [item[1] for item in _modal_offsets(trajectory)]
+        path_length = 0.0
+        speeds = []
+        for previous, current in zip(frame_points, frame_points[1:]):
+            previous_frame, previous_x, previous_y = previous
+            current_frame, current_x, current_y = current
+            distance = ((current_x - previous_x) ** 2 + (current_y - previous_y) ** 2) ** 0.5
+            path_length += distance
+            frame_delta = max(current_frame - previous_frame, 1)
+            speeds.append(distance / frame_delta)
+        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+        confidence_drop = max(confidences) - min(confidences) if confidences else 0.0
+        max_modal_offset = max(modal_offsets) if modal_offsets else 0.0
+        avg_speed = sum(speeds) / len(speeds) if speeds else 0.0
+        max_speed = max(speeds) if speeds else 0.0
+        source = row.get("used_sources", "")
+        source_coverage = 1.0 if "individual" in source and "group" in source else 0.58 if source else 0.0
+        reason_breakdown = [
+            {"key": "score", "label": "Overall score", "value": round(score / max(max_score, 1e-6), 6)},
+            {"key": "source", "label": "Source coverage", "value": round(source_coverage, 6)},
+            {"key": "motion", "label": "Motion burst", "value": round(max_speed / (max_speed + 6.0), 6) if max_speed else 0.0},
+            {
+                "key": "modal",
+                "label": "Modal offset",
+                "value": round(max_modal_offset / (max_modal_offset + 8.0), 6) if max_modal_offset else 0.0,
+            },
+            {"key": "confidence", "label": "Confidence drop", "value": round(min(confidence_drop * 2.0, 1.0), 6)},
+        ]
         tracks.append(
             {
+                "sequence": sequence,
                 "sample_id": trajectory["sample_id"],
                 "track_id": str(trajectory["track_id"]),
                 "category": trajectory.get("category_name", "") or "",
@@ -194,6 +278,14 @@ def _build_playback_payload(
                 "source": row.get("used_sources", ""),
                 "first_frame": frame_points[0][0],
                 "last_frame": frame_points[-1][0],
+                "duration": frame_points[-1][0] - frame_points[0][0] + 1,
+                "avg_confidence": round(avg_confidence, 6),
+                "confidence_drop": round(confidence_drop, 6),
+                "max_modal_offset": round(max_modal_offset, 6),
+                "path_length": round(path_length, 6),
+                "avg_speed": round(avg_speed, 6),
+                "max_speed": round(max_speed, 6),
+                "reason_breakdown": reason_breakdown,
                 "points": points,
             }
         )
@@ -207,6 +299,10 @@ def _build_playback_payload(
     return {
         "sequence": sequence,
         "background": f"assets/{background_asset.name}" if background_asset is not None else None,
+        "background_frames": [
+            {"frame": int(item["frame"]), "src": f"assets/{item['path'].name}"}
+            for item in background_frames
+        ],
         "size": {"width": width, "height": height},
         "frame_range": [frame_start, frame_end],
         "tracks": tracks,
@@ -424,12 +520,18 @@ def build_visual_report(
         timeline_path = assets_dir / f"timeline_{safe_sequence}.png"
         modal_path = assets_dir / f"modal_{safe_sequence}.png"
         playback_path = assets_dir / f"playback_{safe_sequence}.json"
-        background_asset, background_size = _copy_background_asset(sequence, by_sequence[sequence], data_root, assets_dir)
+        background_asset, background_size, background_frames = _copy_background_asset(
+            sequence,
+            by_sequence[sequence],
+            data_root,
+            assets_dir,
+        )
         playback_payload = _build_playback_payload(
             sequence,
             by_sequence[sequence],
             scores,
             background_asset,
+            background_frames,
             background_size,
         )
         _write_playback_payload(playback_payload, playback_path)
@@ -504,10 +606,15 @@ def build_visual_report(
         f"<section class=\"sequence-block evidence-block\" data-sequence=\"{html.escape(asset['sequence'])}\""
         f"{'' if index == 0 else ' hidden'}>"
         f"<h2>{html.escape(asset['sequence'])} evidence</h2>"
-        "<div class=\"figure-grid\">"
-        f"<figure><img class=\"plot-image\" data-title=\"{html.escape(asset['sequence'])} - Fused trajectories\" src=\"assets/{html.escape(asset['trajectory'].name)}\" alt=\"trajectory\"><figcaption>Fused trajectories</figcaption></figure>"
-        f"<figure><img class=\"plot-image\" data-title=\"{html.escape(asset['sequence'])} - Heatmap\" src=\"assets/{html.escape(asset['heatmap'].name)}\" alt=\"heatmap\"><figcaption>Heatmap</figcaption></figure>"
-        f"<figure><img class=\"plot-image\" data-title=\"{html.escape(asset['sequence'])} - Modal consistency\" src=\"assets/{html.escape(asset['modal'].name)}\" alt=\"modal consistency\"><figcaption>Modal consistency</figcaption></figure>"
+        "<div class=\"evidence-tabs\" role=\"tablist\">"
+        "<button type=\"button\" class=\"evidence-tab active\" data-tab=\"trajectory\">Trajectory</button>"
+        "<button type=\"button\" class=\"evidence-tab\" data-tab=\"heatmap\">Heatmap</button>"
+        "<button type=\"button\" class=\"evidence-tab\" data-tab=\"modal\">Modal consistency</button>"
+        "</div>"
+        "<div class=\"figure-grid evidence-panels\">"
+        f"<figure data-evidence-panel=\"trajectory\"><img class=\"plot-image\" data-title=\"{html.escape(asset['sequence'])} - Fused trajectories\" src=\"assets/{html.escape(asset['trajectory'].name)}\" alt=\"trajectory\"><figcaption>Fused trajectories</figcaption></figure>"
+        f"<figure data-evidence-panel=\"heatmap\" hidden><img class=\"plot-image\" data-title=\"{html.escape(asset['sequence'])} - Heatmap\" src=\"assets/{html.escape(asset['heatmap'].name)}\" alt=\"heatmap\"><figcaption>Heatmap</figcaption></figure>"
+        f"<figure data-evidence-panel=\"modal\" hidden><img class=\"plot-image\" data-title=\"{html.escape(asset['sequence'])} - Modal consistency\" src=\"assets/{html.escape(asset['modal'].name)}\" alt=\"modal consistency\"><figcaption>Modal consistency</figcaption></figure>"
         "</div></section>"
         for index, asset in enumerate(sequence_assets)
     )
@@ -528,6 +635,10 @@ def build_visual_report(
       const frameBadge = document.getElementById("frameBadge");
       const speedSelect = document.getElementById("speedSelect");
       const trackReadout = document.getElementById("trackReadout");
+      const targetDetail = document.getElementById("targetDetail");
+      const demoMode = document.getElementById("demoMode");
+      const autoTour = document.getElementById("autoTour");
+      const evidenceTabs = Array.from(document.querySelectorAll(".evidence-tab"));
       const lightbox = document.getElementById("lightbox");
       const lightboxImage = document.getElementById("lightboxImage");
       const lightboxTitle = document.getElementById("lightboxTitle");
@@ -538,12 +649,72 @@ def build_visual_report(
         speed: 1,
         focusSample: null,
         image: null,
+        imageKey: null,
         imageSequence: null,
-        lastTick: 0
+        lastTick: 0,
+        touring: false,
+        tourTimer: null
       };
+      const backgroundCache = new Map();
 
       function currentData() {
         return playbackData[state.sequence];
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;"
+        })[character]);
+      }
+
+      function findTrack(data, sampleId) {
+        return data.tracks.find((track) => track.sample_id === sampleId) || null;
+      }
+
+      function renderReasonBreakdown(track) {
+        const rows = (track.reason_breakdown || []).map((item) => {
+          const value = Math.max(0, Math.min(1, Number(item.value || 0)));
+          const percent = Math.round(value * 100);
+          return `
+            <div class="reason-row">
+              <div class="reason-copy"><span>${escapeHtml(item.label)}</span><strong>${percent}%</strong></div>
+              <div class="reason-bar"><span style="width: ${percent}%"></span></div>
+            </div>
+          `;
+        }).join("");
+        return `
+          <div class="reason-panel">
+            <div class="reason-title">Anomaly explanation</div>
+            ${rows}
+          </div>
+        `;
+      }
+
+      function renderTargetDetail(track, data) {
+        if (!track) {
+          targetDetail.innerHTML = `
+            <div class="detail-title">${escapeHtml(data.sequence)}</div>
+            <div class="detail-subtitle">No target selected</div>
+          `;
+          return;
+        }
+        targetDetail.innerHTML = `
+          <div class="detail-title">${escapeHtml(track.sequence)} / track ${escapeHtml(track.track_id)}</div>
+          <div class="detail-subtitle">${escapeHtml(track.category || "unknown")} | ${escapeHtml(track.source || "score")}</div>
+          <div class="detail-grid">
+            <div class="metric"><span>Score</span><strong>${Number(track.score).toFixed(2)}</strong></div>
+            <div class="metric"><span>Frames</span><strong>${track.first_frame}-${track.last_frame}</strong></div>
+            <div class="metric"><span>Duration</span><strong>${track.duration}</strong></div>
+            <div class="metric"><span>Avg confidence</span><strong>${Number(track.avg_confidence).toFixed(3)}</strong></div>
+            <div class="metric"><span>Max modal offset</span><strong>${Number(track.max_modal_offset).toFixed(2)}</strong></div>
+            <div class="metric"><span>Max speed</span><strong>${Number(track.max_speed).toFixed(2)}</strong></div>
+          </div>
+          ${renderReasonBreakdown(track)}
+        `;
       }
 
       function colorFor(track) {
@@ -569,21 +740,48 @@ def build_visual_report(
         return points;
       }
 
-      function loadBackground(data) {
-        state.image = null;
+      function backgroundForFrame(data, frame) {
+        const frames = data.background_frames || [];
+        if (!frames.length) {
+          return data.background ? { frame: data.frame_range[0], src: data.background } : null;
+        }
+        let selected = frames[0];
+        for (const item of frames) {
+          if (Number(item.frame) <= frame) {
+            selected = item;
+          } else {
+            break;
+          }
+        }
+        return selected;
+      }
+
+      function ensureBackgroundForFrame(data) {
+        const background = backgroundForFrame(data, state.frame);
+        if (!background || !background.src) {
+          state.image = null;
+          state.imageKey = null;
+          return;
+        }
+        const key = `${data.sequence}:${background.src}`;
+        if (state.imageKey === key) {
+          return;
+        }
+        state.imageKey = key;
         state.imageSequence = data.sequence;
-        if (!data.background) {
-          drawPlayback();
+        if (backgroundCache.has(key)) {
+          state.image = backgroundCache.get(key);
           return;
         }
         const image = new Image();
         image.onload = () => {
-          if (state.imageSequence === data.sequence) {
+          backgroundCache.set(key, image);
+          if (state.imageSequence === data.sequence && state.imageKey === key) {
             state.image = image;
             drawPlayback();
           }
         };
-        image.src = data.background;
+        image.src = background.src;
       }
 
       function setCanvasFor(data) {
@@ -594,29 +792,39 @@ def build_visual_report(
         frameScrubber.value = state.frame;
       }
 
-      function drawTimeline(data) {
-        const y = data.size.height + 20;
-        const width = data.size.width;
-        const height = 34;
+      function timelineBounds(data) {
         const [start, end] = data.frame_range;
-        const span = Math.max(end - start, 1);
+        return {
+          x: 12,
+          y: data.size.height + 20,
+          width: data.size.width - 24,
+          height: 34,
+          start,
+          end,
+          span: Math.max(end - start, 1)
+        };
+      }
+
+      function drawTimeline(data) {
+        const bounds = timelineBounds(data);
+        const width = data.size.width;
         const maxMass = Math.max(...data.timeline.map((item) => item.mass), 1);
         ctx.fillStyle = "#f8fafc";
         ctx.fillRect(0, data.size.height, width, 72);
         ctx.strokeStyle = "#cbd5e1";
-        ctx.strokeRect(12, y, width - 24, height);
+        ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
         ctx.fillStyle = "rgba(37, 99, 235, 0.42)";
         for (const item of data.timeline) {
-          const x = 12 + ((item.frame - start) / span) * (width - 24);
-          const h = Math.max(1, (item.mass / maxMass) * height);
-          ctx.fillRect(x, y + height - h, 2, h);
+          const x = bounds.x + ((item.frame - bounds.start) / bounds.span) * bounds.width;
+          const h = Math.max(1, (item.mass / maxMass) * bounds.height);
+          ctx.fillRect(x, bounds.y + bounds.height - h, 2, h);
         }
-        const playX = 12 + ((state.frame - start) / span) * (width - 24);
+        const playX = bounds.x + ((state.frame - bounds.start) / bounds.span) * bounds.width;
         ctx.strokeStyle = "#ef4444";
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(playX, y - 4);
-        ctx.lineTo(playX, y + height + 4);
+        ctx.moveTo(playX, bounds.y - 4);
+        ctx.lineTo(playX, bounds.y + bounds.height + 4);
         ctx.stroke();
       }
 
@@ -625,10 +833,11 @@ def build_visual_report(
         if (!data) {
           return;
         }
+        ensureBackgroundForFrame(data);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#e2e8f0";
         ctx.fillRect(0, 0, data.size.width, data.size.height);
-        if (state.image) {
+        if (state.image && state.imageSequence === data.sequence) {
           ctx.drawImage(state.image, 0, 0, data.size.width, data.size.height);
         }
         const tracks = visibleTracks(data);
@@ -657,7 +866,7 @@ def build_visual_report(
           ctx.beginPath();
           ctx.arc(last.x, last.y, focused ? 7 : 4 + 5 * Number(track.score_ratio || 0), 0, Math.PI * 2);
           ctx.fill();
-          if (focused || Number(track.score_ratio || 0) > 0.55) {
+          if (focused) {
             ctx.font = "12px Arial";
             ctx.fillStyle = "#111827";
             ctx.fillText(track.track_id, last.x + 8, last.y - 8);
@@ -667,10 +876,41 @@ def build_visual_report(
         drawTimeline(data);
         frameScrubber.value = state.frame;
         frameBadge.textContent = `Frame ${state.frame}`;
-        const focused = data.tracks.find((track) => track.sample_id === state.focusSample);
+        const focused = findTrack(data, state.focusSample);
         trackReadout.textContent = focused
-          ? `${focused.sequence || data.sequence} / track ${focused.track_id} / score ${Number(focused.score).toFixed(2)}`
+          ? `${focused.sequence} / track ${focused.track_id} / score ${Number(focused.score).toFixed(2)}`
           : `${data.sequence} / ${tracks.length} visible tracks`;
+        renderTargetDetail(focused, data);
+      }
+
+      function stopPlayback() {
+        state.playing = false;
+        playPause.textContent = "Play";
+      }
+
+      function handleTimelineClick(event) {
+        const data = currentData();
+        if (!data) {
+          return false;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+        const bounds = timelineBounds(data);
+        const insideTimeline =
+          x >= bounds.x &&
+          x <= bounds.x + bounds.width &&
+          y >= bounds.y - 8 &&
+          y <= bounds.y + bounds.height + 8;
+        if (!insideTimeline) {
+          return false;
+        }
+        stopPlayback();
+        const ratio = Math.max(0, Math.min(1, (x - bounds.x) / bounds.width));
+        state.frame = Math.round(bounds.start + ratio * bounds.span);
+        frameScrubber.value = state.frame;
+        drawPlayback();
+        return true;
       }
 
       function showSequence(sequence, shouldScroll, focusSample, focusFrame) {
@@ -682,8 +922,11 @@ def build_visual_report(
         const data = currentData();
         const [start, end] = data.frame_range;
         state.frame = Math.min(Math.max(Number(focusFrame ?? start), start), end);
+        state.image = null;
+        state.imageKey = null;
+        state.imageSequence = data.sequence;
         setCanvasFor(data);
-        loadBackground(data);
+        ensureBackgroundForFrame(data);
         sequenceBlocks.forEach((block) => {
           const active = block.dataset.sequence === sequence;
           block.hidden = !active;
@@ -708,14 +951,80 @@ def build_visual_report(
         drawPlayback();
       }
 
-      tabs.forEach((tab) => tab.addEventListener("click", () => showSequence(tab.dataset.sequence, true)));
+      function visibleTargetItems() {
+        return targetItems.filter((item) => !item.hidden);
+      }
+
+      function showTargetItem(item, shouldScroll) {
+        showSequence(item.dataset.sequence, shouldScroll, item.dataset.sample, item.dataset.frame);
+      }
+
+      function stopAutoTour() {
+        if (state.tourTimer) {
+          clearInterval(state.tourTimer);
+          state.tourTimer = null;
+        }
+        state.touring = false;
+        autoTour.textContent = "Auto tour";
+        document.body.classList.remove("tour-mode");
+      }
+
+      function startAutoTour() {
+        const items = visibleTargetItems();
+        if (!items.length) {
+          return;
+        }
+        state.touring = true;
+        autoTour.textContent = "Stop tour";
+        document.body.classList.add("tour-mode");
+        let index = Math.max(0, items.findIndex((item) => item.classList.contains("active")));
+        const advance = () => {
+          const currentItems = visibleTargetItems();
+          if (!currentItems.length) {
+            stopAutoTour();
+            return;
+          }
+          const item = currentItems[index % currentItems.length];
+          showTargetItem(item, false);
+          const wasPlaying = state.playing;
+          state.playing = true;
+          playPause.textContent = "Pause";
+          state.lastTick = performance.now();
+          if (!wasPlaying) {
+            requestAnimationFrame(tick);
+          }
+          index += 1;
+        };
+        advance();
+        state.tourTimer = setInterval(advance, 5200);
+      }
+
+      function setEvidenceTab(button) {
+        const block = button.closest(".evidence-block");
+        if (!block) {
+          return;
+        }
+        const selected = button.dataset.tab;
+        block.querySelectorAll(".evidence-tab").forEach((tab) => {
+          tab.classList.toggle("active", tab.dataset.tab === selected);
+        });
+        block.querySelectorAll("[data-evidence-panel]").forEach((panel) => {
+          panel.hidden = panel.dataset.evidencePanel !== selected;
+        });
+      }
+
+      tabs.forEach((tab) => tab.addEventListener("click", () => {
+        stopAutoTour();
+        showSequence(tab.dataset.sequence, true);
+      }));
       targetItems.forEach((item) => item.addEventListener("click", () => {
-        showSequence(item.dataset.sequence, true, item.dataset.sample, item.dataset.frame);
+        stopAutoTour();
+        showTargetItem(item, true);
       }));
       [search, minScore].forEach((control) => control.addEventListener("input", applyFilters));
       frameScrubber.addEventListener("input", () => {
-        state.playing = false;
-        playPause.textContent = "Play";
+        stopAutoTour();
+        stopPlayback();
         state.frame = Number(frameScrubber.value);
         drawPlayback();
       });
@@ -730,6 +1039,32 @@ def build_visual_report(
           requestAnimationFrame(tick);
         }
       });
+      autoTour.addEventListener("click", () => {
+        if (state.touring) {
+          stopAutoTour();
+          stopPlayback();
+        } else {
+          startAutoTour();
+        }
+      });
+      demoMode.addEventListener("click", () => {
+        document.body.classList.toggle("demo-mode");
+        demoMode.textContent = document.body.classList.contains("demo-mode") ? "Exit demo" : "Demo mode";
+        drawPlayback();
+      });
+      canvas.addEventListener("click", handleTimelineClick);
+      canvas.addEventListener("mousemove", (event) => {
+        const data = currentData();
+        const rect = canvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+        const bounds = timelineBounds(data);
+        canvas.style.cursor =
+          x >= bounds.x && x <= bounds.x + bounds.width && y >= bounds.y - 8 && y <= bounds.y + bounds.height + 8
+            ? "pointer"
+            : "default";
+      });
+      evidenceTabs.forEach((button) => button.addEventListener("click", () => setEvidenceTab(button)));
       document.querySelectorAll(".plot-image").forEach((image) => {
         image.addEventListener("click", () => {
           lightboxImage.src = image.src;
@@ -768,7 +1103,10 @@ def build_visual_report(
         requestAnimationFrame(tick);
       }
       applyFilters();
-      if (tabs[0]) {
+      const initialTarget = document.querySelector(".target-card");
+      if (initialTarget) {
+        showSequence(initialTarget.dataset.sequence, false, initialTarget.dataset.sample, initialTarget.dataset.frame);
+      } else if (tabs[0]) {
         showSequence(tabs[0].dataset.sequence, false);
       }
     })();
@@ -807,12 +1145,32 @@ def build_visual_report(
     .tab-button {{ border: 1px solid #cbd5e1; background: white; border-radius: 999px; color: #334155; cursor: pointer; padding: 8px 12px; }}
     .tab-button.active {{ background: #111827; border-color: #111827; color: white; }}
     .player-head {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }}
-    .player-controls {{ display: grid; grid-template-columns: auto minmax(180px, 1fr) auto auto; gap: 10px; align-items: center; }}
+    .player-controls {{ display: grid; grid-template-columns: auto minmax(180px, 1fr) auto auto auto; gap: 10px; align-items: center; }}
     .control-button {{ border: 1px solid #111827; background: #111827; color: white; border-radius: 6px; padding: 8px 14px; cursor: pointer; }}
+    .secondary-button {{ border: 1px solid #cbd5e1; background: white; color: #172033; border-radius: 6px; padding: 8px 12px; cursor: pointer; }}
+    .tour-mode #autoTour {{ border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }}
+    .detail-panel {{ margin-top: 12px; border: 1px solid #e1e5eb; border-radius: 8px; padding: 12px; background: #fbfdff; }}
+    .detail-title {{ font-weight: 700; }}
+    .detail-subtitle {{ margin-top: 2px; color: #64748b; font-size: 13px; }}
+    .detail-grid {{ display: grid; grid-template-columns: repeat(6, minmax(90px, 1fr)); gap: 8px; margin-top: 10px; }}
+    .metric {{ border: 1px solid #e1e5eb; border-radius: 6px; padding: 8px; background: white; }}
+    .metric span {{ display: block; color: #64748b; font-size: 12px; }}
+    .metric strong {{ display: block; margin-top: 3px; font-size: 15px; }}
+    .reason-panel {{ margin-top: 12px; display: grid; gap: 8px; }}
+    .reason-title {{ font-size: 13px; font-weight: 700; color: #334155; }}
+    .reason-row {{ display: grid; gap: 4px; }}
+    .reason-copy {{ display: flex; justify-content: space-between; gap: 8px; color: #475569; font-size: 12px; }}
+    .reason-copy strong {{ color: #172033; }}
+    .reason-bar {{ height: 7px; overflow: hidden; border-radius: 999px; background: #e2e8f0; }}
+    .reason-bar span {{ display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2563eb, #ef4444); }}
     #frameBadge, #trackReadout {{ color: #475569; font-size: 13px; }}
     .canvas-shell {{ margin-top: 12px; background: #111827; border-radius: 8px; padding: 10px; }}
     canvas {{ display: block; width: 100%; height: auto; background: #e2e8f0; border-radius: 6px; }}
+    .evidence-tabs {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
+    .evidence-tab {{ border: 1px solid #cbd5e1; background: white; color: #334155; border-radius: 999px; padding: 7px 12px; cursor: pointer; }}
+    .evidence-tab.active {{ border-color: #111827; background: #111827; color: white; }}
     .figure-grid {{ display: grid; grid-template-columns: repeat(3, minmax(260px, 1fr)); gap: 12px; }}
+    .evidence-panels {{ grid-template-columns: minmax(260px, 1fr); }}
     figure {{ margin: 0; background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; }}
     figcaption {{ font-size: 13px; color: #4b5563; padding: 6px 2px 0; }}
     img {{ max-width: 100%; background: white; border-radius: 6px; }}
@@ -823,6 +1181,11 @@ def build_visual_report(
     .lightbox-bar {{ display: flex; justify-content: space-between; align-items: center; color: white; }}
     .lightbox img {{ align-self: center; justify-self: center; max-height: calc(100vh - 90px); max-width: 96vw; }}
     .close-button {{ border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.12); color: white; border-radius: 6px; padding: 8px 12px; cursor: pointer; }}
+    .demo-mode main {{ padding: 14px; }}
+    .demo-mode .side-panel, .demo-mode .evidence-block, .demo-mode .cards {{ display: none; }}
+    .demo-mode .workspace {{ grid-template-columns: 1fr; }}
+    .demo-mode .viewer-panel {{ min-height: calc(100vh - 84px); }}
+    .demo-mode .canvas-shell {{ max-height: calc(100vh - 230px); overflow: hidden; }}
     @media (max-width: 900px) {{
       main {{ padding: 16px; }}
       header {{ display: grid; }}
@@ -830,7 +1193,11 @@ def build_visual_report(
       .workspace {{ grid-template-columns: 1fr; }}
       .side-panel {{ position: static; max-height: none; }}
       .player-controls {{ grid-template-columns: 1fr; }}
+      .detail-grid {{ grid-template-columns: repeat(3, minmax(90px, 1fr)); }}
       .figure-grid {{ grid-template-columns: 1fr; }}
+    }}
+    @media (max-width: 520px) {{
+      .detail-grid {{ grid-template-columns: repeat(2, minmax(90px, 1fr)); }}
     }}
   </style>
 </head>
@@ -881,7 +1248,10 @@ def build_visual_report(
               <option value="2">2x</option>
               <option value="4">4x</option>
             </select>
+            <button type="button" id="demoMode" class="secondary-button">Demo mode</button>
+            <button type="button" id="autoTour" class="secondary-button">Auto tour</button>
           </div>
+          <div id="targetDetail" class="detail-panel"></div>
           <div class="canvas-shell"><canvas id="playbackCanvas" width="960" height="612"></canvas></div>
         </section>
         {plots_html}
