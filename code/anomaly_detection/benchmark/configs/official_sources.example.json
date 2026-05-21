@@ -89,6 +89,69 @@
       "official_components": ["src.models.TranAD", "src.dlutils"],
       "external_runner": "server_artifacts/official_runners/run_tranad_fusiontrack.py",
       "notes": "The runner uses the official TranAD class and training/scoring loss. It isolates the official import-time argparse side effect, stubs unused dgl imports because GDN is not used, and wraps old Transformer layer forward signatures for current PyTorch compatibility."
+    },
+    {
+      "key": "catch",
+      "paper_name": "CATCH: Channel-Aware Multivariate Time Series Anomaly Detection via Frequency Patching",
+      "paper_url": "https://arxiv.org/abs/2410.12261",
+      "official_code_url": "https://github.com/decisionintelligence/CATCH",
+      "commit": "3647c69be5eb56649b072596cf89098e689e20c3",
+      "license": "NO_LICENSE_FILE_FOUND_IN_CLONED_REPOSITORY",
+      "status": "external_checkout_only",
+      "adapter_status": "fixed_length_multivariate_series_runner_ready",
+      "repository_handling": "Do not vendor source into this repository unless license or permission text is recorded. Use only as an external checkout for experiments.",
+      "official_components": [
+        "ts_benchmark.baselines.catch.models.CATCH_model.CATCHModel",
+        "ts_benchmark.baselines.catch.utils.fre_rec_loss.frequency_loss",
+        "ts_benchmark.baselines.catch.utils.fre_rec_loss.frequency_criterion"
+      ],
+      "external_runner": "code/anomaly_detection/benchmark/runners/run_recent_official_fusiontrack.py --method catch",
+      "notes": "The runner bypasses broad benchmark-package imports and directly imports the official CATCH model/frequency-loss components from the external checkout. It converts FusionTrack individual trajectories or group-object windows into fixed-length multivariate series and aggregates official reconstruction/frequency scores per strict benchmark key."
+    },
+    {
+      "key": "cutaddpaste",
+      "paper_name": "CutAddPaste: Time Series Anomaly Detection by Exploiting Abnormal Knowledge",
+      "paper_url": "https://doi.org/10.1145/3637528.3671739",
+      "official_code_url": "https://github.com/ruiking04/CutAddPaste",
+      "commit": "92fff09c93feace14ac6065782f28d55351858f9",
+      "license": "NO_LICENSE_FILE_FOUND_IN_CLONED_REPOSITORY",
+      "status": "external_checkout_only",
+      "adapter_status": "fixed_length_multivariate_series_runner_ready",
+      "repository_handling": "Do not vendor source into this repository unless license or permission text is recorded. Use only as an external checkout for experiments.",
+      "official_components": [
+        "models.CutAddPaste.network.model.base_Model",
+        "dataloader.generate_negative.cut_add_paste_outlier"
+      ],
+      "external_runner": "code/anomaly_detection/benchmark/runners/run_recent_official_fusiontrack.py --method cutaddpaste",
+      "notes": "The runner imports the official CutAddPaste classifier and CutAddPaste pseudo-anomaly generator from the external checkout. It trains on clean FusionTrack sequences plus official pseudo anomalies, then scores validation samples with the official classifier's anomaly probability."
+    },
+    {
+      "key": "timemixer",
+      "paper_name": "TimeMixer: Decomposable Multiscale Mixing for Time Series Forecasting",
+      "paper_url": "https://openreview.net/forum?id=7oLshfEIC2",
+      "official_code_url": "https://github.com/kwuking/TimeMixer",
+      "commit": "e24610583b36fdd8c76cc17a8df4e65759a5f460",
+      "license": "Apache-2.0",
+      "status": "external_checkout_allowed_for_experiments",
+      "adapter_status": "fixed_length_multivariate_series_runner_ready",
+      "repository_handling": "External checkout is allowed. Vendoring is allowed only if the Apache-2.0 license text is copied with the third-party source.",
+      "official_components": ["models.TimeMixer.Model"],
+      "external_runner": "code/anomaly_detection/benchmark/runners/run_recent_official_fusiontrack.py --method timemixer",
+      "notes": "The runner uses the official TimeMixer anomaly-detection model path as a reconstruction baseline over FusionTrack fixed-length multivariate series."
+    },
+    {
+      "key": "sensitive_hue",
+      "paper_name": "SensitiveHUE: Multivariate Time Series Anomaly Detection by Enhancing the Sensitivity to Normal Patterns",
+      "paper_url": "https://github.com/yuesuoqingqiu/SensitiveHUE",
+      "official_code_url": "https://github.com/yuesuoqingqiu/SensitiveHUE",
+      "commit": "a50047883ab22957ed7fd9c168a3bbcb8d836546",
+      "license": "NO_LICENSE_FILE_FOUND_IN_CLONED_REPOSITORY",
+      "status": "supplementary_official_source_candidate",
+      "adapter_status": "fixed_length_multivariate_series_runner_ready",
+      "repository_handling": "Do not vendor source into this repository unless license or permission text is recorded. Use only as an external checkout for supplementary experiments.",
+      "official_components": ["sensitive_hue.model.SensitiveHUE"],
+      "external_runner": "code/anomaly_detection/benchmark/runners/run_recent_official_fusiontrack.py --method sensitive_hue",
+      "notes": "The public README labels the work as under review, so this row is supplementary unless a peer-reviewed venue/source record is verified. The runner imports the official model and uses the official MTS-NLL-style loss from sensitive_hue.trainer.Trainer.loss_func."
     }
   ]
 }

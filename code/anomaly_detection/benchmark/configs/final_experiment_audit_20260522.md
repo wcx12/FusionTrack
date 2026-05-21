@@ -96,3 +96,30 @@
 2. 还有 4 个官方 deep baseline 在 50 epoch 后未收敛；如果论文要求“完全收敛结果”，需要继续扩展预算。
 3. CETrajAD 仍是 coverage failed，不能进入 strict 主表。
 4. 当前 strict 结果是 seed 42 validation protocol；最终论文建议补 test split 或多 seed。
+
+## Recent Official Baseline 补充
+
+远程路径：`/root/autodl-tmp/fusiontrack_recent_official_20260522`。
+本地归档：`server_artifacts/final_results_20260522/fusiontrack_recent_official_20260522.tar.gz`。
+
+新增 strict official-source 结果均已满足：无重复 label key、无重复 score key、无 missing score key、无 extra score key。个体级使用 `sample_id`，群体级使用 `sample_id + window_id`。
+
+### Individual Recent Official
+
+| 方法 | 类别 | AUROC | AUPRC | F1 | P@100 | R@100 | 收敛状态 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `official_catch_individual_20` | official/top-venue | 0.543759 | 0.124095 | 0.204793 | 0.120000 | 0.144578 | `max-budget-not-converged` |
+| `official_timemixer_individual_20` | official/top-venue | 0.521658 | 0.113224 | 0.197441 | 0.090000 | 0.108434 | `converged` |
+| `official_cutaddpaste_individual_20` | official/top-venue | 0.472916 | 0.128043 | 0.182222 | 0.090000 | 0.108434 | `max-budget-not-converged` |
+| `official_sensitive_hue_individual_20` | supplementary official-source | 0.524387 | 0.110813 | 0.196796 | 0.100000 | 0.120482 | `max-budget-not-converged` |
+
+### Group Recent Official
+
+| 方法 | 类别 | AUROC | AUPRC | F1 | P@100 | R@100 | 收敛状态 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `official_timemixer_group_20` | official/top-venue | 0.627657 | 0.014647 | 0.033520 | 0.030000 | 0.034091 | `max-budget-not-converged` |
+| `official_catch_group_20` | official/top-venue | 0.605357 | 0.019403 | 0.022472 | 0.010000 | 0.011364 | `max-budget-not-converged` |
+| `official_cutaddpaste_group_20` | official/top-venue | 0.561328 | 0.020299 | 0.058252 | 0.040000 | 0.045455 | `max-budget-not-converged` |
+| `official_sensitive_hue_group_20` | supplementary official-source | 0.467138 | 0.020232 | 0.046823 | 0.030000 | 0.034091 | `max-budget-not-converged` |
+
+结论：新增顶会 official baseline 中，个体级 AUROC 最好的是 CATCH，群体级 AUROC 最好的是 TimeMixer；它们仍低于当前 FusionTrack 最优个体/群体方法。SensitiveHUE 暂只作为补充结果，因为当前 public README 仍标为 under review。

@@ -91,10 +91,16 @@ Every deep baseline in the main table must have one of these statuses:
 | DCdetector | individual | 8 | 128 | `1e-4` | 64 |
 | DCdetector | group | 8 | 256 | `1e-4` | 16 |
 | TranAD | individual/group | 5 | 128/256 | `1e-4` | 10 |
+| CATCH | individual/group | 20 | 256 | `1e-4` | 64 / 16 |
+| CutAddPaste | individual/group | 20 | 256 | `1e-4` | 64 / 16 |
+| TimeMixer | individual/group | 20 | 256 | `1e-4` | 64 / 16 |
+| SensitiveHUE | individual/group | 20 | 256 | `1e-4` | 64 / 16 |
 
 These are initial budgets from our current external runners and previous run manifests. They are not final convergence claims. Before any deep baseline enters the main table, rerun it with the convergence policy above and record the resulting status.
 
 TranAD uses the official default-style `n_window=10`. If we need a fully standardized TSAD window comparison, run an appendix variant with individual window `64` and group window `16` before reporting that comparison.
+
+The recent-baseline runner uses official external checkouts and imports only the official model/loss/augmentation modules. CATCH, CutAddPaste, and TimeMixer are top-venue rows. SensitiveHUE is tracked as a supplementary official-source candidate until a peer-reviewed venue/source record is verified.
 
 ## Server Execution
 
@@ -131,6 +137,7 @@ Logs are written under `logs/` by default, or under `LOG_ROOT` if that environme
 7. Reran CETrajAD and confirmed it remains coverage-failed: `770/829` score rows, `59` missing score keys.
 8. Reran the max-budget official-source deep baselines with a 50-epoch cap in `/root/autodl-tmp/fusiontrack_b3b8599_convergence_20260522`. LM-TAD converged by validation loss; TranAD and Anomaly Transformer individual/group remained `max-budget-not-converged`.
 9. Added and reran two enhanced FusionTrack rows in `/root/autodl-tmp/fusiontrack_b3b8599_methods_20260522`: `fusiontrack_individual_ensemble` and `fusiontrack_group_hybrid`, both under strict key matching.
+10. Added recent official-source runner `run_recent_official_fusiontrack.py` and started strict validation runs for CATCH, CutAddPaste, TimeMixer, and SensitiveHUE in `/root/autodl-tmp/fusiontrack_recent_official_20260522`.
 
 ## Remaining Reruns
 

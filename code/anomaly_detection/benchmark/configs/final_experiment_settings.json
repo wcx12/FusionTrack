@@ -194,6 +194,50 @@
       "source_policy_key": "tranad",
       "budget_status": "initial_adapter_budget_pending_convergence_check",
       "adapter_note": "Uses the official TranAD default-style n_window=10. If we need a fully standardized TSAD window comparison, run an appendix variant with individual=64 and group=16 before reporting it."
+    },
+    "catch": {
+      "tasks": ["individual", "group"],
+      "epochs": 20,
+      "batch_size": {"individual": 256, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": {"individual": 64, "group": 16},
+      "seed": 42,
+      "source_policy_key": "catch",
+      "budget_status": "recent_official_adapter_budget_pending_convergence_check",
+      "adapter_note": "Uses official CATCHModel and frequency-loss components from the external CATCH checkout."
+    },
+    "cutaddpaste": {
+      "tasks": ["individual", "group"],
+      "epochs": 20,
+      "batch_size": {"individual": 256, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": {"individual": 64, "group": 16},
+      "seed": 42,
+      "source_policy_key": "cutaddpaste",
+      "budget_status": "recent_official_adapter_budget_pending_convergence_check",
+      "adapter_note": "Uses official CutAddPaste classifier and pseudo-anomaly generator from the external CutAddPaste checkout."
+    },
+    "timemixer": {
+      "tasks": ["individual", "group"],
+      "epochs": 20,
+      "batch_size": {"individual": 256, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": {"individual": 64, "group": 16},
+      "seed": 42,
+      "source_policy_key": "timemixer",
+      "budget_status": "recent_official_adapter_budget_pending_convergence_check",
+      "adapter_note": "Uses official TimeMixer anomaly-detection model path as a reconstruction baseline."
+    },
+    "sensitive_hue": {
+      "tasks": ["individual", "group"],
+      "epochs": 20,
+      "batch_size": {"individual": 256, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": {"individual": 64, "group": 16},
+      "seed": 42,
+      "source_policy_key": "sensitive_hue",
+      "budget_status": "supplementary_official_source_candidate_pending_venue_verification",
+      "adapter_note": "Uses public SensitiveHUE official-source model as supplementary evidence; keep out of top-venue main-table claims until a peer-reviewed venue/source record is verified."
     }
   },
   "remote_execution": {
@@ -299,6 +343,64 @@
         "official_tranad_50_group": "max-budget-not-converged",
         "official_anomaly_transformer_50_individual": "max-budget-not-converged",
         "official_anomaly_transformer_50_group": "max-budget-not-converged"
+      }
+    },
+    "latest_completed_recent_official_run": {
+      "date": "2026-05-22",
+      "source_revision": "97a6719 plus recent-official runner patch",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_recent_official_20260522",
+      "local_archive": "server_artifacts/final_results_20260522/fusiontrack_recent_official_20260522.tar.gz",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "epoch_cap": 20,
+      "strict_alignment": {
+        "individual_rows": 829,
+        "group_rows": 15605,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      },
+      "methods": {
+        "top_venue_main_table_candidates": [
+          "official_catch_individual_20",
+          "official_catch_group_20",
+          "official_cutaddpaste_individual_20",
+          "official_cutaddpaste_group_20",
+          "official_timemixer_individual_20",
+          "official_timemixer_group_20"
+        ],
+        "supplementary_official_source_candidates": [
+          "official_sensitive_hue_individual_20",
+          "official_sensitive_hue_group_20"
+        ]
+      },
+      "best_recent_rows": {
+        "individual_by_auroc": {
+          "method": "official_catch_individual_20",
+          "auroc": 0.5437594883555671,
+          "auprc": 0.12409472457123798,
+          "f1": 0.2047930283224401,
+          "precision_at_k": 0.12,
+          "recall_at_k": 0.14457831325301204
+        },
+        "group_by_auroc": {
+          "method": "official_timemixer_group_20",
+          "auroc": 0.627656543849268,
+          "auprc": 0.014646826936147881,
+          "f1": 0.0335195530726257,
+          "precision_at_k": 0.03,
+          "recall_at_k": 0.03409090909090909
+        }
+      },
+      "statuses": {
+        "official_catch_individual_20": "max-budget-not-converged",
+        "official_catch_group_20": "max-budget-not-converged",
+        "official_cutaddpaste_individual_20": "max-budget-not-converged",
+        "official_cutaddpaste_group_20": "max-budget-not-converged",
+        "official_timemixer_individual_20": "converged",
+        "official_timemixer_group_20": "max-budget-not-converged",
+        "official_sensitive_hue_individual_20": "max-budget-not-converged",
+        "official_sensitive_hue_group_20": "max-budget-not-converged"
       }
     }
   },
