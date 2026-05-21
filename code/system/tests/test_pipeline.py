@@ -4,7 +4,8 @@ from pathlib import Path
 import re
 
 from fusiontrack.config import FusionTrackPaths
-from fusiontrack.pipeline import build_experiment_report, build_extraction_command
+from fusiontrack.pipeline import build_experiment_report, build_extraction_command, build_final_results_report
+from test_final_results import _build_small_final_result_tree, _write_jsonl
 
 
 def test_extraction_command_uses_relative_server_paths() -> None:
@@ -72,3 +73,40 @@ def test_build_experiment_report_from_result_manifest(tmp_path: Path) -> None:
     report_html = paths.report_dir / "index.html"
     assert report_html.exists()
     assert "method_a" in report_html.read_text(encoding="utf-8")
+
+
+def test_build_final_results_report_from_summary_files(tmp_path: Path) -> None:
+    paths = FusionTrackPaths.defaults(data_root=tmp_path / "data", work_root=tmp_path / "runs")
+    final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
+    fused_jsonl = tmp_path / "fused.jsonl"
+    _write_jsonl(
+        fused_jsonl,
+        [
+            {
+                "sample_id": "S1:1",
+                "sequence": "S1",
+                "track_id": "1",
+                "category_name": "plane",
+                "points": [
+                    {"frame_id": 1, "fused": {"center_xy": [1, 2], "confidence": 0.9}},
+                    {"frame_id": 2, "fused": {"center_xy": [3, 4], "confidence": 0.8}},
+                ],
+            }
+        ],
+    )
+
+    summary = build_final_results_report(
+        paths=paths,
+        final_results_root=final_root,
+        individual_label_file=individual_labels,
+        group_label_file=group_labels,
+        score_search_roots=[score_root],
+        fused_jsonl=fused_jsonl,
+        top_sequences=1,
+        top_k=2,
+        case_limit=3,
+    )
+
+    assert summary["mode"] == "final_results_dashboard"
+    assert summary["dashboard"]["num_methods"] == 3
+    assert (paths.work_root / "final_dashboard" / "index.html").exists()

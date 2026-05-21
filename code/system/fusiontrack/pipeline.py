@@ -16,6 +16,8 @@ from mtf_ba.group_interface import (
 
 from fusiontrack.config import FusionTrackPaths
 from fusiontrack.experiment_adapter import load_experiment_result, write_scores_csv
+from fusiontrack.final_dashboard import build_final_dashboard
+from fusiontrack.final_results import load_final_results_dashboard
 from fusiontrack.fusion import fuse_observations_csv
 from fusiontrack.group_baseline import score_group_windows_jsonl
 from fusiontrack.score_fusion import fuse_score_records
@@ -216,6 +218,52 @@ def build_experiment_report(
         "report": report_summary,
     }
     summary_path = paths.work_root / f"pipeline_summary_{split}_experiment.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    summary["summary_path"] = str(summary_path)
+    return summary
+
+
+def build_final_results_report(
+    paths: FusionTrackPaths,
+    final_results_root: str | Path,
+    individual_label_file: str | Path,
+    group_label_file: str | Path,
+    score_search_roots: list[str | Path],
+    fused_jsonl: str | Path | None = None,
+    top_sequences: int = 5,
+    top_k: int = 100,
+    case_limit: int = 12,
+) -> dict[str, Any]:
+    ensure_output_dirs(paths)
+    dashboard = load_final_results_dashboard(
+        final_results_root=final_results_root,
+        individual_label_file=individual_label_file,
+        group_label_file=group_label_file,
+        score_search_roots=score_search_roots,
+        top_k=top_k,
+        case_limit=case_limit,
+    )
+    output_dir = paths.work_root / "final_dashboard"
+    dashboard_summary = build_final_dashboard(
+        dashboard=dashboard,
+        output_dir=output_dir,
+        fused_jsonl=fused_jsonl,
+        data_root=paths.data_root,
+        top_sequences=top_sequences,
+    )
+    summary = {
+        "mode": "final_results_dashboard",
+        "data_root": str(paths.data_root),
+        "work_root": str(paths.work_root),
+        "final_results_root": str(final_results_root),
+        "individual_label_file": str(individual_label_file),
+        "group_label_file": str(group_label_file),
+        "score_search_roots": [str(path) for path in score_search_roots],
+        "fused_jsonl": None if fused_jsonl is None else str(fused_jsonl),
+        "dashboard": dashboard_summary,
+    }
+    summary_path = paths.work_root / "pipeline_summary_final_dashboard.json"
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     summary["summary_path"] = str(summary_path)

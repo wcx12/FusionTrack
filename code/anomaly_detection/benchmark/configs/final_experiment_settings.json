@@ -1,0 +1,181 @@
+{
+  "name": "fusiontrack_final_val_experiments",
+  "purpose": "Pre-declared validation configuration for FusionTrack anomaly-detection experiments.",
+  "common_protocol": {
+    "dataset": "VT-Tiny-MOT",
+    "source_split": "train",
+    "sequence_val_ratio": 0.2,
+    "seeds": {
+      "main": 42,
+      "robustness_optional": [42, 43, 44]
+    },
+    "individual_anomaly_fraction": 0.1,
+    "group_anomaly_fraction": 0.1,
+    "group_window_size": 16,
+    "group_stride": 8,
+    "score_split": "val"
+  },
+  "evaluation": {
+    "individual_key_fields": ["sample_id"],
+    "individual_require_unique_keys": true,
+    "individual_require_score_key_match": true,
+    "group_main_key_fields": ["sample_id", "window_id"],
+    "group_main_require_unique_keys": true,
+    "group_main_require_score_key_match": true,
+    "group_optional_any_window_key_fields": ["sample_id"],
+    "group_optional_any_window_require_unique_keys": false,
+    "group_optional_any_window_require_score_key_match": false,
+    "rank_k": 100,
+    "primary_metrics": ["auprc", "auroc", "f1", "precision_at_k", "recall_at_k"],
+    "alignment_diagnostics": [
+      "num_label_rows",
+      "num_score_rows",
+      "num_unique_label_keys",
+      "num_unique_score_keys",
+      "num_duplicate_label_keys",
+      "num_duplicate_score_keys",
+      "num_missing_score_keys",
+      "num_extra_score_keys"
+    ],
+    "main_table_rule": "Use unique sample_id keys with exact label-score key matching for individual rows and unique sample_id+window_id keys with exact label-score key matching for group rows. Duplicate, missing, or extra score keys fail main-protocol runs. The group sample_id-only any-window metric is appendix-only."
+  },
+  "fairness_rules": [
+    "Use the same generated protocol files for all methods in a task.",
+    "Do not tune hyperparameters on the test split.",
+    "Do not pick per-method hyperparameters after seeing validation scores unless the run is explicitly labeled tuning or ablation.",
+    "Paper baseline rows must use official or paper-linked source code and record URL, commit, license, adapter, environment, and run manifest.",
+    "Local proxy implementations are internal/proxy/ablation rows and must not be named as paper baselines in the main table.",
+    "Deep methods start from method-appropriate initial budgets instead of forcing every method to the same epoch count; every run must record epochs, batch size, learning rate, window size, seed, adapter notes, and convergence diagnostics.",
+    "A deep-model result is final only after its train/validation loss curve satisfies the convergence policy below or after an explicitly reported non-convergence budget cap.",
+    "Individual main-protocol evaluation must have one label row and one score row per sample_id; duplicate keys, missing score keys, and extra score keys fail the run.",
+    "Group main-protocol evaluation must have one label row and one score row per sample_id+window_id; duplicate keys, missing score keys, and extra score keys fail the run."
+  ],
+  "convergence_policy": {
+    "status": "required_before_final_tables",
+    "principle": "Epoch counts are initial budgets, not proof of convergence.",
+    "validation_split": "Use only train-derived validation data or the method's official validation protocol. Do not use the anomaly evaluation labels to choose epochs.",
+    "early_stopping": {
+      "monitor": "validation_loss when available, otherwise training_loss plus score-stability diagnostics",
+      "patience": 5,
+      "min_delta": 0.001,
+      "restore_best_checkpoint": true
+    },
+    "budget_schedule": {
+      "pilot_epochs": 5,
+      "default_max_epochs": 50,
+      "extend_if_still_improving": true,
+      "stop_when_plateaued": true
+    },
+    "diagnostics_to_save": [
+      "loss_history.json",
+      "best_epoch",
+      "final_epoch",
+      "early_stop_reason",
+      "gpu_name",
+      "wall_time_seconds",
+      "run_manifest.json"
+    ],
+    "reporting_rule": "Main tables may report a deep baseline only with convergence status: converged, early-stopped, or max-budget-not-converged."
+  },
+  "local_benchmark_methods": {
+    "individual": {
+      "fusiontrack_individual_nn": {"train_epochs": null, "n_neighbors": 1},
+      "fusiontrack_individual_context": {"train_epochs": null, "n_neighbors": 1},
+      "individual_iforest": {"train_epochs": null, "contamination": 0.05, "seed": 42},
+      "individual_lof": {"train_epochs": null, "contamination": 0.05, "seed": 42},
+      "individual_ocsvm": {"train_epochs": null, "contamination": 0.05, "seed": 42}
+    },
+    "group": {
+      "group_prediction_linear": {"train_epochs": null},
+      "group_iforest": {"train_epochs": null, "contamination": 0.05, "seed": 42},
+      "group_lof": {"train_epochs": null, "contamination": 0.05, "seed": 42},
+      "group_ocsvm": {"train_epochs": null, "contamination": 0.05, "seed": 42},
+      "group_temporal_graph_ae_proxy": {"train_epochs": null, "n_components": 3, "seed": 42},
+      "fusiontrack_group_graph": {
+        "train_epochs": null,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5
+      }
+    }
+  },
+  "official_paper_baselines": {
+    "cetrajad": {
+      "tasks": ["individual"],
+      "epochs": 10,
+      "batch_size": 64,
+      "learning_rate": 0.0001,
+      "seed": 42,
+      "source_policy_key": "cetrajad",
+      "budget_status": "initial_adapter_budget_pending_convergence_check"
+    },
+    "lm_tad": {
+      "tasks": ["individual"],
+      "epochs": 5,
+      "batch_size": 64,
+      "learning_rate": 0.0005,
+      "seed": 42,
+      "source_policy_key": "lm_tad",
+      "budget_status": "initial_adapter_budget_pending_convergence_check"
+    },
+    "pidpm": {
+      "tasks": ["individual"],
+      "epochs": 20,
+      "batch_size": 64,
+      "learning_rate": 0.001,
+      "seed": 42,
+      "source_policy_key": "pidpm",
+      "budget_status": "initial_adapter_budget_pending_convergence_check"
+    },
+    "anomaly_transformer": {
+      "tasks": ["individual", "group"],
+      "epochs": 8,
+      "batch_size": {"individual": 128, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": {"individual": 64, "group": 16},
+      "seed": 42,
+      "source_policy_key": "anomaly_transformer",
+      "budget_status": "initial_adapter_budget_pending_convergence_check"
+    },
+    "dcdetector": {
+      "tasks": ["individual", "group"],
+      "epochs": 8,
+      "batch_size": {"individual": 128, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": {"individual": 64, "group": 16},
+      "seed": 42,
+      "source_policy_key": "dcdetector",
+      "budget_status": "initial_adapter_budget_pending_convergence_check"
+    },
+    "tranad": {
+      "tasks": ["individual", "group"],
+      "epochs": 5,
+      "batch_size": {"individual": 128, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": 10,
+      "seed": 42,
+      "source_policy_key": "tranad",
+      "budget_status": "initial_adapter_budget_pending_convergence_check",
+      "adapter_note": "Uses the official TranAD default-style n_window=10. If we need a fully standardized TSAD window comparison, run an appendix variant with individual=64 and group=16 before reporting it."
+    }
+  },
+  "remote_execution": {
+    "recommended_shell": "tmux",
+    "default_tmux_session": "fusiontrack_val",
+    "script": "code/anomaly_detection/benchmark/runners/run_server_gpu_experiments.sh",
+    "required_environment": {
+      "MODE": "val",
+      "GPU_ID": 0,
+      "SEED": 42,
+      "USE_TMUX": 1
+    }
+  },
+  "rerun_requirements": [
+    "Regenerate group labels with sample_id+window_id strict protocol.",
+    "Rerun all group local baselines under group_main_key_fields.",
+    "Rerun official group baselines or reconvert their score files so group scores carry top-level window_id.",
+    "Keep old sample_id-only group results only as appendix any-window diagnostics.",
+    "Regenerate individual and group matrix configs with require_unique_keys=true and require_score_key_match=true, then rerun any experiment whose metrics show duplicate keys, missing score keys, or extra score keys."
+  ]
+}

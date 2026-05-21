@@ -13,7 +13,7 @@ if str(MTF_BA_ROOT) not in sys.path:
     sys.path.insert(0, str(MTF_BA_ROOT))
 
 from fusiontrack.config import FusionTrackPaths
-from fusiontrack.pipeline import build_experiment_report, run_smoke_pipeline
+from fusiontrack.pipeline import build_experiment_report, build_final_results_report, run_smoke_pipeline
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,13 +29,40 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--result-manifest", type=Path, help="Benchmark result manifest to render.")
     parser.add_argument("--result-method", help="Method name inside the result manifest.")
     parser.add_argument("--fused-jsonl", type=Path, help="Fused trajectory JSONL used by the result manifest.")
+    parser.add_argument("--final-results-root", type=Path, help="Directory with final_*_summary files.")
+    parser.add_argument("--individual-label-file", type=Path, help="Individual labels JSONL for final dashboard.")
+    parser.add_argument("--group-label-file", type=Path, help="Group labels JSONL for final dashboard.")
+    parser.add_argument(
+        "--score-search-root",
+        type=Path,
+        action="append",
+        default=[],
+        help="Search root for score files referenced by final summaries. Can be repeated.",
+    )
+    parser.add_argument("--top-k", type=int, default=100, help="Top-K used for case and anomaly-type analysis.")
+    parser.add_argument("--case-limit", type=int, default=12, help="Maximum TP/FP/FN cases per method.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     paths = FusionTrackPaths.defaults(data_root=args.data_root, work_root=args.work_root)
-    if args.result_manifest:
+    if args.final_results_root:
+        if args.individual_label_file is None or args.group_label_file is None:
+            raise SystemExit("--individual-label-file and --group-label-file are required with --final-results-root")
+        score_roots = args.score_search_root or [args.final_results_root.parent]
+        summary = build_final_results_report(
+            paths=paths,
+            final_results_root=args.final_results_root,
+            individual_label_file=args.individual_label_file,
+            group_label_file=args.group_label_file,
+            score_search_roots=score_roots,
+            fused_jsonl=args.fused_jsonl,
+            top_sequences=args.top_sequences,
+            top_k=args.top_k,
+            case_limit=args.case_limit,
+        )
+    elif args.result_manifest:
         summary = build_experiment_report(
             paths=paths,
             result_manifest=args.result_manifest,
