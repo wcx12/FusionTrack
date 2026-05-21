@@ -50,7 +50,7 @@
 | TranAD | individual/group | `imperial-qore/TranAD` 官方源码 | 50 epoch 后仍 `max-budget-not-converged` |
 | Anomaly Transformer | individual/group | 官方源码 | 50 epoch 后仍 `max-budget-not-converged` |
 | DCdetector | individual/group | 官方源码 | 原 8 epoch run 已收敛，本轮未重跑 |
-| CETrajAD | individual | `ShuruiCao/comp-ensemble-ad` 官方源码 | coverage failed，770/829 score，暂不进 strict 主表 |
+| CETrajAD | individual | `ShuruiCao/comp-ensemble-ad` 官方源码 | 原始 adapter coverage failed；已补跑 full-coverage adapter，829/829 strict 通过 |
 
 ## Enhanced Method 结果
 
@@ -94,7 +94,7 @@
 
 1. `fusiontrack_group_hybrid` 的 rank direction 是本轮根据方法审查后固定在配置中的增强项，不能把它描述成已在 test split 上最终定型。
 2. 还有 4 个官方 deep baseline 在 50 epoch 后未收敛；如果论文要求“完全收敛结果”，需要继续扩展预算。
-3. CETrajAD 仍是 coverage failed，不能进入 strict 主表。
+3. CETrajAD 原始 adapter 仍保留为 coverage failed 审计记录；strict 表使用补跑的 `official_cetrajad_fullcoverage`，并注明 full-coverage adapter、`coordinate_scale=1.0` 和 `no-loss-history`。
 4. 当前 strict 结果是 seed 42 validation protocol；最终论文建议补 test split 或多 seed。
 
 ## Recent Official Baseline 补充
@@ -121,5 +121,16 @@
 | `official_catch_group_20` | official/top-venue | 0.605357 | 0.019403 | 0.022472 | 0.010000 | 0.011364 | `max-budget-not-converged` |
 | `official_cutaddpaste_group_20` | official/top-venue | 0.561328 | 0.020299 | 0.058252 | 0.040000 | 0.045455 | `max-budget-not-converged` |
 | `official_sensitive_hue_group_20` | supplementary official-source | 0.467138 | 0.020232 | 0.046823 | 0.030000 | 0.034091 | `max-budget-not-converged` |
+
+## CETrajAD Full-Coverage 补跑
+
+远程路径：`/root/autodl-tmp/fusiontrack_cetrajad_fullcoverage_20260522`。
+本地归档：`server_artifacts/final_results_20260522/fusiontrack_cetrajad_fullcoverage_20260522.tar.gz`。
+
+原始 CETrajAD official-source run 输出 `770/829` score，缺失 `59` 个 `sample_id`，strict evaluation 失败。补跑时保持官方 CETrajAD 源码和模型外部调用不变，只在 FusionTrack adapter 侧对短轨迹/退化轨迹做 full-coverage 正则化，进入官方 preprocessing 前将 raw points 限制到 256，并使用 `coordinate_scale=1.0` 避免官方 shape 重采样产生极长序列。
+
+| 方法 | AUROC | AUPRC | F1 | P@100 | R@100 | label rows | score rows | missing | extra | duplicate score | 收敛状态 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `official_cetrajad_fullcoverage` | 0.521092 | 0.106465 | 0.193437 | 0.080000 | 0.096386 | 829 | 829 | 0 | 0 | 0 | `no-loss-history` |
 
 结论：新增顶会 official baseline 中，个体级 AUROC 最好的是 CATCH，群体级 AUROC 最好的是 TimeMixer；它们仍低于当前 FusionTrack 最优个体/群体方法。SensitiveHUE 暂只作为补充结果，因为当前 public README 仍标为 under review。

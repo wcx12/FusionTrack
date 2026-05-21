@@ -134,14 +134,15 @@ Logs are written under `logs/` by default, or under `LOG_ROOT` if that environme
 4. Verified the generated individual and group summaries have zero duplicate keys, zero missing score keys, and zero extra score keys.
 5. Reran official-source LM-TAD, Pi-DPM, TranAD, Anomaly Transformer, and DCdetector on the remote GPU under revision `b3b8599`.
 6. Regenerated strict official individual and group summaries in `/root/autodl-tmp/fusiontrack_b3b8599_official_20260522`, with zero duplicate, missing, or extra score keys for all main-table official rows.
-7. Reran CETrajAD and confirmed it remains coverage-failed: `770/829` score rows, `59` missing score keys.
+7. Reran CETrajAD original adapter and confirmed the initial failure mode: `770/829` score rows, `59` missing score keys.
 8. Reran the max-budget official-source deep baselines with a 50-epoch cap in `/root/autodl-tmp/fusiontrack_b3b8599_convergence_20260522`. LM-TAD converged by validation loss; TranAD and Anomaly Transformer individual/group remained `max-budget-not-converged`.
 9. Added and reran two enhanced FusionTrack rows in `/root/autodl-tmp/fusiontrack_b3b8599_methods_20260522`: `fusiontrack_individual_ensemble` and `fusiontrack_group_hybrid`, both under strict key matching.
 10. Added recent official-source runner `run_recent_official_fusiontrack.py` and started strict validation runs for CATCH, CutAddPaste, TimeMixer, and SensitiveHUE in `/root/autodl-tmp/fusiontrack_recent_official_20260522`.
+11. Reran CETrajAD with a full-coverage FusionTrack adapter in `/root/autodl-tmp/fusiontrack_cetrajad_fullcoverage_20260522`; strict individual evaluation now has `829/829` scores, zero duplicate keys, zero missing score keys, and zero extra score keys. The result is `official_cetrajad_fullcoverage` with AUROC `0.521092`, AUPRC `0.106465`, F1 `0.193437`, P@100 `0.080000`, R@100 `0.096386`, and convergence status `no-loss-history`.
 
 ## Remaining Reruns
 
-1. Keep CETrajAD out of the strict main table unless a full-coverage official-source scorer is implemented.
+1. CETrajAD can be reported as `official_cetrajad_fullcoverage` in the strict individual table, but the paper must note the full-coverage adapter, `coordinate_scale=1.0`, and `no-loss-history` status; keep the original `770/829` run only as an audit record.
 2. Extend remaining max-budget-not-converged deep runs beyond 50 epochs if the paper needs final convergence claims instead of reporting the current budget status.
 3. Keep old `sample_id`-only group results only as appendix any-window diagnostics.
 4. Rerun any experiment whose metrics show duplicate keys, missing score keys, or extra score keys.

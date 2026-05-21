@@ -291,7 +291,8 @@
           "num_score_rows": 770,
           "num_label_rows": 829,
           "num_missing_score_keys": 59,
-          "main_table_eligible": false
+          "main_table_eligible": false,
+          "resolved_by": "latest_completed_cetrajad_fullcoverage_run"
         }
       },
       "audit": {
@@ -302,6 +303,32 @@
         "num_missing_score_keys": 0,
         "num_extra_score_keys": 0
       }
+    },
+    "latest_completed_cetrajad_fullcoverage_run": {
+      "date": "2026-05-22",
+      "source_revision": "1f8b52e plus remote CETrajAD full-coverage adapter rerun",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_cetrajad_fullcoverage_20260522",
+      "local_archive": "server_artifacts/final_results_20260522/fusiontrack_cetrajad_fullcoverage_20260522.tar.gz",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "epoch_cap": 10,
+      "adapter_note": "Official CETrajAD source and model were kept external/unchanged. The FusionTrack adapter regularized short or degenerate trajectories to avoid official preprocessing drops, capped raw points at 256, and used coordinate_scale=1.0 for full strict-key coverage.",
+      "strict_alignment": {
+        "individual_rows": 829,
+        "num_score_rows": 829,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      },
+      "result": {
+        "method": "official_cetrajad_fullcoverage",
+        "auroc": 0.5210924125456249,
+        "auprc": 0.10646467277054456,
+        "f1": 0.1934369602763385,
+        "precision_at_k": 0.08,
+        "recall_at_k": 0.0963855421686747
+      },
+      "convergence_status": "no-loss-history"
     },
     "latest_completed_method_update_run": {
       "date": "2026-05-22",
@@ -410,7 +437,7 @@
     "Completed for official main-table rows in remote run fusiontrack_b3b8599_official_20260522: rerun official group baselines with top-level window_id and strict key matching.",
     "Keep old sample_id-only group results only as appendix any-window diagnostics.",
     "Extend max-budget-not-converged official-source deep baselines before making final convergence claims, or report the current convergence status explicitly.",
-    "Keep official CETrajAD out of the strict main table unless a full-coverage official-source scorer is implemented.",
+    "Completed for official CETrajAD full-coverage rerun: original 770/829 coverage failure is retained as an audit record, and official_cetrajad_fullcoverage is the strict-key result to report with its adapter note.",
     "Rerun any experiment whose metrics show duplicate keys, missing score keys, or extra score keys."
   ]
 }
