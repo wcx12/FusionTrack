@@ -217,7 +217,7 @@ outputs/vt_tiny_mot_features/
 - `speed_*`：逐帧中心点速度。
 - `shape_*`：去重、归一化、重采样并 PCA 后的运动形状特征。
 
-### 4. 按 sequence 切分 train/val
+### 4. 按序列切分训练集和验证集
 
 ```powershell
 python split_train_val_by_sequence.py --split-features
@@ -398,7 +398,7 @@ python analyze_single_modality_results.py --split test
 2. 实现一个满足 `GroupAnomalyDetector` Protocol 的 group 模型。
 3. 输出 `GroupScoreRecord`，再通过 `aggregate_group_scores_by_sample(...)` 聚合成现有 `ScoreRecord`，交给后续 fusion。
 
-### 导出 group/window 样本
+### 导出群体窗口样本
 
 固定窗口模式：
 
@@ -534,7 +534,7 @@ object_level_group_scores = aggregate_group_scores_by_sample(
 }
 ```
 
-### 后续 fusion 建议
+### 后续融合建议
 
 fusion 层建议只依赖 object-level `ScoreRecord`：
 

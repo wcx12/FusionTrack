@@ -1,13 +1,13 @@
 # FusionTrack
 
-FusionTrack 是一个面向多模态目标融合、轨迹补全与异常检测的毕业设计/论文项目。仓库包含论文 LaTeX 源码、系统可视化材料，以及基于 VT-Tiny-MOT 数据集构建的个体级和群体级异常检测 benchmark。
+FusionTrack 是一个面向多模态目标融合、轨迹补全与异常检测的毕业设计/论文项目。仓库包含论文 LaTeX 源码、系统可视化材料，以及基于 VT-Tiny-MOT 数据集构建的个体级和群体级异常检测基准实验。
 
 本 README 是项目总入口，说明仓库结构、实验协议、方法分类、当前结果、复现实验方式，以及哪些文件适合提交到 GitHub。
 
 ## 当前状态
 
 - 论文源码位于 `article_content/`，使用 XeLaTeX/latexmk 构建。
-- 异常检测 benchmark 位于 `code/anomaly_detection/benchmark/`，覆盖个体级与群体级任务。
+- 异常检测基准实验位于 `code/anomaly_detection/benchmark/`，覆盖个体级与群体级任务。
 - 当前 strict validation protocol 使用 seed 42、train split 内部 train/val 划分。
 - 个体级主键是 `sample_id`，严格要求 829 条 label 与 829 条 score 完整对齐。
 - 群体级主键是 `sample_id + window_id`，严格要求 15605 条 label 与 15605 条 score 完整对齐。
@@ -78,7 +78,7 @@ FusionTrack/
 | `fusiontrack_group_temporal_knn` | 群体级 | 学习型 | 群体窗口特征 KNN |
 | `fusiontrack_group_hybrid` | 群体级 | 学习型/融合型 | prediction residual、graph cohesion、temporal profile 的 rank fusion |
 
-### 经典 Baseline
+### 经典基线方法
 
 | 方法 | 任务 | 类型 |
 | --- | --- | --- |
@@ -90,7 +90,7 @@ FusionTrack/
 | `group_iforest` | 群体级 | 学习型，classical ML |
 | `group_ocsvm` | 群体级 | 学习型，classical ML |
 
-### 官方论文 Baseline
+### 官方论文基线方法
 
 这些方法必须使用论文官方或论文明确关联的 GitHub 源码复现。
 
@@ -107,7 +107,7 @@ FusionTrack/
 | TimeMixer | `official_timemixer_*_20` | 个体级、群体级 | 已接入官方源码；20 epoch recent run 已完成 |
 | SensitiveHUE | `official_sensitive_hue_*_20` | 个体级、群体级 | 补充 official-source 候选；公开 README 仍标为 under review |
 
-### Internal / Proxy / Ablation
+### 内部方法、代理方法与消融
 
 | 方法 | 任务 | 说明 |
 | --- | --- | --- |

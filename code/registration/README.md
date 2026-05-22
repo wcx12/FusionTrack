@@ -1,22 +1,18 @@
-# MPS-GAF Registration
+# MPS-GAF 配准代码
 
-This directory contains the runnable registration code extracted from the
-MPS-GAF experiments.  The dataset is intentionally kept outside the repository.
+这个目录包含从 MPS-GAF 实验中整理出来的可运行配准代码。数据集不放进仓库，训练数据、模型权重、运行日志和实验输出都应保存在仓库外部或被 `.gitignore` 忽略。
 
-## Files
+## 文件说明
 
-- `mps_gaf_registration_core.py`: model, graph fusion, Sinkhorn matching,
-  weighted SVD, learned SVD inlier weighting, and optional geometric refinement
-  utilities.
-- `mps_gaf_data_pipeline.py`: ModelNet40 HDF5 loader and grouped multi-source batching.
-- `mps_gaf_run.py`: command-line entry point for inspection, training, and evaluation.
-- `EXPERIMENT_RECORD.md`: experiment history, ablations, recommended checkpoints,
-  and RPM-Net comparison results.
-- `requirements.txt`: Python dependencies.
+- `mps_gaf_registration_core.py`：模型主体、图融合、Sinkhorn 匹配、加权 SVD、learned SVD 内点加权，以及可选几何细化工具。
+- `mps_gaf_data_pipeline.py`：ModelNet40 HDF5 数据读取，以及 grouped multi-source batching。
+- `mps_gaf_run.py`：检查、训练和评价的命令行入口。
+- `EXPERIMENT_RECORD.md`：实验记录、消融结果、推荐 checkpoint 和 RPM-Net 对比结果。
+- `requirements.txt`：Python 依赖。
 
-## Dataset Layout
+## 数据集结构
 
-Download and keep `modelnet40_ply_hdf5_2048` outside this repository, for example:
+请下载 `modelnet40_ply_hdf5_2048`，并放在仓库外部，例如：
 
 ```text
 datasets/modelnet40_ply_hdf5_2048/
@@ -27,10 +23,9 @@ datasets/modelnet40_ply_hdf5_2048/
   ply_data_test*.h5
 ```
 
-## Sanity Check
+## 运行前检查
 
-Run this before training.  It verifies that each batch contains complete
-source groups sharing the same reference shape.
+训练前建议先运行检查命令。它会确认每个 batch 都包含完整的 source group，并且同一组 source 共享同一个 reference shape。
 
 ```bash
 python mps_gaf_run.py \
@@ -41,11 +36,9 @@ python mps_gaf_run.py \
   --groups_per_batch 1
 ```
 
-## Training
+## 训练
 
-The current recommended learning-forward configuration uses entropy-weighted
-matching plus a learned SVD inlier head.  The head predicts which source points
-should influence the final weighted SVD pose solve.
+当前推荐的 learning-forward 配置使用 entropy-weighted matching 加 learned SVD inlier head。这个 head 会预测哪些 source points 应该参与最终的加权 SVD 位姿求解。
 
 ```bash
 python mps_gaf_run.py \
@@ -74,14 +67,11 @@ python mps_gaf_run.py \
   --pose_trans_weight 50
 ```
 
-For full training without a smoke-test cap, remove `--max_train_steps` and set a
-larger validation protocol as needed.
+如果要进行完整训练，请去掉 `--max_train_steps`，并按需要设置更完整的 validation protocol。
 
-## One-Batch Smoke Test
+## 单批次冒烟测试
 
-This checks data loading, grouped batching, model forward, loss, backward, one
-optimizer step, validation forward, and checkpoint writing without running a
-full experiment.
+这个命令用于快速检查数据读取、grouped batching、模型 forward、loss、backward、一次 optimizer step、validation forward 和 checkpoint 写入，不会跑完整实验。
 
 ```bash
 python mps_gaf_run.py \
@@ -97,7 +87,7 @@ python mps_gaf_run.py \
   --device cpu
 ```
 
-## Evaluation
+## 评价
 
 ```bash
 python mps_gaf_run.py \
@@ -112,8 +102,7 @@ python mps_gaf_run.py \
   --svd_weight_mode learned_entropy
 ```
 
-To reproduce the strongest learned-SVD result against the RPM-Net original
-output, enable light point-to-plane refinement:
+如果要复现 learned SVD 相对 RPM-Net 原始结果的最强记录，可以在评价时打开轻量 point-to-plane refinement：
 
 ```bash
 python mps_gaf_run.py \
@@ -138,23 +127,19 @@ python mps_gaf_run.py \
   --icp_max_translation 0.2
 ```
 
-Under the recorded source-2, crop-noise, 20-batch validation protocol, the
-current learned-SVD checkpoint achieved:
+在已记录的 source-2、crop-noise、20-batch validation protocol 下，当前 learned SVD checkpoint 的结果如下：
 
-| Method | Refinement | Rot mean | Trans mean | Pose50 |
-|---|---|---:|---:|---:|
-| RPM-Net original pose-best | none | 10.3604 | 0.0987 | 15.2972 |
-| Learned MPS-GAF | none | 12.1518 | 0.1505 | 19.6781 |
-| Learned MPS-GAF | plane, 5 steps | 5.5346 | 0.0939 | 10.2313 |
-| Learned MPS-GAF | plane, 20 steps | 4.3478 | 0.0742 | 8.0559 |
+| 方法 | 细化方式 | 旋转误差均值 | 平移误差均值 | Pose50 |
+| --- | --- | ---: | ---: | ---: |
+| RPM-Net original pose-best | 无 | 10.3604 | 0.0987 | 15.2972 |
+| Learned MPS-GAF | 无 | 12.1518 | 0.1505 | 19.6781 |
+| Learned MPS-GAF | plane，5 步 | 5.5346 | 0.0939 | 10.2313 |
+| Learned MPS-GAF | plane，20 步 | 4.3478 | 0.0742 | 8.0559 |
 
-See `EXPERIMENT_RECORD.md` for the complete ablation history and exact remote
-artifact paths.
+完整消融历史和远程 artifact 路径见 `EXPERIMENT_RECORD.md`。
 
-The grouped data loader is required for both training and evaluation.  Do not
-replace it with a plain `DataLoader(batch_size=...)`, because the model assumes
-that `num_sources_per_ref` adjacent rows belong to the same reference group.
+## 注意事项
 
-During training, source/reference augmentations are regenerated every epoch by
-updating the dataset epoch seed.  Validation and test datasets remain
-deterministic so metrics are comparable across runs.
+- 训练和评价都必须使用 grouped data loader。不要替换成普通的 `DataLoader(batch_size=...)`，因为模型假设相邻的 `num_sources_per_ref` 行属于同一个 reference group。
+- 训练时，source/reference augmentation 会在每个 epoch 按 dataset epoch seed 重新生成。
+- validation 和 test 数据保持确定性，保证不同 run 之间的指标可比较。

@@ -1,6 +1,6 @@
-# FusionTrack VT-Tiny-MOT 异常检测实验 README
+# FusionTrack VT-Tiny-MOT 异常检测实验说明
 
-这份 README 是当前项目的“实验版本完整说明”。它覆盖我已经整理、实现、运行和验证过的全部实验内容，包括实验协议、数据与异常注入、个体级和群体级方法、baseline 分类、官方论文源码复现规则、运行命令、当前结果、可提交内容和后续工作边界。
+这份 README 是当前项目的“实验版本完整说明”。它覆盖我已经整理、实现、运行和验证过的全部实验内容，包括实验协议、数据与异常注入、个体级和群体级方法、基线方法分类、官方论文源码复现规则、运行命令、当前结果、可提交内容和后续工作边界。
 
 本文档对应目录：
 
@@ -102,7 +102,7 @@ server_artifacts/final_results_20260522/holdout_multiseed_20260522/
 
 ## 4. 实验协议
 
-### 4.1 Validation 协议
+### 4.1 验证集协议
 
 validation 协议用于开发、调参和选择方法配置。
 
@@ -128,7 +128,7 @@ validation 协议的用途：
 3. 发现 key 对齐、score 覆盖和异常注入错误。
 4. 生成可复现实验配置，而不是直接作为最终泛化结论。
 
-### 4.2 Holdout test 协议
+### 4.2 保留测试集协议
 
 holdout 协议用于最终确认。
 
@@ -165,7 +165,7 @@ server_artifacts/final_results_20260522/fusiontrack_holdout_multiseed_combined_2
 server_artifacts/final_results_20260522/holdout_multiseed_20260522/fusiontrack_holdout_multiseed_combined_20260522/
 ```
 
-### 4.3 严格 key 对齐规则
+### 4.3 严格键对齐规则
 
 所有主实验必须满足：
 
@@ -251,7 +251,7 @@ score key = sample_id + window_id
 
 ## 7. 方法分类
 
-### 7.1 我们的方法：FusionTrack individual
+### 7.1 我们的方法：FusionTrack 个体级
 
 #### `fusiontrack_individual_nn`
 
@@ -366,7 +366,7 @@ calibration_bins = 4
 calibration_global_weight = 0.3
 ```
 
-### 7.2 我们的方法：FusionTrack group
+### 7.2 我们的方法：FusionTrack 群体级
 
 #### `fusiontrack_group_temporal_knn`
 
@@ -507,7 +507,7 @@ validation score-grid 选出的群体级 AUPRC / F1 候选。
 | graph cohesion | `0.42` |
 | temporal profile | `0.12` |
 
-### 7.3 经典 baseline
+### 7.3 经典基线方法
 
 经典 baseline 不依赖具体论文源码，属于通用异常检测方法，主要用于建立合理参照。
 
@@ -535,7 +535,7 @@ validation score-grid 选出的群体级 AUPRC / F1 候选。
 2. 防止只和很弱的随机或简单均值 baseline 比较。
 3. 暴露任务本身是否被某个简单统计特征解决。
 
-### 7.4 官方论文源码 baseline
+### 7.4 官方论文源码基线方法
 
 论文型 baseline 的规则已经固定：
 
@@ -571,7 +571,7 @@ validation score-grid 选出的群体级 AUPRC / F1 候选。
 8. convergence status。
 9. key 对齐诊断。
 
-### 7.5 internal / proxy / ablation
+### 7.5 内部方法、代理方法与消融
 
 以下方法不能冒充对应论文官方 baseline：
 
@@ -611,7 +611,7 @@ fusiontrack/individual_scoring.py
 tests/test_individual_fusiontrack_scoring.py
 ```
 
-### 8.2 群体级 residual gate
+### 8.2 群体级残差门控
 
 修改文件：
 
@@ -633,7 +633,7 @@ fusiontrack/group_temporal_profile.py
 tests/test_group_temporal_profile.py
 ```
 
-### 8.3 benchmark matrix 参数传递
+### 8.3 基准实验矩阵参数传递
 
 修改文件：
 
@@ -653,7 +653,7 @@ runners/run_benchmark_matrix.py
 tests/test_run_benchmark_matrix.py
 ```
 
-### 8.4 validation protocol 方法注册
+### 8.4 验证协议方法注册
 
 修改文件：
 
@@ -681,7 +681,7 @@ fusiontrack_group_hybrid_tuned_fine_f1
 tests/test_prepare_vt_tiny_mot_protocol.py
 ```
 
-### 8.5 score-grid runner
+### 8.5 分数网格运行器
 
 新增文件：
 
@@ -706,7 +706,7 @@ runners/run_fusiontrack_score_grid.py
 
 这个 runner 只能用于 validation 选择。不能拿 test score-grid 结果反过来调参。
 
-### 8.6 holdout protocol runner
+### 8.6 保留测试协议运行器
 
 新增文件：
 
@@ -727,7 +727,7 @@ group_test_matrix.json
 protocol_manifest.json
 ```
 
-### 8.7 holdout multiseed runner
+### 8.7 保留测试多种子运行器
 
 新增文件：
 
@@ -774,7 +774,7 @@ configs/final_experiment_settings.md
 
 ## 9. 运行方式
 
-### 9.1 生成 validation 协议
+### 9.1 生成验证集协议
 
 示例：
 
@@ -787,7 +787,7 @@ python code/anomaly_detection/benchmark/runners/prepare_vt_tiny_mot_protocol.py 
 
 输出会包括 individual/group label、normal reference、benchmark matrix 和 manifest。
 
-### 9.2 运行 benchmark matrix
+### 9.2 运行基准实验矩阵
 
 个体级示例：
 
@@ -805,7 +805,7 @@ python code/anomaly_detection/benchmark/runners/run_benchmark_matrix.py \
   --result-root /root/autodl-tmp/fusiontrack_val_strict/results/group
 ```
 
-### 9.3 运行 score-grid
+### 9.3 运行分数网格搜索
 
 示例：
 
@@ -817,7 +817,7 @@ python code/anomaly_detection/benchmark/runners/run_fusiontrack_score_grid.py \
 
 score-grid 只用于 validation 选择权重。
 
-### 9.4 运行 train -> test holdout 多种子
+### 9.4 运行训练集到测试集的多种子保留测试
 
 示例：
 
@@ -872,7 +872,7 @@ tmux attach -t fusiontrack_val
 
 ## 10. 当前实验结果
 
-### 10.1 validation：预注册 FusionTrack 改进
+### 10.1 验证集：预注册 FusionTrack 改进
 
 结果路径：
 
@@ -908,7 +908,7 @@ tmux attach -t fusiontrack_val
 2. gated 版本这轮没有超过 ungated hybrid，因此没有作为主推版本。
 3. linear prediction 的 AUPRC 在 validation 上较高，但 TopK 和 F1 不占优。
 
-### 10.2 validation：score-grid tuned candidates
+### 10.2 验证集：分数网格调参候选
 
 个体级：
 
@@ -933,7 +933,7 @@ tmux attach -t fusiontrack_val
 2. 个体级 tuned AUPRC 和 TopK 分别服务于不同目标。
 3. 群体级 fine candidates 提高了 AUPRC、F1 和 TopK，但 AUROC 最强仍是 `tuned_auroc_topk`。
 
-### 10.3 holdout：train -> test，seeds 42/43/44
+### 10.3 保留测试：训练集到测试集，种子 42/43/44
 
 结果路径：
 
@@ -1002,7 +1002,7 @@ extra score keys = 0
 3. 所有主要 FusionTrack hybrid 版本都明显高于 `group_prediction_linear`。
 4. 基础 graph 和 temporal KNN 单独使用效果很弱，说明群体任务依赖多组件融合。
 
-## 11. 官方 baseline 当前说明
+## 11. 官方基线方法当前说明
 
 已经完成或记录过的官方 baseline rerun 包括：
 
@@ -1024,7 +1024,7 @@ CETrajAD full-coverage adapter 当前结果：
 2. 可以报告 full-coverage adapter，但必须说明 adapter 做了覆盖修复、`coordinate_scale=1.0`、且没有 loss history。
 3. 深度 baseline 如果 loss 仍在下降，不能声称 fully converged，只能标注 `max-budget-not-converged` 或继续延长训练。
 
-## 12. 收敛和 epoch 规则
+## 12. 收敛和训练轮次规则
 
 不同算法不强制 epoch 完全一样，因为：
 
@@ -1133,7 +1133,7 @@ fusiontrack_individual_ensemble_tuned_auprc AUPRC = 0.190092±0.021638
 直接看 test 结果再调权重。
 ```
 
-### 15.2 官方论文 baseline 收敛补跑
+### 15.2 官方论文基线方法收敛补跑
 
 还需要对 `max-budget-not-converged` 的深度方法延长训练或明确报告状态。
 
@@ -1155,7 +1155,7 @@ wall time
 run_manifest.json
 ```
 
-### 15.3 官方 baseline holdout 多种子
+### 15.3 官方基线方法保留测试多种子
 
 当前 holdout 多种子汇总主要覆盖 local/proxy/FusionTrack 方法。论文主表如果要完整，应把官方源码 baseline 也按同一 train -> test seeds 42/43/44 协议跑完。
 
