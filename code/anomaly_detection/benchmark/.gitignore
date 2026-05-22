@@ -1,0 +1,11 @@
+outputs/
+runs/
+checkpoints/
+logs/
+*.pth
+*.pt
+*.pkl
+*.npy
+*.npz
+__pycache__/
+*.py[cod]

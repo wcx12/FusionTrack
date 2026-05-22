@@ -1,0 +1,106 @@
+{
+  "split": "val",
+  "seed": 42,
+  "label_file": "outputs/protocol/group_labels_val.jsonl",
+  "k": 100,
+  "key_fields": ["sample_id"],
+  "experiments": [
+    {
+      "name": "group_prediction_linear",
+      "task": "group_prediction",
+      "score_windows": "outputs/protocol/group_windows_val.jsonl"
+    },
+    {
+      "name": "group_iforest",
+      "task": "group_classical",
+      "method": "isolation_forest",
+      "train_windows": "outputs/protocol/group_windows_train.jsonl",
+      "score_windows": "outputs/protocol/group_windows_val.jsonl",
+      "contamination": 0.05,
+      "seed": 42
+    },
+    {
+      "name": "group_ocsvm",
+      "task": "group_classical",
+      "method": "one_class_svm",
+      "train_windows": "outputs/protocol/group_windows_train.jsonl",
+      "score_windows": "outputs/protocol/group_windows_val.jsonl",
+      "contamination": 0.05,
+      "seed": 42
+    },
+    {
+      "name": "group_temporal_graph_ae",
+      "task": "group_temporal_autoencoder",
+      "train_windows": "outputs/protocol/group_windows_train.jsonl",
+      "score_windows": "outputs/protocol/group_windows_val.jsonl",
+      "n_components": 3,
+      "seed": 42
+    },
+    {
+      "name": "fusiontrack_group_temporal_knn",
+      "task": "fusiontrack_group_temporal_knn",
+      "train_windows": "outputs/protocol/group_windows_train.jsonl",
+      "score_windows": "outputs/protocol/group_windows_val.jsonl",
+      "n_neighbors": 3
+    },
+    {
+      "name": "fusiontrack_group_graph",
+      "task": "fusiontrack_group",
+      "score_windows": "outputs/protocol/group_windows_val.jsonl",
+      "k_neighbors": 3,
+      "rho_p": 80.0,
+      "rho_v": 20.0,
+      "eta": 0.5
+    },
+    {
+      "name": "fusiontrack_individual_nn",
+      "task": "fusiontrack_individual",
+      "train_jsonl": "outputs/protocol/fused_trajectories_train.jsonl",
+      "score_jsonl": "outputs/protocol/fused_trajectories_val.jsonl",
+      "n_neighbors": 1
+    },
+    {
+      "name": "fusiontrack_individual_context",
+      "task": "fusiontrack_individual_context",
+      "train_jsonl": "outputs/protocol/fused_trajectories_train.jsonl",
+      "score_jsonl": "outputs/protocol/fused_trajectories_val.jsonl",
+      "train_windows": "outputs/protocol/group_windows_train.jsonl",
+      "score_windows": "outputs/protocol/group_windows_val.jsonl",
+      "n_neighbors": 1
+    },
+    {
+      "name": "individual_complementary_cetrajad",
+      "task": "individual_complementary",
+      "train_jsonl": "outputs/protocol/fused_trajectories_train.jsonl",
+      "score_jsonl": "outputs/protocol/fused_trajectories_val.jsonl",
+      "n_neighbors": 1,
+      "contamination": 0.05,
+      "seed": 42
+    },
+    {
+      "name": "individual_trajectory_lm_ngram",
+      "task": "individual_trajectory_lm",
+      "train_jsonl": "outputs/protocol/fused_trajectories_train.jsonl",
+      "score_jsonl": "outputs/protocol/fused_trajectories_val.jsonl",
+      "ngram_order": 2,
+      "alpha": 1.0,
+      "grid_size": 16,
+      "seed": 42
+    },
+    {
+      "name": "individual_physics_kinematic",
+      "task": "individual_physics",
+      "train_jsonl": "outputs/protocol/fused_trajectories_train.jsonl",
+      "score_jsonl": "outputs/protocol/fused_trajectories_val.jsonl"
+    },
+    {
+      "name": "individual_iforest",
+      "task": "individual_classical",
+      "method": "isolation_forest",
+      "train_jsonl": "outputs/protocol/fused_trajectories_train.jsonl",
+      "score_jsonl": "outputs/protocol/fused_trajectories_val.jsonl",
+      "contamination": 0.05,
+      "seed": 42
+    }
+  ]
+}

@@ -1,0 +1,922 @@
+{
+  "name": "fusiontrack_final_val_experiments",
+  "purpose": "Pre-declared validation configuration for FusionTrack anomaly-detection experiments.",
+  "common_protocol": {
+    "dataset": "VT-Tiny-MOT",
+    "source_split": "train",
+    "sequence_val_ratio": 0.2,
+    "seeds": {
+      "main": 42,
+      "robustness_optional": [42, 43, 44]
+    },
+    "individual_anomaly_fraction": 0.1,
+    "group_anomaly_fraction": 0.1,
+    "group_window_size": 16,
+    "group_stride": 8,
+    "score_split": "val"
+  },
+  "evaluation": {
+    "individual_key_fields": ["sample_id"],
+    "individual_require_unique_keys": true,
+    "individual_require_score_key_match": true,
+    "group_main_key_fields": ["sample_id", "window_id"],
+    "group_main_require_unique_keys": true,
+    "group_main_require_score_key_match": true,
+    "group_optional_any_window_key_fields": ["sample_id"],
+    "group_optional_any_window_require_unique_keys": false,
+    "group_optional_any_window_require_score_key_match": false,
+    "rank_k": 100,
+    "primary_metrics": ["auprc", "auroc", "f1", "precision_at_k", "recall_at_k"],
+    "alignment_diagnostics": [
+      "num_label_rows",
+      "num_score_rows",
+      "num_unique_label_keys",
+      "num_unique_score_keys",
+      "num_duplicate_label_keys",
+      "num_duplicate_score_keys",
+      "num_missing_score_keys",
+      "num_extra_score_keys"
+    ],
+    "main_table_rule": "Use unique sample_id keys with exact label-score key matching for individual rows and unique sample_id+window_id keys with exact label-score key matching for group rows. Duplicate, missing, or extra score keys fail main-protocol runs. The group sample_id-only any-window metric is appendix-only."
+  },
+  "fairness_rules": [
+    "Use the same generated protocol files for all methods in a task.",
+    "Do not tune hyperparameters on the test split.",
+    "Do not pick per-method hyperparameters after seeing validation scores unless the run is explicitly labeled tuning or ablation.",
+    "Paper baseline rows must use official or paper-linked source code and record URL, commit, license, adapter, environment, and run manifest.",
+    "Local proxy implementations are internal/proxy/ablation rows and must not be named as paper baselines in the main table.",
+    "Deep methods start from method-appropriate initial budgets instead of forcing every method to the same epoch count; every run must record epochs, batch size, learning rate, window size, seed, adapter notes, and convergence diagnostics.",
+    "A deep-model result is final only after its train/validation loss curve satisfies the convergence policy below or after an explicitly reported non-convergence budget cap.",
+    "Individual main-protocol evaluation must have one label row and one score row per sample_id; duplicate keys, missing score keys, and extra score keys fail the run.",
+    "Group main-protocol evaluation must have one label row and one score row per sample_id+window_id; duplicate keys, missing score keys, and extra score keys fail the run."
+  ],
+  "convergence_policy": {
+    "status": "required_before_final_tables",
+    "principle": "Epoch counts are initial budgets, not proof of convergence.",
+    "validation_split": "Use only train-derived validation data or the method's official validation protocol. Do not use the anomaly evaluation labels to choose epochs.",
+    "early_stopping": {
+      "monitor": "validation_loss when available, otherwise training_loss plus score-stability diagnostics",
+      "patience": 5,
+      "min_delta": 0.001,
+      "restore_best_checkpoint": true
+    },
+    "budget_schedule": {
+      "pilot_epochs": 5,
+      "default_max_epochs": 50,
+      "extend_if_still_improving": true,
+      "stop_when_plateaued": true
+    },
+    "diagnostics_to_save": [
+      "loss_history.json",
+      "best_epoch",
+      "final_epoch",
+      "early_stop_reason",
+      "gpu_name",
+      "wall_time_seconds",
+      "run_manifest.json"
+    ],
+    "reporting_rule": "Main tables may report a deep baseline only with convergence status: converged, early-stopped, or max-budget-not-converged."
+  },
+  "local_benchmark_methods": {
+    "individual": {
+      "fusiontrack_individual_nn": {"train_epochs": null, "n_neighbors": 1},
+      "fusiontrack_individual_ensemble": {
+        "train_epochs": null,
+        "n_neighbors": 1,
+        "components": ["nearest_feature_rank", "lof_novelty_rank", "isolation_forest_rank"],
+        "weights": {
+          "nearest_feature_rank": 0.4,
+          "lof_novelty_rank": 0.35,
+          "isolation_forest_rank": 0.25
+        },
+        "seed": 42,
+        "contamination": 0.05
+      },
+      "fusiontrack_individual_ensemble_calibrated": {
+        "train_epochs": null,
+        "n_neighbors": 1,
+        "components": ["nearest_feature_rank", "lof_novelty_rank", "isolation_forest_rank"],
+        "weights": {
+          "nearest_feature_rank": 0.4,
+          "lof_novelty_rank": 0.35,
+          "isolation_forest_rank": 0.25
+        },
+        "seed": 42,
+        "contamination": 0.05,
+        "calibration": {
+          "method": "feature_stratified_rank_blend",
+          "columns": ["mean_speed", "duration_frames", "num_points"],
+          "bins": 4,
+          "global_weight": 0.5,
+          "selection_rule": "predeclared train/score feature-stratified calibration; no evaluation labels used inside the scorer"
+        }
+      },
+      "fusiontrack_individual_ensemble_tuned_auprc": {
+        "train_epochs": null,
+        "n_neighbors": 1,
+        "components": ["nearest_feature_rank", "lof_novelty_rank", "isolation_forest_rank"],
+        "weights": {
+          "nearest_feature_rank": 0.45,
+          "lof_novelty_rank": 0.45,
+          "isolation_forest_rank": 0.1
+        },
+        "seed": 42,
+        "contamination": 0.05,
+        "calibration": {
+          "method": "feature_stratified_rank_blend",
+          "columns": ["mean_speed", "duration_frames", "num_points"],
+          "bins": 4,
+          "global_weight": 0.3,
+          "selection_rule": "selected by validation score-grid for AUPRC; confirm on test/additional seeds before main-table claim"
+        }
+      },
+      "fusiontrack_individual_ensemble_tuned_topk": {
+        "train_epochs": null,
+        "n_neighbors": 1,
+        "components": ["nearest_feature_rank", "lof_novelty_rank", "isolation_forest_rank"],
+        "weights": {
+          "nearest_feature_rank": 0.6,
+          "lof_novelty_rank": 0.3,
+          "isolation_forest_rank": 0.1
+        },
+        "seed": 42,
+        "contamination": 0.05,
+        "calibration": {
+          "method": "feature_stratified_rank_blend",
+          "columns": ["mean_speed", "duration_frames", "num_points"],
+          "bins": 4,
+          "global_weight": 0.3,
+          "selection_rule": "selected by validation score-grid for P@100/R@100; confirm on test/additional seeds before main-table claim"
+        }
+      },
+      "fusiontrack_individual_context": {"train_epochs": null, "n_neighbors": 1},
+      "individual_iforest": {"train_epochs": null, "contamination": 0.05, "seed": 42},
+      "individual_lof": {"train_epochs": null, "contamination": 0.05, "seed": 42},
+      "individual_ocsvm": {"train_epochs": null, "contamination": 0.05, "seed": 42}
+    },
+    "group": {
+      "group_prediction_linear": {"train_epochs": null},
+      "group_iforest": {"train_epochs": null, "contamination": 0.05, "seed": 42},
+      "group_lof": {"train_epochs": null, "contamination": 0.05, "seed": 42},
+      "group_ocsvm": {"train_epochs": null, "contamination": 0.05, "seed": 42},
+      "group_temporal_graph_ae_proxy": {"train_epochs": null, "n_components": 3, "seed": 42},
+      "fusiontrack_group_temporal_knn": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "model": "standardized_group_feature_knn"
+      },
+      "fusiontrack_group_hybrid": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.6,
+          "graph_rank": 0.2,
+          "temporal_profile_rank": 0.2
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        }
+      },
+      "fusiontrack_group_hybrid_gated": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.6,
+          "graph_rank": 0.2,
+          "temporal_profile_rank": 0.2
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        },
+        "residual_gate": {
+          "enabled": true,
+          "power": 2.0,
+          "floor": 0.05,
+          "selection_rule": "predeclared gating that suppresses graph/temporal side evidence when prediction residual rank is low"
+        }
+      },
+      "fusiontrack_group_hybrid_tuned_auroc_topk": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.5,
+          "graph_rank": 0.25,
+          "temporal_profile_rank": 0.25
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        },
+        "residual_gate": {
+          "enabled": false,
+          "selection_rule": "selected by validation score-grid for AUROC/P@100/R@100; confirm on test/additional seeds before main-table claim"
+        }
+      },
+      "fusiontrack_group_hybrid_tuned_auprc_f1": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.6,
+          "graph_rank": 0.3,
+          "temporal_profile_rank": 0.1
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        },
+        "residual_gate": {
+          "enabled": false,
+          "selection_rule": "selected by validation score-grid for AUPRC/F1; confirm on test/additional seeds before main-table claim"
+        }
+      },
+      "fusiontrack_group_hybrid_tuned_fine_auprc": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.47,
+          "graph_rank": 0.41,
+          "temporal_profile_rank": 0.12
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        },
+        "residual_gate": {
+          "enabled": false,
+          "selection_rule": "selected by fine validation weight search for AUPRC; confirm on test/additional seeds before main-table claim"
+        }
+      },
+      "fusiontrack_group_hybrid_tuned_fine_topk": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.45,
+          "graph_rank": 0.43,
+          "temporal_profile_rank": 0.12
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        },
+        "residual_gate": {
+          "enabled": false,
+          "selection_rule": "selected by fine validation weight search for P@100/R@100; confirm on test/additional seeds before main-table claim"
+        }
+      },
+      "fusiontrack_group_hybrid_tuned_fine_f1": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.46,
+          "graph_rank": 0.42,
+          "temporal_profile_rank": 0.12
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        },
+        "residual_gate": {
+          "enabled": false,
+          "selection_rule": "selected by fine validation weight search for F1; confirm on test/additional seeds before main-table claim"
+        }
+      },
+      "fusiontrack_group_graph": {
+        "train_epochs": null,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5
+      }
+    }
+  },
+  "official_paper_baselines": {
+    "cetrajad": {
+      "tasks": ["individual"],
+      "epochs": 10,
+      "batch_size": 64,
+      "learning_rate": 0.0001,
+      "seed": 42,
+      "source_policy_key": "cetrajad",
+      "budget_status": "initial_adapter_budget_pending_convergence_check"
+    },
+    "lm_tad": {
+      "tasks": ["individual"],
+      "epochs": 5,
+      "batch_size": 64,
+      "learning_rate": 0.0005,
+      "seed": 42,
+      "source_policy_key": "lm_tad",
+      "budget_status": "initial_adapter_budget_pending_convergence_check"
+    },
+    "pidpm": {
+      "tasks": ["individual"],
+      "epochs": 20,
+      "batch_size": 64,
+      "learning_rate": 0.001,
+      "seed": 42,
+      "source_policy_key": "pidpm",
+      "budget_status": "initial_adapter_budget_pending_convergence_check"
+    },
+    "anomaly_transformer": {
+      "tasks": ["individual", "group"],
+      "epochs": 8,
+      "batch_size": {"individual": 128, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": {"individual": 64, "group": 16},
+      "seed": 42,
+      "source_policy_key": "anomaly_transformer",
+      "budget_status": "initial_adapter_budget_pending_convergence_check"
+    },
+    "dcdetector": {
+      "tasks": ["individual", "group"],
+      "epochs": 8,
+      "batch_size": {"individual": 128, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": {"individual": 64, "group": 16},
+      "seed": 42,
+      "source_policy_key": "dcdetector",
+      "budget_status": "initial_adapter_budget_pending_convergence_check"
+    },
+    "tranad": {
+      "tasks": ["individual", "group"],
+      "epochs": 5,
+      "batch_size": {"individual": 128, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": 10,
+      "seed": 42,
+      "source_policy_key": "tranad",
+      "budget_status": "initial_adapter_budget_pending_convergence_check",
+      "adapter_note": "Uses the official TranAD default-style n_window=10. If we need a fully standardized TSAD window comparison, run an appendix variant with individual=64 and group=16 before reporting it."
+    },
+    "catch": {
+      "tasks": ["individual", "group"],
+      "epochs": 20,
+      "batch_size": {"individual": 256, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": {"individual": 64, "group": 16},
+      "seed": 42,
+      "source_policy_key": "catch",
+      "budget_status": "recent_official_adapter_budget_pending_convergence_check",
+      "adapter_note": "Uses official CATCHModel and frequency-loss components from the external CATCH checkout."
+    },
+    "cutaddpaste": {
+      "tasks": ["individual", "group"],
+      "epochs": 20,
+      "batch_size": {"individual": 256, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": {"individual": 64, "group": 16},
+      "seed": 42,
+      "source_policy_key": "cutaddpaste",
+      "budget_status": "recent_official_adapter_budget_pending_convergence_check",
+      "adapter_note": "Uses official CutAddPaste classifier and pseudo-anomaly generator from the external CutAddPaste checkout."
+    },
+    "timemixer": {
+      "tasks": ["individual", "group"],
+      "epochs": 20,
+      "batch_size": {"individual": 256, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": {"individual": 64, "group": 16},
+      "seed": 42,
+      "source_policy_key": "timemixer",
+      "budget_status": "recent_official_adapter_budget_pending_convergence_check",
+      "adapter_note": "Uses official TimeMixer anomaly-detection model path as a reconstruction baseline."
+    },
+    "sensitive_hue": {
+      "tasks": ["individual", "group"],
+      "epochs": 20,
+      "batch_size": {"individual": 256, "group": 256},
+      "learning_rate": 0.0001,
+      "window_size": {"individual": 64, "group": 16},
+      "seed": 42,
+      "source_policy_key": "sensitive_hue",
+      "budget_status": "supplementary_official_source_candidate_pending_venue_verification",
+      "adapter_note": "Uses public SensitiveHUE official-source model as supplementary evidence; keep out of top-venue main-table claims until a peer-reviewed venue/source record is verified."
+    }
+  },
+  "remote_execution": {
+    "recommended_shell": "tmux",
+    "default_tmux_session": "fusiontrack_val",
+    "script": "code/anomaly_detection/benchmark/runners/run_server_gpu_experiments.sh",
+    "required_environment": {
+      "MODE": "val",
+      "GPU_ID": 0,
+      "SEED": 42,
+      "USE_TMUX": 1
+    },
+    "latest_completed_local_matrix_run": {
+      "date": "2026-05-22",
+      "source_revision": "b3b8599",
+      "tmux_session": "fusiontrack_group_knn_b3b8599",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_val/results",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "scope": [
+        "strict individual validation matrix",
+        "strict group validation matrix",
+        "fusiontrack_group_temporal_knn full-coverage group run"
+      ]
+    },
+      "latest_completed_official_run": {
+      "date": "2026-05-22",
+      "source_revision": "b3b8599",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_official_20260522",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "parallel_tmux_sessions": [
+        "official_traj_b3b8599",
+        "official_tsad_ind_b3b8599",
+        "official_tsad_group_b3b8599"
+      ],
+      "strict_main_table_methods": {
+        "individual": [
+          "official_lmtad",
+          "official_pidpm",
+          "official_tranad",
+          "official_anomaly_transformer",
+          "official_dcdetector"
+        ],
+        "group": [
+          "official_tranad",
+          "official_anomaly_transformer",
+          "official_dcdetector"
+        ]
+      },
+      "coverage_failed_methods": {
+        "official_cetrajad": {
+          "num_score_rows": 770,
+          "num_label_rows": 829,
+          "num_missing_score_keys": 59,
+          "main_table_eligible": false,
+          "resolved_by": "latest_completed_cetrajad_fullcoverage_run"
+        }
+      },
+      "audit": {
+        "strict_official_individual_rows": 5,
+        "strict_official_group_rows": 3,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      }
+    },
+    "latest_completed_cetrajad_fullcoverage_run": {
+      "date": "2026-05-22",
+      "source_revision": "1f8b52e plus remote CETrajAD full-coverage adapter rerun",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_cetrajad_fullcoverage_20260522",
+      "local_archive": "server_artifacts/final_results_20260522/fusiontrack_cetrajad_fullcoverage_20260522.tar.gz",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "epoch_cap": 10,
+      "adapter_note": "Official CETrajAD source and model were kept external/unchanged. The FusionTrack adapter regularized short or degenerate trajectories to avoid official preprocessing drops, capped raw points at 256, and used coordinate_scale=1.0 for full strict-key coverage.",
+      "strict_alignment": {
+        "individual_rows": 829,
+        "num_score_rows": 829,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      },
+      "result": {
+        "method": "official_cetrajad_fullcoverage",
+        "auroc": 0.5210924125456249,
+        "auprc": 0.10646467277054456,
+        "f1": 0.1934369602763385,
+        "precision_at_k": 0.08,
+        "recall_at_k": 0.0963855421686747
+      },
+      "convergence_status": "no-loss-history"
+    },
+    "latest_completed_method_update_run": {
+      "date": "2026-05-22",
+      "source_revision": "b3b8599 plus local enhanced-method patch",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_methods_20260522",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "scope": [
+        "strict individual validation matrix with fusiontrack_individual_ensemble",
+        "strict group validation matrix with fusiontrack_group_hybrid"
+      ],
+      "best_updated_rows": {
+        "individual": {
+          "method": "fusiontrack_individual_ensemble",
+          "auroc": 0.623752382182887,
+          "auprc": 0.15314710119744618,
+          "f1": 0.2546419098143236,
+          "precision_at_k": 0.15,
+          "recall_at_k": 0.18072289156626506
+        },
+        "group": {
+          "method": "fusiontrack_group_hybrid",
+          "auroc": 0.6921766889101103,
+          "auprc": 0.08155060646072547,
+          "f1": 0.1935483870967742,
+          "precision_at_k": 0.15,
+          "recall_at_k": 0.17045454545454544
+        }
+      }
+    },
+    "latest_completed_improved_method_run": {
+      "date": "2026-05-22",
+      "source_revision": "1f8b52e plus local feature-stratified calibration and residual-gate patch",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522",
+      "local_archive": "server_artifacts/final_results_20260522/fusiontrack_improved_methods_v2_20260522_summaries.tar.gz",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "scope": [
+        "strict individual validation matrix with fusiontrack_individual_ensemble_calibrated",
+        "strict group validation matrix with fusiontrack_group_hybrid_gated",
+        "fast validation score-grid over cached FusionTrack component scores"
+      ],
+      "strict_alignment": {
+        "individual_rows": 829,
+        "group_rows": 15605,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      },
+      "predeclared_rows": {
+        "individual": {
+          "method": "fusiontrack_individual_ensemble_calibrated",
+          "auroc": 0.6250524887754774,
+          "auprc": 0.16026100977920833,
+          "f1": 0.2808988764044944,
+          "precision_at_k": 0.16,
+          "recall_at_k": 0.1927710843373494
+        },
+        "group": {
+          "method": "fusiontrack_group_hybrid_gated",
+          "auroc": 0.6338231675523033,
+          "auprc": 0.07987178105972877,
+          "f1": 0.1864406779661017,
+          "precision_at_k": 0.14,
+          "recall_at_k": 0.1590909090909091
+        }
+      },
+      "validation_grid_best_rows": {
+        "individual_by_auprc": {
+          "method": "fusiontrack_individual_fastgrid_nearest_lof_motion_gw03",
+          "weights": {
+            "nearest_feature_rank": 0.45,
+            "lof_novelty_rank": 0.45,
+            "isolation_forest_rank": 0.1
+          },
+          "calibration": {
+            "columns": ["mean_speed", "duration_frames", "num_points"],
+            "bins": 4,
+            "global_weight": 0.3
+          },
+          "auroc": 0.6243257211150232,
+          "auprc": 0.16682640421690512,
+          "f1": 0.2727272727272727,
+          "precision_at_k": 0.19,
+          "recall_at_k": 0.2289156626506024
+        },
+        "individual_by_topk": {
+          "method": "fusiontrack_individual_fastgrid_nearest_heavy_motion_gw03",
+          "weights": {
+            "nearest_feature_rank": 0.6,
+            "lof_novelty_rank": 0.3,
+            "isolation_forest_rank": 0.1
+          },
+          "calibration": {
+            "columns": ["mean_speed", "duration_frames", "num_points"],
+            "bins": 4,
+            "global_weight": 0.3
+          },
+          "auroc": 0.6189153396427531,
+          "auprc": 0.1623991980005509,
+          "f1": 0.25563909774436094,
+          "precision_at_k": 0.2,
+          "recall_at_k": 0.24096385542168675
+        },
+        "group_by_auroc_topk": {
+          "method": "fusiontrack_group_fastgrid_pred50_side25_ungated",
+          "weights": {
+            "prediction_residual_rank": 0.5,
+            "graph_rank": 0.25,
+            "temporal_profile_rank": 0.25
+          },
+          "residual_gate": {
+            "enabled": false,
+            "power": 1.0,
+            "floor": 0.0
+          },
+          "auroc": 0.7088552438088431,
+          "auprc": 0.08202274706905116,
+          "f1": 0.19847328244274812,
+          "precision_at_k": 0.16,
+          "recall_at_k": 0.18181818181818182
+        },
+        "group_by_auprc_f1": {
+          "method": "fusiontrack_group_fastgrid_graph_heavy_ungated",
+          "weights": {
+            "prediction_residual_rank": 0.6,
+            "graph_rank": 0.3,
+            "temporal_profile_rank": 0.1
+          },
+          "residual_gate": {
+            "enabled": false,
+            "power": 1.0,
+            "floor": 0.0
+          },
+          "auroc": 0.6729122604533444,
+          "auprc": 0.09219957477934118,
+          "f1": 0.2158273381294964,
+          "precision_at_k": 0.15,
+          "recall_at_k": 0.17045454545454544
+        }
+      },
+      "reporting_note": "validation_grid_best_rows are validation-tuned candidates and must be confirmed on an untouched test split or additional seeds before being used as final main-table claims."
+    },
+    "latest_completed_validation_tuned_subset_run": {
+      "date": "2026-05-22",
+      "source_revision": "1f8b52e plus validation-tuned candidate protocol patch",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522/tuned_subset",
+      "local_archive": "server_artifacts/final_results_20260522/fusiontrack_tuned_subset_20260522_summaries.tar.gz",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "scope": [
+        "strict individual validation subset for two validation-tuned FusionTrack candidates",
+        "strict group validation subset for two validation-tuned FusionTrack candidates"
+      ],
+      "strict_alignment": {
+        "individual_rows": 829,
+        "group_rows": 15605,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      },
+      "results": {
+        "fusiontrack_individual_ensemble_tuned_auprc": {
+          "auroc": 0.6243257211150232,
+          "auprc": 0.16682640421690512,
+          "f1": 0.2727272727272727,
+          "precision_at_k": 0.19,
+          "recall_at_k": 0.2289156626506024
+        },
+        "fusiontrack_individual_ensemble_tuned_topk": {
+          "auroc": 0.6189153396427531,
+          "auprc": 0.1623991980005509,
+          "f1": 0.25563909774436094,
+          "precision_at_k": 0.2,
+          "recall_at_k": 0.24096385542168675
+        },
+        "fusiontrack_group_hybrid_tuned_auroc_topk": {
+          "auroc": 0.7088552438088431,
+          "auprc": 0.08202274706905116,
+          "f1": 0.19847328244274812,
+          "precision_at_k": 0.16,
+          "recall_at_k": 0.18181818181818182
+        },
+        "fusiontrack_group_hybrid_tuned_auprc_f1": {
+          "auroc": 0.6729122604533444,
+          "auprc": 0.09219957477934118,
+          "f1": 0.2158273381294964,
+          "precision_at_k": 0.15,
+          "recall_at_k": 0.17045454545454544
+        }
+      },
+      "reporting_note": "These rows are strict-run reproductions of validation score-grid choices. Keep them marked validation-tuned until test/additional-seed confirmation."
+    },
+    "latest_completed_group_fine_tuned_subset_run": {
+      "date": "2026-05-22",
+      "source_revision": "1f8b52e plus fine validation-tuned group candidate patch",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522/tuned_subset/results/group_fine",
+      "local_archive": "server_artifacts/final_results_20260522/fusiontrack_group_fine_tuned_subset_20260522_summaries.tar.gz",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "scope": [
+        "strict group validation subset for three fine validation-tuned FusionTrack group candidates"
+      ],
+      "strict_alignment": {
+        "group_rows": 15605,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      },
+      "results": {
+        "fusiontrack_group_hybrid_tuned_fine_auprc": {
+          "auroc": 0.6805153585217386,
+          "auprc": 0.09851327742740051,
+          "f1": 0.2155688622754491,
+          "precision_at_k": 0.18,
+          "recall_at_k": 0.20454545454545456
+        },
+        "fusiontrack_group_hybrid_tuned_fine_topk": {
+          "auroc": 0.6791949591943147,
+          "auprc": 0.09816361063449583,
+          "f1": 0.2168674698795181,
+          "precision_at_k": 0.19,
+          "recall_at_k": 0.2159090909090909
+        },
+        "fusiontrack_group_hybrid_tuned_fine_f1": {
+          "auroc": 0.6798917755892364,
+          "auprc": 0.09772014322660835,
+          "f1": 0.2181818181818182,
+          "precision_at_k": 0.18,
+          "recall_at_k": 0.20454545454545456
+        }
+      },
+      "reporting_note": "These rows are fine validation-tuned candidates. Keep them marked validation-tuned until test/additional-seed confirmation."
+    },
+    "latest_completed_holdout_multiseed_run": {
+      "date": "2026-05-22",
+      "source_revision": "1f8b52e plus holdout protocol and multi-seed runner patch",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_holdout_multiseed_combined_20260522",
+      "local_archive": "server_artifacts/final_results_20260522/fusiontrack_holdout_multiseed_combined_20260522_summaries.tar.gz",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "tmux_sessions": [
+        "ft_holdout_0522 for seed 42",
+        "ft_holdout_seed43",
+        "ft_holdout_seed44"
+      ],
+      "protocol": {
+        "train_source_split": "train",
+        "eval_source_split": "test",
+        "score_split": "test",
+        "seeds": [42, 43, 44],
+        "individual_rows_per_seed": 1592,
+        "group_rows_per_seed": 28366,
+        "individual_anomaly_fraction": 0.1,
+        "group_anomaly_fraction": 0.1,
+        "group_window_size": 16,
+        "group_stride": 8
+      },
+      "strict_alignment": {
+        "total_metric_rows": 78,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      },
+      "individual_results_mean_std": {
+        "individual_lof": {
+          "auroc": "0.634865+/-0.034705",
+          "auprc": "0.191153+/-0.042912",
+          "f1": "0.258759+/-0.023014",
+          "precision_at_k": "0.223333+/-0.055076",
+          "recall_at_k": "0.139583+/-0.034422"
+        },
+        "fusiontrack_individual_ensemble_tuned_auprc": {
+          "auroc": "0.645935+/-0.031040",
+          "auprc": "0.190092+/-0.021638",
+          "f1": "0.274699+/-0.031964",
+          "precision_at_k": "0.246667+/-0.020817",
+          "recall_at_k": "0.154167+/-0.013010"
+        },
+        "fusiontrack_individual_ensemble_calibrated": {
+          "auroc": "0.643727+/-0.025806",
+          "auprc": "0.181702+/-0.018038",
+          "f1": "0.263375+/-0.022913",
+          "precision_at_k": "0.216667+/-0.011547",
+          "recall_at_k": "0.135417+/-0.007217"
+        }
+      },
+      "group_results_mean_std": {
+        "group_prediction_linear": {
+          "auroc": "0.637508+/-0.008517",
+          "auprc": "0.017417+/-0.003255",
+          "f1": "0.071098+/-0.001315",
+          "precision_at_k": "0.020000+/-0.010000",
+          "recall_at_k": "0.013072+/-0.006536"
+        },
+        "fusiontrack_group_hybrid_tuned_auroc_topk": {
+          "auroc": "0.794720+/-0.018227",
+          "auprc": "0.085337+/-0.021904",
+          "f1": "0.169019+/-0.023337",
+          "precision_at_k": "0.190000+/-0.043589",
+          "recall_at_k": "0.124183+/-0.028490"
+        },
+        "fusiontrack_group_hybrid_tuned_fine_topk": {
+          "auroc": "0.787700+/-0.020840",
+          "auprc": "0.091499+/-0.021386",
+          "f1": "0.154654+/-0.025797",
+          "precision_at_k": "0.180000+/-0.036056",
+          "recall_at_k": "0.117647+/-0.023566"
+        }
+      },
+      "reporting_note": "This is an untouched train-to-test holdout confirmation over seeds 42, 43, and 44. The validation-tuned individual method wins AUROC, F1, P@100, and R@100 among individual FusionTrack rows, but individual_lof is marginally higher on test AUPRC by 0.001061. Do not tune further on this test split; any next improvement must be selected on validation-only data and then confirmed on a new held-out run."
+    },
+    "latest_completed_long_budget_official_run": {
+      "date": "2026-05-22",
+      "source_revision": "b3b8599 plus official-runner scripts",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_convergence_20260522",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "epoch_cap": 50,
+      "statuses": {
+        "official_lmtad_50_individual": "converged",
+        "official_tranad_50_individual": "max-budget-not-converged",
+        "official_tranad_50_group": "max-budget-not-converged",
+        "official_anomaly_transformer_50_individual": "max-budget-not-converged",
+        "official_anomaly_transformer_50_group": "max-budget-not-converged"
+      }
+    },
+    "latest_completed_recent_official_run": {
+      "date": "2026-05-22",
+      "source_revision": "97a6719 plus recent-official runner patch",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_recent_official_20260522",
+      "local_archive": "server_artifacts/final_results_20260522/fusiontrack_recent_official_20260522.tar.gz",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "epoch_cap": 20,
+      "strict_alignment": {
+        "individual_rows": 829,
+        "group_rows": 15605,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      },
+      "methods": {
+        "top_venue_main_table_candidates": [
+          "official_catch_individual_20",
+          "official_catch_group_20",
+          "official_cutaddpaste_individual_20",
+          "official_cutaddpaste_group_20",
+          "official_timemixer_individual_20",
+          "official_timemixer_group_20"
+        ],
+        "supplementary_official_source_candidates": [
+          "official_sensitive_hue_individual_20",
+          "official_sensitive_hue_group_20"
+        ]
+      },
+      "best_recent_rows": {
+        "individual_by_auroc": {
+          "method": "official_catch_individual_20",
+          "auroc": 0.5437594883555671,
+          "auprc": 0.12409472457123798,
+          "f1": 0.2047930283224401,
+          "precision_at_k": 0.12,
+          "recall_at_k": 0.14457831325301204
+        },
+        "group_by_auroc": {
+          "method": "official_timemixer_group_20",
+          "auroc": 0.627656543849268,
+          "auprc": 0.014646826936147881,
+          "f1": 0.0335195530726257,
+          "precision_at_k": 0.03,
+          "recall_at_k": 0.03409090909090909
+        }
+      },
+      "statuses": {
+        "official_catch_individual_20": "max-budget-not-converged",
+        "official_catch_group_20": "max-budget-not-converged",
+        "official_cutaddpaste_individual_20": "max-budget-not-converged",
+        "official_cutaddpaste_group_20": "max-budget-not-converged",
+        "official_timemixer_individual_20": "converged",
+        "official_timemixer_group_20": "max-budget-not-converged",
+        "official_sensitive_hue_individual_20": "max-budget-not-converged",
+        "official_sensitive_hue_group_20": "max-budget-not-converged"
+      }
+    }
+  },
+  "rerun_requirements": [
+    "Completed for local matrices in remote run fusiontrack_group_knn_b3b8599: regenerate group labels with sample_id+window_id strict protocol.",
+    "Completed for local matrices in remote run fusiontrack_group_knn_b3b8599: rerun all group local baselines under group_main_key_fields.",
+    "Completed for official main-table rows in remote run fusiontrack_b3b8599_official_20260522: rerun official group baselines with top-level window_id and strict key matching.",
+    "Keep old sample_id-only group results only as appendix any-window diagnostics.",
+    "Extend max-budget-not-converged official-source deep baselines before making final convergence claims, or report the current convergence status explicitly.",
+    "Completed for official CETrajAD full-coverage rerun: original 770/829 coverage failure is retained as an audit record, and official_cetrajad_fullcoverage is the strict-key result to report with its adapter note.",
+    "Rerun any experiment whose metrics show duplicate keys, missing score keys, or extra score keys."
+  ]
+}

@@ -1,0 +1,8 @@
+docs/
+runs/
+code/system/outputs/
+.pytest_cache/
+__pycache__/
+*.pyc
+server_artifacts/
+output/
