@@ -297,11 +297,59 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert summary["num_methods"] == 3
     assert summary["playback_sequences"] == ["S1"]
     html = (tmp_path / "dashboard" / "index.html").read_text(encoding="utf-8")
-    assert "Final Results Dashboard" in html
-    assert "Method leaderboard" in html
-    assert "Anomaly-type analysis" in html
-    assert "TP / FP / FN cases" in html
+    playback_data = json.loads((tmp_path / "dashboard" / "assets" / "final_playback_data.json").read_text(encoding="utf-8"))
+    assert playback_data["S1"]["stats"] == {
+        "sequence_sample_count": 2,
+        "sequence_anomaly_count": 2,
+        "frame_start": 10,
+        "frame_end": 20,
+        "visualized_tracks": 2,
+    }
+    assert "FusionTrack 最终结果看板" in html
+    assert "总标签数" in html
+    assert "总异常数" in html
+    assert "当前序列样本数" in html
+    assert "当前序列异常数" in html
+    assert "当前序列帧范围" in html
+    assert "可视化轨迹数" in html
+    assert "sequenceStats" in html
+    assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in html
+    assert "control-surface" in html
+    assert "section-heading" in html
+    assert "focus-visible" in html
+    assert "prefers-reduced-motion" in html
+    assert ".view-mode-button { min-height: 44px" in html
+    assert ".layer-button { min-height: 44px" in html
+    assert "min-width: 760px" in html
+    assert "四画面对比" in html
+    assert "单画面模式" in html
+    assert "originalCanvas" in html
+    assert "heatmapCanvas" in html
+    assert "tracksCanvas" in html
+    assert "bothCanvas" in html
+    assert "singleCanvas" in html
+    assert "drawComparisonView" in html
+    assert "drawCanvasLayer" in html
+    assert "languageSelector" in html
+    assert "localStorage" in html
+    assert "translations" in html
+    assert "data-analysis-panel=\"leaderboard\"" in html
+    assert "data-analysis-panel=\"types\"" in html
+    assert "data-analysis-panel=\"cases\"" in html
+    assert "analysis-tab active" in html
+    assert "<aside" not in html
+    assert "methodCards" not in html
+    assert html.index("Interactive playback") < html.index("data-analysis-panel=\"leaderboard\"")
+    assert "典型案例" in html
+    assert "truePositive" in html
     assert "methodSelector" in html
+    assert "sequenceSelector" in html
+    assert "frameSlider" in html
+    assert "backgroundForFrame" in html
+    assert "drawHeatmap" in html
+    assert "heatOpacity" in html
+    assert "heatWindow" in html
+    assert "Heat + Tracks" in html
     assert "renderMethodView" in html
     assert "playbackData" in html
     assert "fusiontrack_individual_nn" in html
