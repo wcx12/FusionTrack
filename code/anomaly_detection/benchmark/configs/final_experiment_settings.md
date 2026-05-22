@@ -66,6 +66,9 @@ Every deep baseline in the main table must have one of these statuses:
 | --- | --- | --- |
 | `fusiontrack_individual_nn` | individual | no epoch, `n_neighbors=1` |
 | `fusiontrack_individual_ensemble` | individual | no epoch, rank ensemble of nearest-feature, LOF novelty, and Isolation Forest components |
+| `fusiontrack_individual_ensemble_calibrated` | individual | no epoch, same rank ensemble plus feature-stratified rank calibration over `mean_speed`, `duration_frames`, and `num_points` |
+| `fusiontrack_individual_ensemble_tuned_auprc` | individual | validation-tuned score-grid candidate, weights `0.45/0.45/0.10`, motion calibration global weight `0.3` |
+| `fusiontrack_individual_ensemble_tuned_topk` | individual | validation-tuned score-grid candidate, weights `0.60/0.30/0.10`, motion calibration global weight `0.3` |
 | `fusiontrack_individual_context` | individual | no epoch, `n_neighbors=1` |
 | `individual_iforest` | individual | no epoch, `contamination=0.05`, `seed=42` |
 | `individual_lof` | individual | no epoch, `contamination=0.05`, `seed=42` |
@@ -77,6 +80,12 @@ Every deep baseline in the main table must have one of these statuses:
 | `group_temporal_graph_ae_proxy` | group | no deep epoch, `n_components=3`, `seed=42` |
 | `fusiontrack_group_temporal_knn` | group | no epoch, `n_neighbors=3`, standardized group-feature KNN |
 | `fusiontrack_group_hybrid` | group | no epoch, rank fusion of prediction residual, graph cohesion, and temporal-profile components |
+| `fusiontrack_group_hybrid_gated` | group | no epoch, same hybrid components plus residual gate that suppresses graph/temporal side evidence when prediction residual rank is low |
+| `fusiontrack_group_hybrid_tuned_auroc_topk` | group | validation-tuned score-grid candidate, ungated weights `0.50/0.25/0.25` |
+| `fusiontrack_group_hybrid_tuned_auprc_f1` | group | validation-tuned score-grid candidate, ungated weights `0.60/0.30/0.10` |
+| `fusiontrack_group_hybrid_tuned_fine_auprc` | group | fine validation-tuned candidate, ungated weights `0.47/0.41/0.12` |
+| `fusiontrack_group_hybrid_tuned_fine_topk` | group | fine validation-tuned candidate, ungated weights `0.45/0.43/0.12` |
+| `fusiontrack_group_hybrid_tuned_fine_f1` | group | fine validation-tuned candidate, ungated weights `0.46/0.42/0.12` |
 | `fusiontrack_group_graph` | group | no epoch, `k_neighbors=3`, `rho_p=80`, `rho_v=20`, `eta=0.5` |
 
 ## Official Paper Baselines
@@ -139,6 +148,11 @@ Logs are written under `logs/` by default, or under `LOG_ROOT` if that environme
 9. Added and reran two enhanced FusionTrack rows in `/root/autodl-tmp/fusiontrack_b3b8599_methods_20260522`: `fusiontrack_individual_ensemble` and `fusiontrack_group_hybrid`, both under strict key matching.
 10. Added recent official-source runner `run_recent_official_fusiontrack.py` and started strict validation runs for CATCH, CutAddPaste, TimeMixer, and SensitiveHUE in `/root/autodl-tmp/fusiontrack_recent_official_20260522`.
 11. Reran CETrajAD with a full-coverage FusionTrack adapter in `/root/autodl-tmp/fusiontrack_cetrajad_fullcoverage_20260522`; strict individual evaluation now has `829/829` scores, zero duplicate keys, zero missing score keys, and zero extra score keys. The result is `official_cetrajad_fullcoverage` with AUROC `0.521092`, AUPRC `0.106465`, F1 `0.193437`, P@100 `0.080000`, R@100 `0.096386`, and convergence status `no-loss-history`.
+12. Added `fusiontrack_individual_ensemble_calibrated` and `fusiontrack_group_hybrid_gated`, then reran strict validation in `/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522`. The predeclared individual calibrated row improved to AUROC `0.625052`, AUPRC `0.160261`, F1 `0.280899`, P@100 `0.160000`, R@100 `0.192771`. The predeclared group gated row did not improve over the old hybrid.
+13. Ran a validation score-grid over cached FusionTrack components in `/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522/score_grid_fast`. Best individual AUPRC is `0.166826` with weights `0.45/0.45/0.10` and motion calibration global weight `0.3`; best group AUROC/P@100 is `0.708855`/`0.160000` with ungated weights `0.50/0.25/0.25`; best group AUPRC/F1 is `0.092200`/`0.215827` with ungated weights `0.60/0.30/0.10`.
+14. Reproduced the four validation-tuned candidates with the standard strict matrix runner in `/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522/tuned_subset`. Results: `fusiontrack_individual_ensemble_tuned_auprc` AUROC `0.624326`, AUPRC `0.166826`, F1 `0.272727`, P@100 `0.190000`, R@100 `0.228916`; `fusiontrack_individual_ensemble_tuned_topk` AUROC `0.618915`, AUPRC `0.162399`, F1 `0.255639`, P@100 `0.200000`, R@100 `0.240964`; `fusiontrack_group_hybrid_tuned_auroc_topk` AUROC `0.708855`, AUPRC `0.082023`, F1 `0.198473`, P@100 `0.160000`, R@100 `0.181818`; `fusiontrack_group_hybrid_tuned_auprc_f1` AUROC `0.672912`, AUPRC `0.092200`, F1 `0.215827`, P@100 `0.150000`, R@100 `0.170455`.
+15. Ran a finer group weight search and reproduced three fine validation-tuned candidates in `/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522/tuned_subset/results/group_fine`. Results: `fusiontrack_group_hybrid_tuned_fine_auprc` AUROC `0.680515`, AUPRC `0.098513`, F1 `0.215569`, P@100 `0.180000`, R@100 `0.204545`; `fusiontrack_group_hybrid_tuned_fine_topk` AUROC `0.679195`, AUPRC `0.098164`, F1 `0.216867`, P@100 `0.190000`, R@100 `0.215909`; `fusiontrack_group_hybrid_tuned_fine_f1` AUROC `0.679892`, AUPRC `0.097720`, F1 `0.218182`, P@100 `0.180000`, R@100 `0.204545`.
+16. Added train-to-test holdout protocol and multi-seed aggregation runners, then confirmed local/proxy methods on untouched VT-Tiny-MOT `test` over seeds `42,43,44`. Combined output is `/root/autodl-tmp/fusiontrack_holdout_multiseed_combined_20260522`, archived locally at `server_artifacts/final_results_20260522/fusiontrack_holdout_multiseed_combined_20260522_summaries.tar.gz`. Strict alignment has `78/78` metric rows with zero duplicate, missing, or extra keys. Key mean/std results: individual `fusiontrack_individual_ensemble_tuned_auprc` AUROC `0.645935+/-0.031040`, AUPRC `0.190092+/-0.021638`, F1 `0.274699+/-0.031964`, P@100 `0.246667+/-0.020817`, R@100 `0.154167+/-0.013010`; individual `individual_lof` AUPRC is marginally higher at `0.191153+/-0.042912`; group `fusiontrack_group_hybrid_tuned_fine_topk` AUPRC `0.091499+/-0.021386`, and group `fusiontrack_group_hybrid_tuned_auroc_topk` AUROC `0.794720+/-0.018227`, both well above `group_prediction_linear` AUPRC `0.017417+/-0.003255` and AUROC `0.637508+/-0.008517` under this holdout protocol.
 
 ## Remaining Reruns
 
@@ -146,4 +160,4 @@ Logs are written under `logs/` by default, or under `LOG_ROOT` if that environme
 2. Extend remaining max-budget-not-converged deep runs beyond 50 epochs if the paper needs final convergence claims instead of reporting the current budget status.
 3. Keep old `sample_id`-only group results only as appendix any-window diagnostics.
 4. Rerun any experiment whose metrics show duplicate keys, missing score keys, or extra score keys.
-5. Treat `fusiontrack_group_hybrid` as the current best validation candidate, but document that it uses rank-direction choices fixed in the method config and should be confirmed on an untouched test split or additional seeds before a final paper claim.
+5. Treat the score-grid best rows as validation-tuned candidates. The train-to-test multi-seed run above is the first holdout confirmation, but individual AUPRC is not strictly best because `individual_lof` is higher by `0.001061`; do not tune on the test split. Any further individual improvement must be selected on validation-only data, then confirmed on a fresh held-out run.

@@ -9,6 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fusiontrack.group_temporal_profile import (
+    _residual_gated_rank_fusion,
     fit_group_temporal_knn,
     run_group_hybrid_fusiontrack,
     run_group_temporal_knn,
@@ -102,6 +103,52 @@ def test_group_hybrid_combines_prediction_graph_and_temporal_profile() -> None:
             "temporal_profile_rank",
         }
         assert row["metadata"]["method"] == "fusiontrack_group_hybrid"
+
+
+def test_residual_gate_suppresses_side_components_when_residual_is_low() -> None:
+    ungated = _residual_gated_rank_fusion(
+        prediction_rank=[0.0, 1.0],
+        graph_rank=[1.0, 0.0],
+        temporal_rank=[1.0, 0.0],
+        weights=(0.50, 0.25, 0.25),
+        enabled=False,
+        gate_power=2.0,
+        gate_floor=0.0,
+    )
+    gated = _residual_gated_rank_fusion(
+        prediction_rank=[0.0, 1.0],
+        graph_rank=[1.0, 0.0],
+        temporal_rank=[1.0, 0.0],
+        weights=(0.50, 0.25, 0.25),
+        enabled=True,
+        gate_power=2.0,
+        gate_floor=0.0,
+    )
+
+    assert gated[0] < ungated[0]
+    assert gated[1] > gated[0]
+    assert all(0.0 <= score <= 1.0 for score in gated)
+
+
+def test_group_hybrid_records_residual_gate_config() -> None:
+    rows = run_group_hybrid_fusiontrack(
+        _train_windows(),
+        [_stable_window("stable"), _anomalous_window("broken")],
+        n_neighbors=3,
+        prediction_weight=0.8,
+        graph_weight=0.1,
+        temporal_weight=0.1,
+        use_residual_gate=True,
+        residual_gate_power=2.0,
+        residual_gate_floor=0.05,
+    )
+
+    for row in rows:
+        assert row["metadata"]["residual_gate"] == {
+            "enabled": True,
+            "power": 2.0,
+            "floor": 0.05,
+        }
 
 
 def test_outputs_object_window_schema_and_preserves_sample_id() -> None:

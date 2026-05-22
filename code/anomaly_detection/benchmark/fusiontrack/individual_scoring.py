@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 import numpy as np
 import pandas as pd
@@ -87,6 +87,9 @@ def run_individual_fusiontrack_ensemble(
     nearest_weight: float = 0.4,
     lof_weight: float = 0.35,
     iforest_weight: float = 0.25,
+    calibration_columns: Sequence[str] = (),
+    calibration_bins: int = 4,
+    calibration_global_weight: float = 0.7,
 ) -> list[dict[str, Any]]:
     train_features = build_handcrafted_feature_table(train_trajectories)
     score_features = build_handcrafted_feature_table(score_trajectories)
@@ -124,6 +127,30 @@ def run_individual_fusiontrack_ensemble(
         weights = np.asarray([0.4, 0.35, 0.25], dtype=float)
     weights = weights / float(weights.sum())
 
+    base_scores = (
+        float(weights[0]) * np.asarray(nearest_rank, dtype=float)
+        + float(weights[1]) * np.asarray(lof_rank, dtype=float)
+        + float(weights[2]) * np.asarray(iforest_rank, dtype=float)
+    )
+    calibration_config = _calibration_metadata(
+        calibration_columns,
+        calibration_bins,
+        calibration_global_weight,
+    )
+    if calibration_config["enabled"]:
+        final_scores = _feature_stratified_rank01(
+            base_scores,
+            score_features,
+            columns=tuple(calibration_config["columns"]),
+            bins=int(calibration_config["bins"]),
+            global_weight=float(calibration_config["global_weight"]),
+        )
+    else:
+        final_scores = [
+            float(score) if np.isfinite(score) else 0.0
+            for score in base_scores
+        ]
+
     rows: list[dict[str, Any]] = []
     for index, (_, feature_row) in enumerate(score_features.iterrows()):
         component_scores = {
@@ -131,11 +158,9 @@ def run_individual_fusiontrack_ensemble(
             "lof_novelty_rank": float(lof_rank[index]),
             "isolation_forest_rank": float(iforest_rank[index]),
         }
-        score = (
-            float(weights[0]) * component_scores["nearest_feature_rank"]
-            + float(weights[1]) * component_scores["lof_novelty_rank"]
-            + float(weights[2]) * component_scores["isolation_forest_rank"]
-        )
+        if calibration_config["enabled"]:
+            component_scores["uncalibrated_ensemble_rank"] = float(base_scores[index])
+        score = final_scores[index]
         rows.append(
             {
                 "sample_id": str(feature_row["sample_id"]),
@@ -150,6 +175,7 @@ def run_individual_fusiontrack_ensemble(
                     "seed": int(seed),
                     "contamination": float(contamination),
                     "feature_columns": list(FEATURE_COLUMNS),
+                    "calibration": dict(calibration_config),
                     "weights": {
                         "nearest_feature_rank": float(weights[0]),
                         "lof_novelty_rank": float(weights[1]),
@@ -186,6 +212,89 @@ def _classical_component_scores(
         contamination=contamination,
     )
     return score_classical_detector(model, score_features, method=method)
+
+
+def _calibration_metadata(
+    columns: Sequence[str],
+    bins: int,
+    global_weight: float,
+) -> dict[str, Any]:
+    valid_columns = [
+        str(column)
+        for column in columns
+        if str(column) in FEATURE_COLUMNS
+    ]
+    clean_bins = max(2, int(bins))
+    clean_global_weight = min(1.0, max(0.0, float(global_weight)))
+    return {
+        "enabled": bool(valid_columns),
+        "columns": valid_columns,
+        "bins": clean_bins,
+        "global_weight": clean_global_weight,
+    }
+
+
+def _feature_stratified_rank01(
+    values: Iterable[float],
+    feature_df: pd.DataFrame,
+    columns: Sequence[str],
+    bins: int = 4,
+    global_weight: float = 0.7,
+) -> list[float]:
+    array = np.asarray(list(values), dtype=float)
+    if len(array) == 0:
+        return []
+    global_rank = np.asarray(_rank01(array), dtype=float)
+    valid_columns = [
+        str(column)
+        for column in columns
+        if str(column) in feature_df.columns and str(column) in FEATURE_COLUMNS
+    ]
+    if not valid_columns:
+        return [float(value) for value in global_rank]
+
+    local_ranks: list[np.ndarray] = []
+    for column in valid_columns:
+        strata = _quantile_strata(feature_df[column], bins=bins)
+        local_ranks.append(_rank_within_strata(array, strata, fallback=global_rank))
+    if not local_ranks:
+        return [float(value) for value in global_rank]
+
+    clean_global_weight = min(1.0, max(0.0, float(global_weight)))
+    local_rank = np.mean(np.vstack(local_ranks), axis=0)
+    blended = clean_global_weight * global_rank + (1.0 - clean_global_weight) * local_rank
+    blended = np.clip(np.where(np.isfinite(blended), blended, 0.0), 0.0, 1.0)
+    return [float(value) for value in blended]
+
+
+def _quantile_strata(values: Iterable[float], bins: int) -> np.ndarray:
+    array = np.asarray(list(values), dtype=float)
+    if len(array) == 0:
+        return np.asarray([], dtype=int)
+    array = np.where(np.isfinite(array), array, 0.0)
+    if float(np.max(array) - np.min(array)) <= 0.0:
+        return np.zeros(len(array), dtype=int)
+
+    max_bins = max(1, min(int(bins), len(array)))
+    quantiles = np.linspace(0.0, 1.0, num=max_bins + 1)
+    edges = np.unique(np.quantile(array, quantiles))
+    if len(edges) <= 2:
+        return np.zeros(len(array), dtype=int)
+    return np.digitize(array, edges[1:-1], right=True).astype(int)
+
+
+def _rank_within_strata(
+    values: np.ndarray,
+    strata: np.ndarray,
+    fallback: np.ndarray,
+) -> np.ndarray:
+    local = np.asarray(fallback, dtype=float).copy()
+    for stratum in np.unique(strata):
+        mask = strata == stratum
+        if int(np.sum(mask)) < 2:
+            continue
+        local[mask] = np.asarray(_rank01(values[mask]), dtype=float)
+    return np.clip(np.where(np.isfinite(local), local, 0.0), 0.0, 1.0)
 
 
 def _rank01(values: Iterable[float]) -> list[float]:

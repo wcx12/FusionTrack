@@ -92,6 +92,63 @@
         "seed": 42,
         "contamination": 0.05
       },
+      "fusiontrack_individual_ensemble_calibrated": {
+        "train_epochs": null,
+        "n_neighbors": 1,
+        "components": ["nearest_feature_rank", "lof_novelty_rank", "isolation_forest_rank"],
+        "weights": {
+          "nearest_feature_rank": 0.4,
+          "lof_novelty_rank": 0.35,
+          "isolation_forest_rank": 0.25
+        },
+        "seed": 42,
+        "contamination": 0.05,
+        "calibration": {
+          "method": "feature_stratified_rank_blend",
+          "columns": ["mean_speed", "duration_frames", "num_points"],
+          "bins": 4,
+          "global_weight": 0.5,
+          "selection_rule": "predeclared train/score feature-stratified calibration; no evaluation labels used inside the scorer"
+        }
+      },
+      "fusiontrack_individual_ensemble_tuned_auprc": {
+        "train_epochs": null,
+        "n_neighbors": 1,
+        "components": ["nearest_feature_rank", "lof_novelty_rank", "isolation_forest_rank"],
+        "weights": {
+          "nearest_feature_rank": 0.45,
+          "lof_novelty_rank": 0.45,
+          "isolation_forest_rank": 0.1
+        },
+        "seed": 42,
+        "contamination": 0.05,
+        "calibration": {
+          "method": "feature_stratified_rank_blend",
+          "columns": ["mean_speed", "duration_frames", "num_points"],
+          "bins": 4,
+          "global_weight": 0.3,
+          "selection_rule": "selected by validation score-grid for AUPRC; confirm on test/additional seeds before main-table claim"
+        }
+      },
+      "fusiontrack_individual_ensemble_tuned_topk": {
+        "train_epochs": null,
+        "n_neighbors": 1,
+        "components": ["nearest_feature_rank", "lof_novelty_rank", "isolation_forest_rank"],
+        "weights": {
+          "nearest_feature_rank": 0.6,
+          "lof_novelty_rank": 0.3,
+          "isolation_forest_rank": 0.1
+        },
+        "seed": 42,
+        "contamination": 0.05,
+        "calibration": {
+          "method": "feature_stratified_rank_blend",
+          "columns": ["mean_speed", "duration_frames", "num_points"],
+          "bins": 4,
+          "global_weight": 0.3,
+          "selection_rule": "selected by validation score-grid for P@100/R@100; confirm on test/additional seeds before main-table claim"
+        }
+      },
       "fusiontrack_individual_context": {"train_epochs": null, "n_neighbors": 1},
       "individual_iforest": {"train_epochs": null, "contamination": 0.05, "seed": 42},
       "individual_lof": {"train_epochs": null, "contamination": 0.05, "seed": 42},
@@ -125,6 +182,146 @@
           "prediction_residual_rank": "rank",
           "graph_rank": "inverse_rank",
           "temporal_profile_rank": "inverse_rank"
+        }
+      },
+      "fusiontrack_group_hybrid_gated": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.6,
+          "graph_rank": 0.2,
+          "temporal_profile_rank": 0.2
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        },
+        "residual_gate": {
+          "enabled": true,
+          "power": 2.0,
+          "floor": 0.05,
+          "selection_rule": "predeclared gating that suppresses graph/temporal side evidence when prediction residual rank is low"
+        }
+      },
+      "fusiontrack_group_hybrid_tuned_auroc_topk": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.5,
+          "graph_rank": 0.25,
+          "temporal_profile_rank": 0.25
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        },
+        "residual_gate": {
+          "enabled": false,
+          "selection_rule": "selected by validation score-grid for AUROC/P@100/R@100; confirm on test/additional seeds before main-table claim"
+        }
+      },
+      "fusiontrack_group_hybrid_tuned_auprc_f1": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.6,
+          "graph_rank": 0.3,
+          "temporal_profile_rank": 0.1
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        },
+        "residual_gate": {
+          "enabled": false,
+          "selection_rule": "selected by validation score-grid for AUPRC/F1; confirm on test/additional seeds before main-table claim"
+        }
+      },
+      "fusiontrack_group_hybrid_tuned_fine_auprc": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.47,
+          "graph_rank": 0.41,
+          "temporal_profile_rank": 0.12
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        },
+        "residual_gate": {
+          "enabled": false,
+          "selection_rule": "selected by fine validation weight search for AUPRC; confirm on test/additional seeds before main-table claim"
+        }
+      },
+      "fusiontrack_group_hybrid_tuned_fine_topk": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.45,
+          "graph_rank": 0.43,
+          "temporal_profile_rank": 0.12
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        },
+        "residual_gate": {
+          "enabled": false,
+          "selection_rule": "selected by fine validation weight search for P@100/R@100; confirm on test/additional seeds before main-table claim"
+        }
+      },
+      "fusiontrack_group_hybrid_tuned_fine_f1": {
+        "train_epochs": null,
+        "n_neighbors": 3,
+        "k_neighbors": 3,
+        "rho_p": 80.0,
+        "rho_v": 20.0,
+        "eta": 0.5,
+        "components": ["prediction_residual_rank", "graph_rank", "temporal_profile_rank"],
+        "weights": {
+          "prediction_residual_rank": 0.46,
+          "graph_rank": 0.42,
+          "temporal_profile_rank": 0.12
+        },
+        "rank_transforms": {
+          "prediction_residual_rank": "rank",
+          "graph_rank": "inverse_rank",
+          "temporal_profile_rank": "inverse_rank"
+        },
+        "residual_gate": {
+          "enabled": false,
+          "selection_rule": "selected by fine validation weight search for F1; confirm on test/additional seeds before main-table claim"
         }
       },
       "fusiontrack_group_graph": {
@@ -357,6 +554,288 @@
           "recall_at_k": 0.17045454545454544
         }
       }
+    },
+    "latest_completed_improved_method_run": {
+      "date": "2026-05-22",
+      "source_revision": "1f8b52e plus local feature-stratified calibration and residual-gate patch",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522",
+      "local_archive": "server_artifacts/final_results_20260522/fusiontrack_improved_methods_v2_20260522_summaries.tar.gz",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "scope": [
+        "strict individual validation matrix with fusiontrack_individual_ensemble_calibrated",
+        "strict group validation matrix with fusiontrack_group_hybrid_gated",
+        "fast validation score-grid over cached FusionTrack component scores"
+      ],
+      "strict_alignment": {
+        "individual_rows": 829,
+        "group_rows": 15605,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      },
+      "predeclared_rows": {
+        "individual": {
+          "method": "fusiontrack_individual_ensemble_calibrated",
+          "auroc": 0.6250524887754774,
+          "auprc": 0.16026100977920833,
+          "f1": 0.2808988764044944,
+          "precision_at_k": 0.16,
+          "recall_at_k": 0.1927710843373494
+        },
+        "group": {
+          "method": "fusiontrack_group_hybrid_gated",
+          "auroc": 0.6338231675523033,
+          "auprc": 0.07987178105972877,
+          "f1": 0.1864406779661017,
+          "precision_at_k": 0.14,
+          "recall_at_k": 0.1590909090909091
+        }
+      },
+      "validation_grid_best_rows": {
+        "individual_by_auprc": {
+          "method": "fusiontrack_individual_fastgrid_nearest_lof_motion_gw03",
+          "weights": {
+            "nearest_feature_rank": 0.45,
+            "lof_novelty_rank": 0.45,
+            "isolation_forest_rank": 0.1
+          },
+          "calibration": {
+            "columns": ["mean_speed", "duration_frames", "num_points"],
+            "bins": 4,
+            "global_weight": 0.3
+          },
+          "auroc": 0.6243257211150232,
+          "auprc": 0.16682640421690512,
+          "f1": 0.2727272727272727,
+          "precision_at_k": 0.19,
+          "recall_at_k": 0.2289156626506024
+        },
+        "individual_by_topk": {
+          "method": "fusiontrack_individual_fastgrid_nearest_heavy_motion_gw03",
+          "weights": {
+            "nearest_feature_rank": 0.6,
+            "lof_novelty_rank": 0.3,
+            "isolation_forest_rank": 0.1
+          },
+          "calibration": {
+            "columns": ["mean_speed", "duration_frames", "num_points"],
+            "bins": 4,
+            "global_weight": 0.3
+          },
+          "auroc": 0.6189153396427531,
+          "auprc": 0.1623991980005509,
+          "f1": 0.25563909774436094,
+          "precision_at_k": 0.2,
+          "recall_at_k": 0.24096385542168675
+        },
+        "group_by_auroc_topk": {
+          "method": "fusiontrack_group_fastgrid_pred50_side25_ungated",
+          "weights": {
+            "prediction_residual_rank": 0.5,
+            "graph_rank": 0.25,
+            "temporal_profile_rank": 0.25
+          },
+          "residual_gate": {
+            "enabled": false,
+            "power": 1.0,
+            "floor": 0.0
+          },
+          "auroc": 0.7088552438088431,
+          "auprc": 0.08202274706905116,
+          "f1": 0.19847328244274812,
+          "precision_at_k": 0.16,
+          "recall_at_k": 0.18181818181818182
+        },
+        "group_by_auprc_f1": {
+          "method": "fusiontrack_group_fastgrid_graph_heavy_ungated",
+          "weights": {
+            "prediction_residual_rank": 0.6,
+            "graph_rank": 0.3,
+            "temporal_profile_rank": 0.1
+          },
+          "residual_gate": {
+            "enabled": false,
+            "power": 1.0,
+            "floor": 0.0
+          },
+          "auroc": 0.6729122604533444,
+          "auprc": 0.09219957477934118,
+          "f1": 0.2158273381294964,
+          "precision_at_k": 0.15,
+          "recall_at_k": 0.17045454545454544
+        }
+      },
+      "reporting_note": "validation_grid_best_rows are validation-tuned candidates and must be confirmed on an untouched test split or additional seeds before being used as final main-table claims."
+    },
+    "latest_completed_validation_tuned_subset_run": {
+      "date": "2026-05-22",
+      "source_revision": "1f8b52e plus validation-tuned candidate protocol patch",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522/tuned_subset",
+      "local_archive": "server_artifacts/final_results_20260522/fusiontrack_tuned_subset_20260522_summaries.tar.gz",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "scope": [
+        "strict individual validation subset for two validation-tuned FusionTrack candidates",
+        "strict group validation subset for two validation-tuned FusionTrack candidates"
+      ],
+      "strict_alignment": {
+        "individual_rows": 829,
+        "group_rows": 15605,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      },
+      "results": {
+        "fusiontrack_individual_ensemble_tuned_auprc": {
+          "auroc": 0.6243257211150232,
+          "auprc": 0.16682640421690512,
+          "f1": 0.2727272727272727,
+          "precision_at_k": 0.19,
+          "recall_at_k": 0.2289156626506024
+        },
+        "fusiontrack_individual_ensemble_tuned_topk": {
+          "auroc": 0.6189153396427531,
+          "auprc": 0.1623991980005509,
+          "f1": 0.25563909774436094,
+          "precision_at_k": 0.2,
+          "recall_at_k": 0.24096385542168675
+        },
+        "fusiontrack_group_hybrid_tuned_auroc_topk": {
+          "auroc": 0.7088552438088431,
+          "auprc": 0.08202274706905116,
+          "f1": 0.19847328244274812,
+          "precision_at_k": 0.16,
+          "recall_at_k": 0.18181818181818182
+        },
+        "fusiontrack_group_hybrid_tuned_auprc_f1": {
+          "auroc": 0.6729122604533444,
+          "auprc": 0.09219957477934118,
+          "f1": 0.2158273381294964,
+          "precision_at_k": 0.15,
+          "recall_at_k": 0.17045454545454544
+        }
+      },
+      "reporting_note": "These rows are strict-run reproductions of validation score-grid choices. Keep them marked validation-tuned until test/additional-seed confirmation."
+    },
+    "latest_completed_group_fine_tuned_subset_run": {
+      "date": "2026-05-22",
+      "source_revision": "1f8b52e plus fine validation-tuned group candidate patch",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522/tuned_subset/results/group_fine",
+      "local_archive": "server_artifacts/final_results_20260522/fusiontrack_group_fine_tuned_subset_20260522_summaries.tar.gz",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "scope": [
+        "strict group validation subset for three fine validation-tuned FusionTrack group candidates"
+      ],
+      "strict_alignment": {
+        "group_rows": 15605,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      },
+      "results": {
+        "fusiontrack_group_hybrid_tuned_fine_auprc": {
+          "auroc": 0.6805153585217386,
+          "auprc": 0.09851327742740051,
+          "f1": 0.2155688622754491,
+          "precision_at_k": 0.18,
+          "recall_at_k": 0.20454545454545456
+        },
+        "fusiontrack_group_hybrid_tuned_fine_topk": {
+          "auroc": 0.6791949591943147,
+          "auprc": 0.09816361063449583,
+          "f1": 0.2168674698795181,
+          "precision_at_k": 0.19,
+          "recall_at_k": 0.2159090909090909
+        },
+        "fusiontrack_group_hybrid_tuned_fine_f1": {
+          "auroc": 0.6798917755892364,
+          "auprc": 0.09772014322660835,
+          "f1": 0.2181818181818182,
+          "precision_at_k": 0.18,
+          "recall_at_k": 0.20454545454545456
+        }
+      },
+      "reporting_note": "These rows are fine validation-tuned candidates. Keep them marked validation-tuned until test/additional-seed confirmation."
+    },
+    "latest_completed_holdout_multiseed_run": {
+      "date": "2026-05-22",
+      "source_revision": "1f8b52e plus holdout protocol and multi-seed runner patch",
+      "remote_result_root": "/root/autodl-tmp/fusiontrack_holdout_multiseed_combined_20260522",
+      "local_archive": "server_artifacts/final_results_20260522/fusiontrack_holdout_multiseed_combined_20260522_summaries.tar.gz",
+      "gpu_name": "NVIDIA GeForce RTX 5090",
+      "tmux_sessions": [
+        "ft_holdout_0522 for seed 42",
+        "ft_holdout_seed43",
+        "ft_holdout_seed44"
+      ],
+      "protocol": {
+        "train_source_split": "train",
+        "eval_source_split": "test",
+        "score_split": "test",
+        "seeds": [42, 43, 44],
+        "individual_rows_per_seed": 1592,
+        "group_rows_per_seed": 28366,
+        "individual_anomaly_fraction": 0.1,
+        "group_anomaly_fraction": 0.1,
+        "group_window_size": 16,
+        "group_stride": 8
+      },
+      "strict_alignment": {
+        "total_metric_rows": 78,
+        "num_duplicate_label_keys": 0,
+        "num_duplicate_score_keys": 0,
+        "num_missing_score_keys": 0,
+        "num_extra_score_keys": 0
+      },
+      "individual_results_mean_std": {
+        "individual_lof": {
+          "auroc": "0.634865+/-0.034705",
+          "auprc": "0.191153+/-0.042912",
+          "f1": "0.258759+/-0.023014",
+          "precision_at_k": "0.223333+/-0.055076",
+          "recall_at_k": "0.139583+/-0.034422"
+        },
+        "fusiontrack_individual_ensemble_tuned_auprc": {
+          "auroc": "0.645935+/-0.031040",
+          "auprc": "0.190092+/-0.021638",
+          "f1": "0.274699+/-0.031964",
+          "precision_at_k": "0.246667+/-0.020817",
+          "recall_at_k": "0.154167+/-0.013010"
+        },
+        "fusiontrack_individual_ensemble_calibrated": {
+          "auroc": "0.643727+/-0.025806",
+          "auprc": "0.181702+/-0.018038",
+          "f1": "0.263375+/-0.022913",
+          "precision_at_k": "0.216667+/-0.011547",
+          "recall_at_k": "0.135417+/-0.007217"
+        }
+      },
+      "group_results_mean_std": {
+        "group_prediction_linear": {
+          "auroc": "0.637508+/-0.008517",
+          "auprc": "0.017417+/-0.003255",
+          "f1": "0.071098+/-0.001315",
+          "precision_at_k": "0.020000+/-0.010000",
+          "recall_at_k": "0.013072+/-0.006536"
+        },
+        "fusiontrack_group_hybrid_tuned_auroc_topk": {
+          "auroc": "0.794720+/-0.018227",
+          "auprc": "0.085337+/-0.021904",
+          "f1": "0.169019+/-0.023337",
+          "precision_at_k": "0.190000+/-0.043589",
+          "recall_at_k": "0.124183+/-0.028490"
+        },
+        "fusiontrack_group_hybrid_tuned_fine_topk": {
+          "auroc": "0.787700+/-0.020840",
+          "auprc": "0.091499+/-0.021386",
+          "f1": "0.154654+/-0.025797",
+          "precision_at_k": "0.180000+/-0.036056",
+          "recall_at_k": "0.117647+/-0.023566"
+        }
+      },
+      "reporting_note": "This is an untouched train-to-test holdout confirmation over seeds 42, 43, and 44. The validation-tuned individual method wins AUROC, F1, P@100, and R@100 among individual FusionTrack rows, but individual_lof is marginally higher on test AUPRC by 0.001061. Do not tune further on this test split; any next improvement must be selected on validation-only data and then confirmed on a new held-out run."
     },
     "latest_completed_long_budget_official_run": {
       "date": "2026-05-22",

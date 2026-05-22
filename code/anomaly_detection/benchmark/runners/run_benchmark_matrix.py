@@ -245,6 +245,11 @@ def _run_experiment(
             nearest_weight=float(experiment.get("nearest_weight", 0.4)),
             lof_weight=float(experiment.get("lof_weight", 0.35)),
             iforest_weight=float(experiment.get("iforest_weight", 0.25)),
+            calibration_columns=_string_sequence(experiment.get("calibration_columns", ())),
+            calibration_bins=int(experiment.get("calibration_bins", 4)),
+            calibration_global_weight=float(
+                experiment.get("calibration_global_weight", 0.7)
+            ),
         )
     elif task == "fusiontrack_individual_context":
         rows = run_context_aware_fusiontrack_baseline(
@@ -286,6 +291,9 @@ def _run_experiment(
             temporal_weight=float(experiment.get("temporal_weight", 0.2)),
             invert_graph_rank=bool(experiment.get("invert_graph_rank", True)),
             invert_temporal_rank=bool(experiment.get("invert_temporal_rank", True)),
+            use_residual_gate=bool(experiment.get("use_residual_gate", False)),
+            residual_gate_power=float(experiment.get("residual_gate_power", 1.0)),
+            residual_gate_floor=float(experiment.get("residual_gate_floor", 0.0)),
         )
     else:  # pragma: no cover - guarded by caller
         raise ValueError(f"Unsupported task '{task}'")
@@ -303,6 +311,16 @@ def _required(mapping: dict[str, Any], field: str) -> Any:
     if value in (None, ""):
         raise ValueError(f"Missing required config field '{field}'")
     return value
+
+
+def _string_sequence(value: Any) -> tuple[str, ...]:
+    if value in (None, ""):
+        return ()
+    if isinstance(value, str):
+        return tuple(part.strip() for part in value.split(",") if part.strip())
+    if isinstance(value, Sequence):
+        return tuple(str(part) for part in value if str(part))
+    return (str(value),)
 
 
 def _safe_name(value: Any) -> str:

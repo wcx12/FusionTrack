@@ -164,6 +164,9 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
                         "train_windows": str(train_group_windows_path),
                         "score_windows": str(group_windows_path),
                         "n_neighbors": 1,
+                        "use_residual_gate": True,
+                        "residual_gate_power": 2.0,
+                        "residual_gate_floor": 0.05,
                     },
                     {
                         "name": "fusiontrack_individual",
@@ -178,6 +181,9 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
                         "train_jsonl": str(train_trajectories_path),
                         "score_jsonl": str(trajectories_path),
                         "n_neighbors": 1,
+                        "calibration_columns": ["mean_speed"],
+                        "calibration_bins": 2,
+                        "calibration_global_weight": 0.30,
                     },
                     {
                         "name": "fusiontrack_individual_context",
@@ -258,6 +264,30 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
     assert (output_dir / "scores" / "individual_physics.jsonl").exists()
     assert (output_dir / "metrics" / "group_prediction.json").exists()
     assert manifest["summary_csv"] == str(output_dir / "summary.csv")
+
+    group_hybrid_rows = [
+        json.loads(line)
+        for line in (output_dir / "scores" / "fusiontrack_group_hybrid.jsonl").read_text(
+            encoding="utf-8"
+        ).splitlines()
+    ]
+    individual_ensemble_rows = [
+        json.loads(line)
+        for line in (
+            output_dir / "scores" / "fusiontrack_individual_ensemble.jsonl"
+        ).read_text(encoding="utf-8").splitlines()
+    ]
+    assert group_hybrid_rows[0]["metadata"]["residual_gate"] == {
+        "enabled": True,
+        "power": 2.0,
+        "floor": 0.05,
+    }
+    assert individual_ensemble_rows[0]["metadata"]["calibration"] == {
+        "enabled": True,
+        "columns": ["mean_speed"],
+        "bins": 2,
+        "global_weight": 0.30,
+    }
 
     metrics = json.loads(
         (output_dir / "metrics" / "group_prediction.json").read_text(encoding="utf-8")

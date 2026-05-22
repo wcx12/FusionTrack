@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 import numpy as np
 import pandas as pd
@@ -117,6 +117,9 @@ def run_group_hybrid_fusiontrack(
     temporal_weight: float = 0.2,
     invert_graph_rank: bool = True,
     invert_temporal_rank: bool = True,
+    use_residual_gate: bool = False,
+    residual_gate_power: float = 1.0,
+    residual_gate_floor: float = 0.0,
 ) -> list[dict[str, Any]]:
     train_windows = list(train_windows)
     score_windows = list(score_windows)
@@ -164,6 +167,22 @@ def run_group_hybrid_fusiontrack(
         weights = np.asarray([0.6, 0.2, 0.2], dtype=float)
     weights = weights / float(weights.sum())
 
+    fused_scores = _residual_gated_rank_fusion(
+        prediction_rank=prediction_rank,
+        graph_rank=graph_rank,
+        temporal_rank=temporal_rank,
+        weights=tuple(float(weight) for weight in weights),
+        enabled=bool(use_residual_gate),
+        gate_power=float(residual_gate_power),
+        gate_floor=float(residual_gate_floor),
+    )
+    side_gates = _residual_side_gates(
+        prediction_rank,
+        enabled=bool(use_residual_gate),
+        gate_power=float(residual_gate_power),
+        gate_floor=float(residual_gate_floor),
+    )
+
     rows: list[dict[str, Any]] = []
     for index, row in enumerate(prediction_rows):
         key = keys[index]
@@ -174,11 +193,9 @@ def run_group_hybrid_fusiontrack(
             "graph_rank": float(graph_rank[index]),
             "temporal_profile_rank": float(temporal_rank[index]),
         }
-        score = (
-            float(weights[0]) * component_scores["prediction_residual_rank"]
-            + float(weights[1]) * component_scores["graph_rank"]
-            + float(weights[2]) * component_scores["temporal_profile_rank"]
-        )
+        if use_residual_gate:
+            component_scores["residual_side_gate"] = float(side_gates[index])
+        score = fused_scores[index]
         rows.append(
             {
                 "sample_id": str(row["sample_id"]),
@@ -209,6 +226,11 @@ def run_group_hybrid_fusiontrack(
                         "prediction_residual_rank": float(weights[0]),
                         "graph_rank": float(weights[1]),
                         "temporal_profile_rank": float(weights[2]),
+                    },
+                    "residual_gate": {
+                        "enabled": bool(use_residual_gate),
+                        "power": float(max(0.0, residual_gate_power)),
+                        "floor": float(min(1.0, max(0.0, residual_gate_floor))),
                     },
                     "raw_scores": {
                         "prediction_residual": float(row.get("score", 0.0) or 0.0),
@@ -281,6 +303,66 @@ def _rows_by_key(rows: Iterable[dict[str, Any]]) -> dict[tuple[str, str], dict[s
 
 def _row_key(row: dict[str, Any]) -> tuple[str, str]:
     return str(row.get("sample_id", "")), str(row.get("window_id", ""))
+
+
+def _residual_gated_rank_fusion(
+    prediction_rank: Iterable[float],
+    graph_rank: Iterable[float],
+    temporal_rank: Iterable[float],
+    weights: Sequence[float],
+    enabled: bool,
+    gate_power: float = 1.0,
+    gate_floor: float = 0.0,
+) -> list[float]:
+    prediction = _rank_array(prediction_rank)
+    graph = _rank_array(graph_rank)
+    temporal = _rank_array(temporal_rank)
+    if len(prediction) == 0:
+        return []
+    clean_weights = np.asarray(list(weights), dtype=float)
+    if (
+        len(clean_weights) != 3
+        or not np.isfinite(clean_weights).all()
+        or float(clean_weights.sum()) <= 0.0
+    ):
+        clean_weights = np.asarray([0.6, 0.2, 0.2], dtype=float)
+    clean_weights = clean_weights / float(clean_weights.sum())
+
+    gates = _residual_side_gates(
+        prediction,
+        enabled=enabled,
+        gate_power=gate_power,
+        gate_floor=gate_floor,
+    )
+    scores = (
+        float(clean_weights[0]) * prediction
+        + gates * (
+            float(clean_weights[1]) * graph
+            + float(clean_weights[2]) * temporal
+        )
+    )
+    scores = np.clip(np.where(np.isfinite(scores), scores, 0.0), 0.0, 1.0)
+    return [float(score) for score in scores]
+
+
+def _residual_side_gates(
+    prediction_rank: Iterable[float],
+    enabled: bool,
+    gate_power: float = 1.0,
+    gate_floor: float = 0.0,
+) -> np.ndarray:
+    prediction = _rank_array(prediction_rank)
+    if not enabled:
+        return np.ones(len(prediction), dtype=float)
+    clean_power = max(0.0, float(gate_power))
+    clean_floor = min(1.0, max(0.0, float(gate_floor)))
+    gates = clean_floor + (1.0 - clean_floor) * np.power(prediction, clean_power)
+    return np.clip(np.where(np.isfinite(gates), gates, clean_floor), clean_floor, 1.0)
+
+
+def _rank_array(values: Iterable[float]) -> np.ndarray:
+    array = np.asarray(list(values), dtype=float)
+    return np.clip(np.where(np.isfinite(array), array, 0.0), 0.0, 1.0)
 
 
 def _rank01(values: Iterable[float], inverse: bool = False) -> list[float]:
