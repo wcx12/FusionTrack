@@ -19,20 +19,26 @@ from tqdm import tqdm
 FEATURE_COLUMNS = {
     "route_rgb": ["latitude", "longitude"],
     "route_thermal": ["latitude", "longitude"],
+    "route_fused": ["latitude", "longitude"],
     "speed_rgb": ["speed"],
     "speed_thermal": ["speed"],
+    "speed_fused": ["speed"],
     "shape_rgb": ["delta_x", "delta_y"],
     "shape_thermal": ["delta_x", "delta_y"],
+    "shape_fused": ["delta_x", "delta_y"],
 }
 
 
 FEATURE_NUM_LAYERS = {
     "route_rgb": 2,
     "route_thermal": 2,
+    "route_fused": 2,
     "speed_rgb": 1,
     "speed_thermal": 1,
+    "speed_fused": 1,
     "shape_rgb": 2,
     "shape_thermal": 2,
+    "shape_fused": 2,
 }
 
 
@@ -49,10 +55,13 @@ FEATURE_NUM_LAYERS = {
 FEATURE_MIN_LENGTH_DEFAULTS = {
     "route_rgb": 10,
     "route_thermal": 10,
+    "route_fused": 10,
     "speed_rgb": 10,
     "speed_thermal": 10,
+    "speed_fused": 10,
     "shape_rgb": 2,
     "shape_thermal": 2,
+    "shape_fused": 2,
 }
 
 
