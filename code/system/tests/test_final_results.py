@@ -282,6 +282,26 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
                     {"frame_id": 20, "fused": {"center_xy": [40, 50], "confidence": 0.8}},
                 ],
             },
+            {
+                "sample_id": "G1:1",
+                "sequence": "G1",
+                "track_id": "1",
+                "category_name": "plane",
+                "points": [
+                    {"frame_id": 1, "fused": {"center_xy": [15, 25], "confidence": 0.9}},
+                    {"frame_id": 8, "fused": {"center_xy": [25, 35], "confidence": 0.8}},
+                ],
+            },
+            {
+                "sample_id": "G1:2",
+                "sequence": "G1",
+                "track_id": "2",
+                "category_name": "plane",
+                "points": [
+                    {"frame_id": 1, "fused": {"center_xy": [35, 45], "confidence": 0.9}},
+                    {"frame_id": 8, "fused": {"center_xy": [45, 55], "confidence": 0.8}},
+                ],
+            },
         ],
     )
 
@@ -295,7 +315,7 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
 
     assert summary["num_tasks"] == 2
     assert summary["num_methods"] == 3
-    assert summary["playback_sequences"] == ["S1"]
+    assert summary["playback_sequences"] == ["S1", "G1"]
     html = (tmp_path / "dashboard" / "index.html").read_text(encoding="utf-8")
     playback_data = json.loads((tmp_path / "dashboard" / "assets" / "final_playback_data.json").read_text(encoding="utf-8"))
     assert playback_data["S1"]["stats"] == {
@@ -305,6 +325,17 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
         "frame_end": 20,
         "visualized_tracks": 2,
     }
+    assert playback_data["S1"]["stats_by_task"]["group"]["sequence_sample_count"] == 0
+    group_tracks = {track["sample_id"]: track for track in playback_data["G1"]["tracks"]}
+    assert playback_data["G1"]["stats_by_task"]["group"] == {
+        "sequence_sample_count": 2,
+        "sequence_anomaly_count": 1,
+        "frame_start": 1,
+        "frame_end": 8,
+        "visualized_tracks": 2,
+    }
+    assert group_tracks["G1:2"]["task_scores"]["group"]["group_prediction_linear"] == 0.75
+    assert group_tracks["G1:1"]["task_labels"]["group"]["label"] == 1
     assert "FusionTrack 最终结果看板" in html
     assert "总标签数" in html
     assert "总异常数" in html
@@ -313,6 +344,12 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "当前序列帧范围" in html
     assert "可视化轨迹数" in html
     assert "sequenceStats" in html
+    assert "sequencesForTask" in html
+    assert "compareSequencesForTask" in html
+    assert "trackScores" in html
+    assert "trackScoresForTask" in html
+    assert "trackLabelValue" in html
+    assert 'state.task !== "individual"' not in html
     assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in html
     assert "control-surface" in html
     assert "section-heading" in html

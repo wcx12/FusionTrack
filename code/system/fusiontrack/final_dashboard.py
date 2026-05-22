@@ -62,23 +62,24 @@ def _build_playback_payloads(
     assets_dir: Path,
     top_sequences: int,
 ) -> dict[str, Any]:
-    individual = dashboard.tasks.get("individual")
-    if individual is None:
+    if not dashboard.tasks:
         return {}
-    default_method = _default_method(individual.leaderboard)
-    cases = individual.case_rows.get(default_method, {})
-    selected_samples = []
-    for case_type in ("true_positive", "false_positive", "false_negative"):
-        selected_samples.extend(row["sample_id"] for row in cases.get(case_type, [])[:4])
+
     selected_sequences: list[str] = []
-    for sample_id in selected_samples:
-        sequence = sample_id.split(":", 1)[0]
-        if sequence and sequence not in selected_sequences:
-            selected_sequences.append(sequence)
-        if len(selected_sequences) >= top_sequences:
-            break
-    if not selected_sequences and individual.labels:
-        selected_sequences = [str(individual.labels[0].get("sequence", ""))]
+    for task in dashboard.tasks.values():
+        for sequence in _selected_sequences_for_task(task, top_sequences=top_sequences):
+            if sequence and sequence not in selected_sequences:
+                selected_sequences.append(sequence)
+    if not selected_sequences:
+        for task in dashboard.tasks.values():
+            if task.labels:
+                selected_sequences = [str(task.labels[0].get("sequence", ""))]
+                break
+    priority_samples_by_sequence: dict[str, set[str]] = defaultdict(set)
+    for task in dashboard.tasks.values():
+        for sample_id, sequence in _selected_case_samples_for_task(task):
+            if sample_id and sequence:
+                priority_samples_by_sequence[sequence].add(sample_id)
     selected_set = set(selected_sequences)
     by_sequence: dict[str, list[dict[str, Any]]] = defaultdict(list)
     with fused_jsonl.open("r", encoding="utf-8-sig") as handle:
@@ -90,13 +91,22 @@ def _build_playback_payloads(
             sequence = str(trajectory.get("sequence", ""))
             if sequence in selected_set:
                 by_sequence[sequence].append(trajectory)
-    labels_by_sample = individual.labels_by_sample
-    labels_by_sequence: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for label in individual.labels:
-        labels_by_sequence[str(label.get("sequence", ""))].append(label)
-    scores_by_method = {
-        method_name: method.scores_by_sample
-        for method_name, method in individual.methods.items()
+    labels_by_task_sample = {
+        task_name: _aggregate_labels_by_sample(task.labels)
+        for task_name, task in dashboard.tasks.items()
+    }
+    labels_by_task_sequence: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for task_name, task in dashboard.tasks.items():
+        labels_by_sequence: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for label in task.labels:
+            labels_by_sequence[str(label.get("sequence", ""))].append(label)
+        labels_by_task_sequence[task_name] = labels_by_sequence
+    scores_by_task_method = {
+        task_name: {
+            method_name: _aggregate_scores_by_sample(method.score_rows)
+            for method_name, method in task.methods.items()
+        }
+        for task_name, task in dashboard.tasks.items()
     }
     payloads = {}
     for sequence in selected_sequences:
@@ -109,7 +119,8 @@ def _build_playback_payloads(
         )
         tracks = []
         frame_ids: list[int] = []
-        for trajectory in trajectories[:160]:
+        priority_samples = priority_samples_by_sequence.get(sequence, set())
+        for trajectory in _prioritized_trajectories(trajectories, priority_samples)[:160]:
             frame_points = _trajectory_frame_points(trajectory)
             if not frame_points:
                 continue
@@ -119,29 +130,63 @@ def _build_playback_payloads(
                 {"frame": frame, "x": round(x, 3), "y": round(y, 3)}
                 for frame, x, y in frame_points
             ]
-            method_scores = {
-                method_name: round(float(rows.get(sample_id, {}).get("score", 0.0) or 0.0), 6)
-                for method_name, rows in scores_by_method.items()
+            task_scores = {
+                task_name: {
+                    method_name: round(float(rows.get(sample_id, {}).get("score", 0.0) or 0.0), 6)
+                    for method_name, rows in method_scores.items()
+                }
+                for task_name, method_scores in scores_by_task_method.items()
             }
-            label = labels_by_sample.get(sample_id, {})
+            task_labels = {
+                task_name: _track_label_payload(
+                    labels.get(sample_id, {}),
+                    default_start=frame_points[0][0],
+                    default_end=frame_points[-1][0],
+                )
+                for task_name, labels in labels_by_task_sample.items()
+            }
+            individual_scores = task_scores.get("individual") or next(iter(task_scores.values()), {})
+            individual_label = task_labels.get("individual") or next(iter(task_labels.values()), {})
             tracks.append(
                 {
                     "sample_id": sample_id,
                     "sequence": sequence,
                     "track_id": str(trajectory.get("track_id", "")),
                     "category": trajectory.get("category_name", "") or "",
-                    "method_scores": method_scores,
-                    "label": int(label.get("label", 0) or 0),
-                    "anomaly_type": str(label.get("anomaly_type", "normal")),
-                    "frame_start": int(label.get("frame_start", frame_points[0][0]) or frame_points[0][0]),
-                    "frame_end": int(label.get("frame_end", frame_points[-1][0]) or frame_points[-1][0]),
+                    "method_scores": individual_scores,
+                    "task_scores": task_scores,
+                    "task_labels": task_labels,
+                    "label": int(individual_label.get("label", 0) or 0),
+                    "anomaly_type": str(individual_label.get("anomaly_type", "normal")),
+                    "frame_start": int(individual_label.get("frame_start", frame_points[0][0]) or frame_points[0][0]),
+                    "frame_end": int(individual_label.get("frame_end", frame_points[-1][0]) or frame_points[-1][0]),
                     "points": points,
                 }
             )
         width, height = background_size or _fallback_scene_size(trajectories)
-        sequence_labels = labels_by_sequence.get(sequence, [])
         frame_start = min(frame_ids) if frame_ids else 0
         frame_end = max(frame_ids) if frame_ids else 0
+        stats_by_task = {}
+        for task_name, labels_by_sequence in labels_by_task_sequence.items():
+            sequence_labels = labels_by_sequence.get(sequence, [])
+            stats_by_task[task_name] = {
+                "sequence_sample_count": len(sequence_labels),
+                "sequence_anomaly_count": sum(1 for row in sequence_labels if int(row.get("label", 0) or 0) == 1),
+                "frame_start": frame_start,
+                "frame_end": frame_end,
+                "visualized_tracks": len(tracks),
+            }
+        default_stats = (
+            stats_by_task.get("individual")
+            or next(iter(stats_by_task.values()), {})
+            or {
+                "sequence_sample_count": len(tracks),
+                "sequence_anomaly_count": 0,
+                "frame_start": frame_start,
+                "frame_end": frame_end,
+                "visualized_tracks": len(tracks),
+            }
+        )
         payloads[sequence] = {
             "sequence": sequence,
             "background": f"assets/{background_asset.name}" if background_asset else None,
@@ -151,16 +196,113 @@ def _build_playback_payloads(
             ],
             "size": {"width": width, "height": height},
             "frame_range": [frame_start, frame_end],
-            "stats": {
-                "sequence_sample_count": len(sequence_labels) if sequence_labels else len(tracks),
-                "sequence_anomaly_count": sum(1 for row in sequence_labels if int(row.get("label", 0) or 0) == 1),
-                "frame_start": frame_start,
-                "frame_end": frame_end,
-                "visualized_tracks": len(tracks),
-            },
+            "stats": default_stats,
+            "stats_by_task": stats_by_task,
             "tracks": tracks,
         }
     return payloads
+
+
+def _selected_sequences_for_task(task: Any, top_sequences: int) -> list[str]:
+    sequences: list[str] = []
+    for _, sequence in _selected_case_samples_for_task(task):
+        if sequence and sequence not in sequences:
+            sequences.append(sequence)
+        if len(sequences) >= top_sequences:
+            return sequences
+    if not sequences and task.labels:
+        sequence = str(task.labels[0].get("sequence", ""))
+        if sequence:
+            sequences.append(sequence)
+    return sequences
+
+
+def _selected_case_samples_for_task(task: Any) -> list[tuple[str, str]]:
+    default_method = _default_method(task.leaderboard)
+    cases = task.case_rows.get(default_method, {})
+    samples: list[tuple[str, str]] = []
+    for case_type in ("true_positive", "false_positive", "false_negative"):
+        for row in cases.get(case_type, [])[:4]:
+            sample_id = str(row.get("sample_id", ""))
+            sequence = str(row.get("sequence") or sample_id.split(":", 1)[0])
+            samples.append((sample_id, sequence))
+    return samples
+
+
+def _prioritized_trajectories(
+    trajectories: list[dict[str, Any]],
+    priority_samples: set[str],
+) -> list[dict[str, Any]]:
+    if not priority_samples:
+        return trajectories
+    indexed = list(enumerate(trajectories))
+    indexed.sort(
+        key=lambda item: (
+            0 if str(item[1].get("sample_id", "")) in priority_samples else 1,
+            item[0],
+        )
+    )
+    return [trajectory for _, trajectory in indexed]
+
+
+def _aggregate_labels_by_sample(labels: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    aggregated: dict[str, dict[str, Any]] = {}
+    for row in labels:
+        sample_id = str(row.get("sample_id", ""))
+        if not sample_id:
+            continue
+        label = int(row.get("label", 0) or 0)
+        frame_start = int(row.get("frame_start", 0) or 0)
+        frame_end = int(row.get("frame_end", frame_start) or frame_start)
+        existing = aggregated.get(sample_id)
+        if existing is None:
+            aggregated[sample_id] = {
+                "sample_id": sample_id,
+                "sequence": str(row.get("sequence", "")),
+                "track_id": str(row.get("track_id", "")),
+                "label": label,
+                "anomaly_type": str(row.get("anomaly_type", "normal")),
+                "frame_start": frame_start,
+                "frame_end": frame_end,
+                "num_windows": 1,
+                "positive_windows": 1 if label == 1 else 0,
+            }
+            continue
+        existing["label"] = max(int(existing.get("label", 0) or 0), label)
+        existing["frame_start"] = min(int(existing.get("frame_start", frame_start) or frame_start), frame_start)
+        existing["frame_end"] = max(int(existing.get("frame_end", frame_end) or frame_end), frame_end)
+        existing["num_windows"] = int(existing.get("num_windows", 1) or 1) + 1
+        existing["positive_windows"] = int(existing.get("positive_windows", 0) or 0) + (1 if label == 1 else 0)
+        if label == 1 and str(existing.get("anomaly_type", "normal")) == "normal":
+            existing["anomaly_type"] = str(row.get("anomaly_type", "anomaly"))
+    return aggregated
+
+
+def _aggregate_scores_by_sample(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    aggregated: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        sample_id = str(row.get("sample_id", ""))
+        if not sample_id:
+            continue
+        score = float(row.get("score", 0.0) or 0.0)
+        existing = aggregated.get(sample_id)
+        if existing is None or score > float(existing.get("score", 0.0) or 0.0):
+            converted = dict(row)
+            converted["sample_id"] = sample_id
+            converted["score"] = score
+            aggregated[sample_id] = converted
+    return aggregated
+
+
+def _track_label_payload(label: dict[str, Any], default_start: int, default_end: int) -> dict[str, Any]:
+    return {
+        "label": int(label.get("label", 0) or 0),
+        "anomaly_type": str(label.get("anomaly_type", "normal")),
+        "frame_start": int(label.get("frame_start", default_start) or default_start),
+        "frame_end": int(label.get("frame_end", default_end) or default_end),
+        "num_windows": int(label.get("num_windows", 0) or 0),
+        "positive_windows": int(label.get("positive_windows", 0) or 0),
+    }
 
 
 def _default_method(leaderboard: list[dict[str, Any]]) -> str:
@@ -560,9 +702,72 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       function esc(value) {{ return String(value ?? "").replace(/[&<>"']/g, ch => ({{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"}})[ch]); }}
       function methodsForTask(task) {{ return task.leaderboard.map(row => row.method); }}
       function sequences() {{ return Object.keys(playbackData); }}
-      function currentPlayback() {{ return playbackData[state.sequence] || playbackData[sequences()[0]] || null; }}
+      function sequenceHasTaskData(sequence, taskName) {{
+        const data = playbackData[sequence];
+        if (!data) {{
+          return false;
+        }}
+        const stats = (data.stats_by_task || {{}})[taskName];
+        if (stats && Number(stats.sequence_sample_count || 0) > 0) {{
+          return true;
+        }}
+        return (data.tracks || []).some(track => {{
+          const scores = ((track.task_scores || {{}})[taskName]) || {{}};
+          const label = ((track.task_labels || {{}})[taskName]) || {{}};
+          const hasScore = Object.values(scores).some(value => Number(value || 0) !== 0);
+          const hasLabel = Number(label.num_windows || 0) > 0 || Number(label.label || 0) === 1;
+          return hasScore || hasLabel;
+        }});
+      }}
+      function sequencesForTask() {{
+        const names = sequences();
+        const filtered = names.filter(sequence => sequenceHasTaskData(sequence, state.task));
+        const selected = filtered.length ? filtered : names;
+        return [...selected].sort((a, b) => compareSequencesForTask(a, b, state.task));
+      }}
+      function currentPlayback() {{
+        const names = sequencesForTask();
+        return playbackData[state.sequence] || playbackData[names[0]] || null;
+      }}
       function clamp(value, min, max) {{ return Math.max(min, Math.min(max, value)); }}
       function t(key) {{ return (translations[state.language] || translations.zh)[key] || translations.en[key] || key; }}
+      function trackScoresForTask(track, taskName) {{
+        return ((track.task_scores || {{}})[taskName]) || (taskName === "individual" ? track.method_scores : {{}}) || {{}};
+      }}
+      function trackLabelForTask(track, taskName) {{
+        return ((track.task_labels || {{}})[taskName]) || {{
+          label: track.label || 0,
+          anomaly_type: track.anomaly_type || "normal",
+          frame_start: track.frame_start,
+          frame_end: track.frame_end
+        }};
+      }}
+      function trackScores(track) {{ return trackScoresForTask(track, state.task); }}
+      function trackLabel(track) {{ return trackLabelForTask(track, state.task); }}
+      function trackScore(track) {{ return Number((trackScores(track) || {{}})[state.method] || 0); }}
+      function trackLabelValue(track) {{ return Number(trackLabel(track).label || 0); }}
+      function compareSequencesForTask(a, b, taskName) {{
+        const dataA = playbackData[a] || {{}};
+        const dataB = playbackData[b] || {{}};
+        const statsA = (dataA.stats_by_task || {{}})[taskName] || {{}};
+        const statsB = (dataB.stats_by_task || {{}})[taskName] || {{}};
+        const positiveA = (dataA.tracks || []).filter(track => Number(trackLabelForTask(track, taskName).label || 0) === 1).length;
+        const positiveB = (dataB.tracks || []).filter(track => Number(trackLabelForTask(track, taskName).label || 0) === 1).length;
+        if ((positiveA > 0) !== (positiveB > 0)) {{
+          return positiveA > 0 ? -1 : 1;
+        }}
+        const anomaliesA = Number(statsA.sequence_anomaly_count || 0);
+        const anomaliesB = Number(statsB.sequence_anomaly_count || 0);
+        if (anomaliesA !== anomaliesB) {{
+          return anomaliesB - anomaliesA;
+        }}
+        const maxScoreA = Math.max(...(dataA.tracks || []).map(track => Math.max(0, ...Object.values(trackScoresForTask(track, taskName)).map(value => Number(value || 0)))), 0);
+        const maxScoreB = Math.max(...(dataB.tracks || []).map(track => Math.max(0, ...Object.values(trackScoresForTask(track, taskName)).map(value => Number(value || 0)))), 0);
+        if (maxScoreA !== maxScoreB) {{
+          return maxScoreB - maxScoreA;
+        }}
+        return sequences().indexOf(a) - sequences().indexOf(b);
+      }}
 
       function setTaskOptions() {{
         const labels = {{ individual: t("taskIndividual"), group: t("taskGroup") }};
@@ -591,7 +796,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       }}
 
       function setSequenceOptions() {{
-        const names = sequences();
+        const names = sequencesForTask();
         if (!names.length) {{
           sequenceSelector.innerHTML = "";
           sequenceSelector.disabled = true;
@@ -599,12 +804,14 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           frameSlider.disabled = true;
           return;
         }}
-        if (!state.sequence || !playbackData[state.sequence]) {{
+        if (!state.sequence || !names.includes(state.sequence)) {{
           state.sequence = names[0];
+          state.image = null;
+          state.imageKey = null;
         }}
-        sequenceSelector.disabled = state.task !== "individual";
-        playToggle.disabled = state.task !== "individual";
-        frameSlider.disabled = state.task !== "individual";
+        sequenceSelector.disabled = false;
+        playToggle.disabled = false;
+        frameSlider.disabled = false;
         sequenceSelector.innerHTML = names.map(sequence =>
           `<option value="${{esc(sequence)}}"${{sequence === state.sequence ? " selected" : ""}}>${{esc(sequence)}}</option>`
         ).join("");
@@ -624,16 +831,16 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
 
       function renderSequenceStats() {{
         const data = currentPlayback();
-        if (!data || state.task !== "individual") {{
+        if (!data) {{
           sequenceStats.innerHTML = "";
           return;
         }}
-        const stats = data.stats || {{}};
+        const stats = (data.stats_by_task || {{}})[state.task] || data.stats || {{}};
         const frameStart = stats.frame_start ?? data.frame_range?.[0] ?? 0;
         const frameEnd = stats.frame_end ?? data.frame_range?.[1] ?? frameStart;
         const rows = [
           [t("sequenceSampleCount"), stats.sequence_sample_count ?? data.tracks.length],
-          [t("sequenceAnomalyCount"), stats.sequence_anomaly_count ?? data.tracks.filter(track => track.label === 1).length],
+          [t("sequenceAnomalyCount"), stats.sequence_anomaly_count ?? data.tracks.filter(track => trackLabelValue(track) === 1).length],
           [t("sequenceFrameRange"), `${{frameStart}}-${{frameEnd}}`],
           [t("sequenceVisualizedTracks"), stats.visualized_tracks ?? data.tracks.length]
         ];
@@ -837,9 +1044,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         heatCtx.globalCompositeOperation = "lighter";
         const currentFrame = Number(state.frame);
         for (const track of ranked.slice(0, 55)) {{
-          const score = Number((track.method_scores || {{}})[state.method] || 0);
+          const score = trackScore(track);
           const scoreRatio = clamp(score / maxScore, 0, 1);
-          const labelBoost = track.label === 1 ? 0.22 : 0;
+          const labelBoost = trackLabelValue(track) === 1 ? 0.22 : 0;
           for (const point of heatPoints(track, currentFrame)) {{
             const age = Math.max(0, currentFrame - Number(point.frame));
             const recency = clamp(1 - age / Math.max(1, state.heatWindow), 0.18, 1);
@@ -869,18 +1076,19 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           if (!points.length) {{
             continue;
           }}
-          const score = Number((track.method_scores || {{}})[state.method] || 0);
+          const score = trackScore(track);
+          const isAnomaly = trackLabelValue(track) === 1;
           const ratio = clamp(score / maxScore, 0, 1);
-          targetCtx.strokeStyle = track.label === 1 ? "rgba(239, 68, 68, 0.95)" : `rgba(37, 99, 235, ${{0.25 + 0.45 * ratio}})`;
-          targetCtx.lineWidth = track.label === 1 ? 2.6 : 0.9 + 2.0 * ratio;
+          targetCtx.strokeStyle = isAnomaly ? "rgba(239, 68, 68, 0.95)" : `rgba(37, 99, 235, ${{0.25 + 0.45 * ratio}})`;
+          targetCtx.lineWidth = isAnomaly ? 2.6 : 0.9 + 2.0 * ratio;
           targetCtx.beginPath();
           points.forEach((point, index) => index ? targetCtx.lineTo(point.x, point.y) : targetCtx.moveTo(point.x, point.y));
           targetCtx.stroke();
           const last = points[points.length - 1];
           if (last) {{
-            targetCtx.fillStyle = track.label === 1 ? "#ef4444" : "#f59e0b";
+            targetCtx.fillStyle = isAnomaly ? "#ef4444" : "#f59e0b";
             targetCtx.beginPath();
-            targetCtx.arc(last.x, last.y, track.label === 1 ? 4.8 : 2.7, 0, Math.PI * 2);
+            targetCtx.arc(last.x, last.y, isAnomaly ? 4.8 : 2.7, 0, Math.PI * 2);
             targetCtx.fill();
           }}
         }}
@@ -917,8 +1125,8 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
 
       function drawPlayback() {{
         setViewModeVisibility();
-        const names = sequences();
-        if (!names.length || state.task !== "individual") {{
+        const names = sequencesForTask();
+        if (!names.length) {{
           playbackReadout.textContent = t("noPlayback");
           clearPlaybackCanvases();
           return;
@@ -929,9 +1137,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }}
         resetFrameForSequence();
         ensureBackground(data, state.frame);
-        const scores = data.tracks.map(track => Number((track.method_scores || {{}})[state.method] || 0));
+        const scores = data.tracks.map(track => trackScore(track));
         const maxScore = Math.max(...scores, 1e-6);
-        const ranked = [...data.tracks].sort((a, b) => Number((b.method_scores || {{}})[state.method] || 0) - Number((a.method_scores || {{}})[state.method] || 0)).slice(0, 80);
+        const ranked = [...data.tracks].sort((a, b) => trackScore(b) - trackScore(a)).slice(0, 80);
         if (state.viewMode === "comparison") {{
           drawComparisonView(data, ranked, maxScore);
         }} else {{
@@ -952,7 +1160,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       }}
 
       function startPlayback() {{
-        if (state.task !== "individual" || !currentPlayback()) {{
+        if (!currentPlayback()) {{
           return;
         }}
         state.playing = true;
@@ -989,9 +1197,11 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       taskSelector.addEventListener("change", () => {{
         state.task = taskSelector.value;
         state.method = methodsForTask(taskData())[0] || "";
-        if (state.task !== "individual") {{
-          stopPlayback();
-        }}
+        state.sequence = "";
+        state.image = null;
+        state.imageKey = null;
+        state.frame = -1;
+        stopPlayback();
         renderMethodView();
       }});
       methodSelector.addEventListener("change", () => {{
