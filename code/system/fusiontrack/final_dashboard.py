@@ -95,6 +95,10 @@ def _build_playback_payloads(
         task_name: _aggregate_labels_by_sample(task.labels)
         for task_name, task in dashboard.tasks.items()
     }
+    labels_by_task_sample_rows = {
+        task_name: _group_labels_by_sample(task.labels)
+        for task_name, task in dashboard.tasks.items()
+    }
     labels_by_task_sequence: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for task_name, task in dashboard.tasks.items():
         labels_by_sequence: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -137,6 +141,13 @@ def _build_playback_payloads(
                 }
                 for task_name, method_scores in scores_by_task_method.items()
             }
+            task_score_rows = {
+                task_name: {
+                    method_name: rows.get(sample_id, {})
+                    for method_name, rows in method_scores.items()
+                }
+                for task_name, method_scores in scores_by_task_method.items()
+            }
             task_labels = {
                 task_name: _track_label_payload(
                     labels.get(sample_id, {}),
@@ -144,6 +155,33 @@ def _build_playback_payloads(
                     default_end=frame_points[-1][0],
                 )
                 for task_name, labels in labels_by_task_sample.items()
+            }
+            task_segments = {
+                task_name: sorted(
+                    labels_by_task_sample_rows.get(task_name, {}).get(sample_id, []),
+                    key=lambda row: int(row.get("frame_start", 0) or 0),
+                )
+                for task_name in labels_by_task_sample
+            }
+            task_score_components = {
+                task_name: {
+                    method_name: {
+                        "score": round(float(method_rows.get("score", 0.0) or 0.0), 6),
+                        "used_sources": str(method_rows.get("used_sources", "")),
+                        "source": str(method_rows.get("source", "")),
+                        "component_scores": method_rows.get("component_scores", {}),
+                        "metadata": method_rows.get("metadata", {}),
+                    }
+                    for method_name, method_rows in method_rows_by_method.items()
+                }
+                for task_name, method_rows_by_method in task_score_rows.items()
+            }
+            task_score_decomp = {
+                task_name: {
+                    method_name: _score_decomposition(method_rows)
+                    for method_name, method_rows in method_rows_by_method.items()
+                }
+                for task_name, method_rows_by_method in task_score_rows.items()
             }
             individual_scores = task_scores.get("individual") or next(iter(task_scores.values()), {})
             individual_label = task_labels.get("individual") or next(iter(task_labels.values()), {})
@@ -155,7 +193,11 @@ def _build_playback_payloads(
                     "category": trajectory.get("category_name", "") or "",
                     "method_scores": individual_scores,
                     "task_scores": task_scores,
+                    "task_score_rows": task_score_rows,
+                    "task_score_components": task_score_components,
+                    "task_score_decomposition": task_score_decomp,
                     "task_labels": task_labels,
+                    "task_segments": task_segments,
                     "label": int(individual_label.get("label", 0) or 0),
                     "anomaly_type": str(individual_label.get("anomaly_type", "normal")),
                     "frame_start": int(individual_label.get("frame_start", frame_points[0][0]) or frame_points[0][0]),
@@ -294,6 +336,90 @@ def _aggregate_scores_by_sample(rows: list[dict[str, Any]]) -> dict[str, dict[st
     return aggregated
 
 
+def _group_labels_by_sample(labels: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in labels:
+        sample_id = str(row.get("sample_id", ""))
+        if not sample_id:
+            continue
+        grouped.setdefault(sample_id, []).append(
+            {
+                "label": int(row.get("label", 0) or 0),
+                "anomaly_type": str(row.get("anomaly_type", "normal")),
+                "frame_start": int(row.get("frame_start", 0) or 0),
+                "frame_end": int(row.get("frame_end", 0) or 0),
+                "sample_id": sample_id,
+                "sequence": str(row.get("sequence", "")),
+                "track_id": str(row.get("track_id", "")),
+            }
+        )
+    return grouped
+
+
+def _coerce_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _normalize_weighted_score(row: dict[str, Any], key_prefix: str, fallback_weight: float = 1.0) -> float:
+    values = [
+        _coerce_float(value, 0.0)
+        for key, value in (row.get("component_scores") or {}).items()
+        if isinstance(key, str) and key.startswith(f"{key_prefix}_") and _coerce_float(value, 0.0) > 0
+    ]
+    if values:
+        return max(values)
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    if key_prefix == "individual":
+        return _coerce_float(metadata.get("individual_raw_score"), 0.0)
+    if key_prefix == "group":
+        return _coerce_float(metadata.get("group_raw_score"), 0.0)
+    return fallback_weight * _coerce_float(row.get("score"), 0.0)
+
+
+def _score_decomposition(row: dict[str, Any]) -> dict[str, float]:
+    components = row.get("component_scores") if isinstance(row.get("component_scores"), dict) else {}
+    used_sources = str(row.get("used_sources", ""))
+    has_individual = "individual" in used_sources
+    has_group = "group" in used_sources
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    individual_raw = _coerce_float(metadata.get("individual_raw_score", 0.0), 0.0)
+    group_raw = _coerce_float(metadata.get("group_raw_score", 0.0), 0.0)
+    alpha = _coerce_float(
+        metadata.get("alpha", 0.65) if isinstance(metadata.get("alpha"), (int, float)) else 0.65,
+        0.65,
+    )
+    fused = _coerce_float(row.get("score", 0.0), 0.0)
+    ind = 0.0
+    grp = 0.0
+    evt = _coerce_float(row.get("event_score", 0.0), 0.0)
+
+    if has_individual and has_group:
+        ind = _normalize_weighted_score(row, "individual", fallback_weight=alpha)
+        grp = _normalize_weighted_score(row, "group", fallback_weight=(1 - alpha))
+        if not ind and individual_raw:
+            ind = individual_raw
+        if not grp and group_raw:
+            grp = group_raw
+    elif has_individual:
+        ind = _normalize_weighted_score(row, "individual", fallback_weight=1.0)
+    elif has_group:
+        grp = _normalize_weighted_score(row, "group", fallback_weight=1.0)
+
+    return {
+        "S_ind": float(ind),
+        "S_grp": float(grp),
+        "S_event": float(evt),
+        "S_fused": float(fused),
+        "individual_source": 1.0 if has_individual else 0.0,
+        "group_source": 1.0 if has_group else 0.0,
+        "alpha": float(alpha),
+        "component_count": float(len(components)),
+    }
+
+
 def _track_label_payload(label: dict[str, Any], default_start: int, default_end: int) -> dict[str, Any]:
     return {
         "label": int(label.get("label", 0) or 0),
@@ -399,6 +525,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .type-chip strong {{ color: #0f172a; font-variant-numeric: tabular-nums; }}
     .insight-grid {{ display: grid; grid-template-columns: minmax(250px, 0.9fr) minmax(280px, 1.1fr) minmax(260px, 0.9fr); gap: 12px; margin-top: 12px; }}
     .insight-card {{ border: 1px solid #e1e7ef; border-radius: 8px; background: #f8fafc; padding: 12px; min-width: 0; }}
+    .insight-grid-large {{ display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }}
     .track-rank-list {{ display: grid; gap: 7px; max-height: 260px; overflow: auto; padding-right: 2px; }}
     .track-rank-item {{ display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; min-height: 44px; border: 1px solid #dbe4ee; border-radius: 7px; background: white; padding: 8px 10px; text-align: left; }}
     .track-rank-item.active {{ border-color: #0f766e; box-shadow: inset 3px 0 0 #0f766e; }}
@@ -408,6 +535,31 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .explain-metric span {{ display: block; color: #64748b; font-size: 12px; }}
     .explain-metric strong {{ display: block; margin-top: 2px; font-variant-numeric: tabular-nums; }}
     .explain-reason {{ margin-top: 10px; color: #334155; font-size: 13px; }}
+    .submodule-switch {{ display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; align-items: center; }}
+    .submodule-tab {{ min-height: 34px; padding: 6px 10px; border-radius: 999px; font-size: 12px; }}
+    .submodule-tab.active {{ background: #111827; border-color: #111827; color: white; }}
+    .flow-steps {{ display: grid; gap: 7px; }}
+    .flow-step {{ display: grid; grid-template-columns: 1fr auto; align-items: center; border: 1px solid #dbe4ee; border-radius: 7px; padding: 8px 10px; background: #f8fafc; font-size: 12px; }}
+    .flow-step-text {{ color: #334155; }}
+    .flow-step-state {{ font-size: 12px; font-weight: 700; color: #334155; }}
+    .flow-step.done {{ border-color: #cbd5e1; background: #ffffff; }}
+    .flow-step.active {{ border-color: #0f766e; background: #ecfeff; }}
+    .flow-step.pending {{ border-color: #cbd5e1; opacity: 0.8; }}
+    .flow-step.done .flow-step-state {{ color: #16a34a; }}
+    .flow-step.active .flow-step-state {{ color: #0ea5e9; }}
+    .flow-step.pending .flow-step-state {{ color: #94a3b8; }}
+    .decomp-bar {{ display: grid; gap: 7px; }}
+    .decomp-row {{ display: grid; align-items: center; grid-template-columns: 68px 1fr 54px; gap: 8px; font-size: 12px; color: #334155; }}
+    .decomp-track {{ position: relative; height: 10px; border-radius: 999px; background: #dbe4ee; overflow: hidden; }}
+    .decomp-fill {{ height: 100%; background: linear-gradient(90deg, #0284c7, #22c55e); border-radius: inherit; }}
+    .timeline {{ display: grid; gap: 8px; margin-top: 10px; }}
+    .timeline-item {{ position: relative; border: 1px solid #dbe4ee; border-radius: 7px; padding: 8px; background: #f8fafc; }}
+    .timeline-label {{ font-size: 12px; color: #334155; margin-bottom: 6px; }}
+    .timeline-strip {{ position: relative; height: 14px; border-radius: 7px; background: #e2e8f0; overflow: hidden; }}
+    .timeline-segment {{ position: absolute; top: 0; height: 100%; }}
+    .timeline-segment.gt {{ background: #7c3aed; opacity: 0.7; }}
+    .timeline-segment.pred {{ background: #dc2626; opacity: 0.7; }}
+    .timeline-segment.overlap {{ background: #059669; opacity: 0.8; }}
     .method-summary {{ display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; }}
     .method-summary-item {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 8px 10px; }}
     .method-summary-item span {{ display: block; color: #64748b; font-size: 12px; }}
@@ -440,6 +592,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       .control-surface {{ padding: 10px; }}
       .mode-switch button, .layer-switch button {{ flex: 1 1 140px; }}
       .protocol-strip, .insight-grid, .method-summary {{ grid-template-columns: 1fr; }}
+      .insight-grid-large {{ grid-template-columns: 1fr; }}
       .explain-metrics {{ grid-template-columns: 1fr; }}
     }}
   </style>
@@ -549,6 +702,28 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           <div id="groupInsightPanel" class="subtle"></div>
         </div>
       </div>
+      <div class="insight-grid-large">
+        <div class="insight-card">
+          <h3 data-i18n="methodFlowTitle">Method flow</h3>
+          <div id="methodFlowPanel" class="flow-steps subtle">--</div>
+          <div id="flowReadout" class="subtle" style="margin-top: 8px;"></div>
+        </div>
+        <div class="insight-card">
+          <h3 data-i18n="submoduleTitle">Individual submodules</h3>
+          <div class="submodule-switch" id="submoduleSwitch">
+            <span class="subtle" data-i18n="submodulePrefix">Submodule</span>
+            <button type="button" class="submodule-tab active" data-submodule="route" data-i18n="submoduleRoute">Route</button>
+            <button type="button" class="submodule-tab" data-submodule="speed" data-i18n="submoduleSpeed">Speed</button>
+            <button type="button" class="submodule-tab" data-submodule="shape" data-i18n="submoduleShape">Shape</button>
+          </div>
+          <div id="submodulePanel" class="subtle"></div>
+          <div class="decomp-bar" id="scoreCompositionPanel"></div>
+        </div>
+        <div class="insight-card">
+          <h3 data-i18n="timelineTitle">Event timeline</h3>
+          <div id="eventTimelinePanel" class="subtle"></div>
+        </div>
+      </div>
     </section>
 
     <section class="panel">
@@ -588,8 +763,8 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       <div class="help-dialog-body" id="helpBody"></div>
     </dialog>
   </main>
-  <script id="dashboardData" type="application/json">{dashboard_json}</script>
-  <script id="playbackData" type="application/json">{playback_json}</script>
+  <script id="dashboardData" type="application/json">{{dashboard_json}}</script>
+  <script id="playbackData" type="application/json">{{playback_json}}</script>
   <script>
     (() => {{
       const dashboard = JSON.parse(document.getElementById("dashboardData").textContent);
@@ -612,6 +787,13 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       const trackRankList = document.getElementById("trackRankList");
       const explanationPanel = document.getElementById("explanationPanel");
       const groupInsightPanel = document.getElementById("groupInsightPanel");
+      const methodFlowPanel = document.getElementById("methodFlowPanel");
+      const flowReadout = document.getElementById("flowReadout");
+      const submoduleSwitch = document.getElementById("submoduleSwitch");
+      const submodulePanel = document.getElementById("submodulePanel");
+      const scoreCompositionPanel = document.getElementById("scoreCompositionPanel");
+      const eventTimelinePanel = document.getElementById("eventTimelinePanel");
+      const submoduleTabs = Array.from(document.querySelectorAll(".submodule-tab"));
       const caseTabs = Array.from(document.querySelectorAll(".case-tab"));
       const analysisTabs = Array.from(document.querySelectorAll(".analysis-tab"));
       const analysisPanels = Array.from(document.querySelectorAll("[data-analysis-panel]"));
@@ -725,8 +907,35 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           view_comparison: "四画面对比",
           view_single: "单画面模式",
           layer_tracks: "轨迹",
-          layer_both: "热力 + 轨迹",
-          layer_heatmap: "热力图"
+        layer_both: "热力 + 轨迹",
+          layer_heatmap: "热力图",
+          methodFlowTitle: "方法流程",
+          flowStepPrepare: "准备输入",
+          flowStepFeatures: "特征构建",
+          flowStepIndividual: "单目标分支",
+          flowStepGroup: "群体分支",
+          flowStepFusion: "融合得分",
+          flowReadoutTask: "任务",
+          flowReadoutMethod: "方法",
+          flowReadoutScore: "当前轨迹分数",
+          methodFlowDone: "已完成",
+          methodFlowActive: "进行中",
+          methodFlowPending: "待执行",
+          submoduleTitle: "Individual 子模块",
+          submodulePrefix: "子模块",
+          submoduleRoute: "轨迹/路由",
+          submoduleSpeed: "速度",
+          submoduleShape: "形状",
+          noSubmoduleData: "当前轨迹暂无单目标子模块证据。",
+          timelineTitle: "事件级时间线",
+          timelineGt: "真实异常段",
+          timelinePred: "模型预测段",
+          noTimeline: "无可展示时间线",
+          compSInd: "个体分数",
+          compSGrp: "群体分数",
+          compSEvent: "事件分数",
+          compSFused: "融合分数",
+          compNoData: "当前轨迹无分数分解数据。"
         }},
         en: {{
           documentTitle: "FusionTrack Final Results Dashboard",
@@ -818,7 +1027,34 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           view_single: "single view",
           layer_tracks: "tracks",
           layer_both: "heat + tracks",
-          layer_heatmap: "heatmap"
+          layer_heatmap: "heatmap",
+          methodFlowTitle: "Method Flow",
+          flowStepPrepare: "Prepare",
+          flowStepFeatures: "Build features",
+          flowStepIndividual: "Individual branch",
+          flowStepGroup: "Group branch",
+          flowStepFusion: "Fuse score",
+          flowReadoutTask: "Task",
+          flowReadoutMethod: "Method",
+          flowReadoutScore: "Current track score",
+          methodFlowDone: "Done",
+          methodFlowActive: "Active",
+          methodFlowPending: "Pending",
+          submoduleTitle: "Individual submodules",
+          submodulePrefix: "Submodule",
+          submoduleRoute: "Route",
+          submoduleSpeed: "Speed",
+          submoduleShape: "Shape",
+          noSubmoduleData: "No submodule evidence for this track.",
+          timelineTitle: "Event timeline",
+          timelineGt: "Ground truth segments",
+          timelinePred: "Predicted segments",
+          noTimeline: "No timeline data",
+          compSInd: "Individual score",
+          compSGrp: "Group score",
+          compSEvent: "Event score",
+          compSFused: "Fused score",
+          compNoData: "No score decomposition data for this track."
         }}
       }};
       const backgroundCache = new Map();
@@ -828,6 +1064,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         method: "{html.escape(initial_method)}",
         caseType: "true_positive",
         sequence: "{html.escape(initial_sequence)}",
+        submodule: "route",
         frame: -1,
         playing: false,
         viewMode: "comparison",
@@ -955,6 +1192,243 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           byType.set(typeName, Math.max(current, Number(row.total_positive || 0)));
         }}
         return [...byType.entries()].sort((a, b) => b[1] - a[1]);
+      }}
+
+      function activeTrack(taskSpecific) {{
+        const data = currentPlayback();
+        const ranked = data ? rankedTracks(data) : [];
+        return ranked.find(track => track.sample_id === state.selectedSampleId) || ranked[0] || null;
+      }}
+
+      function selectedTrackDecomposition(track) {{
+        if (!track) {{
+          return null;
+        }}
+        const decompRows = (track.task_score_decomposition || {{}})[state.task];
+        const selected = decompRows && decompRows[state.method];
+        if (selected) {{
+          return {{
+            S_ind: Number(selected.S_ind || 0),
+            S_grp: Number(selected.S_grp || 0),
+            S_event: Number(selected.S_event || 0),
+            S_fused: Number(selected.S_fused || 0),
+            alpha: Number(selected.alpha || 0.65),
+          }};
+        }}
+        const fallback = Object.values(decompRows || {{}})[0];
+        if (!fallback) {{
+          return null;
+        }}
+        return {{
+          S_ind: Number(fallback.S_ind || 0),
+          S_grp: Number(fallback.S_grp || 0),
+          S_event: Number(fallback.S_event || 0),
+          S_fused: Number(fallback.S_fused || 0),
+          alpha: Number(fallback.alpha || 0.65),
+        }};
+      }}
+
+      function selectedTrackScoreComponents(track) {{
+        if (!track) {{
+          return {{}};
+        }}
+        const compRows = (track.task_score_components || {{}})[state.task] || {{}};
+        return compRows[state.method] || Object.values(compRows || {{}})[0] || {{}};
+      }}
+
+      function renderMethodFlow(track) {{
+        const task = taskData();
+        const labels = {{
+          prepare: t("flowStepPrepare"),
+          features: t("flowStepFeatures"),
+          individual: t("flowStepIndividual"),
+          group: t("flowStepGroup"),
+          fusion: t("flowStepFusion"),
+        }};
+        const decomp = selectedTrackDecomposition(track);
+        const steps = [
+          {{ text: labels.prepare, state: task?.data_root ? "done" : "done" }},
+          {{ text: labels.features, state: decomp ? "done" : "pending" }},
+          {{ text: labels.individual, state: state.task === "individual" ? "active" : "pending" }},
+          {{ text: labels.group, state: state.task === "group" ? "active" : "pending" }},
+          {{ text: labels.fusion + " (" + (track ? fmt(trackScore(track)) : "0.000") + ")", state: decomp ? "done" : "pending" }},
+        ];
+        const statusLabel = {{
+          done: t("methodFlowDone"),
+          active: t("methodFlowActive"),
+          pending: t("methodFlowPending"),
+        }};
+        methodFlowPanel.innerHTML = steps
+          .map(item => `<div class="flow-step ${{item.state}}"><span class="flow-step-text">${{item.text}}</span> <span class="flow-step-state">${{statusLabel[item.state]}}</span></div>`)
+          .join("");
+        const taskLabel = state.task === "group" ? t("taskGroup") : t("taskIndividual");
+        const scoreText = track ? fmt(trackScore(track)) : t("noTrackSelected");
+        flowReadout.textContent = `${{t("flowReadoutTask")}}: ${{taskLabel}} / ${{t("flowReadoutMethod")}}: ${{state.method}} / ${{t("flowReadoutScore")}}: ${{scoreText}}`;
+      }}
+
+      function submoduleFeatureValue(track, stats, kind) {{
+        if (!track) {{
+          return 0;
+        }}
+        const components = selectedTrackScoreComponents(track).component_scores || {{}};
+        const candidates = {{
+          route: {{
+            route_shift: Number(components.route_score || 0),
+            shape_shift: Number(components.route_shape_score || 0),
+            normal: 0,
+          }},
+          speed: {{
+            speed_spike: Number(components.speed_score || 0),
+            stop_or_slowdown: Number(components.speed_slowdown_score || 0),
+            jump: Number(components.jump_score || 0),
+          }},
+          shape: {{
+            shape_warp: Number(components.shape_score || 0),
+            modal_offset: Number(components.modal_offset_score || 0),
+          }},
+        }};
+        if (kind === "route") {{
+          return Math.max(...Object.values(candidates.route || {{ normal: 0 }}), stats.length > 0 ? Math.min(stats.length / 100, 1) : 0);
+        }}
+        if (kind === "speed") {{
+          const base = stats.avgSpeed || 0;
+          return Math.max(...Object.values(candidates.speed || {{ normal: 0 }}), Math.min(base / 5, 1));
+        }}
+        if (kind === "shape") {{
+          const ratio = stats.displacement > 0 ? Math.min(stats.length / stats.displacement, 5) / 5 : 0;
+          return Math.max(...Object.values(candidates.shape || {{ normal: 0 }}), Math.min(ratio, 1));
+        }}
+        return 0;
+      }}
+
+      function renderSubmoduleTrack(track) {{
+        const stats = trajectoryStats(track || {{}});  
+        const score = submoduleFeatureValue(track, stats, state.submodule);
+        const label = track ? trackLabel(track) : {{ anomaly_type: "normal" }};
+        const source = selectedTrackScoreComponents(track).used_sources || "";
+        const kindLabel = {{
+          route: t("submoduleRoute"),
+          speed: t("submoduleSpeed"),
+          shape: t("submoduleShape"),
+        }};
+        submodulePanel.innerHTML = `
+          <div class="explain-metric">
+            <span>${{t("submodulePrefix")}}</span>
+            <strong>${{kindLabel[state.submodule] || state.submodule}}</strong>
+          </div>
+          <div class="explain-metric">
+            <span>${{t("anomalyTypeLabel")}}</span>
+            <strong>${{esc(label.anomaly_type || "normal")}}</strong>
+          </div>
+          <div class="explain-reason">${{source ? `Used source: ${{source}}` : t("noSubmoduleData")}}</div>
+          <div class="explain-reason">Proxy score: ${{fmt(score)}} (dynamic evidence)</div>
+        `;
+      }}
+
+      function renderCompositionBars(track) {{
+        const decomp = selectedTrackDecomposition(track);
+        if (!decomp) {{
+          scoreCompositionPanel.textContent = t("compNoData");
+          return;
+        }}
+        const rows = [
+          ["S_ind", decomp.S_ind, t("compSInd")],
+          ["S_grp", decomp.S_grp, t("compSGrp")],
+          ["S_event", decomp.S_event, t("compSEvent")],
+          ["S_fused", decomp.S_fused, t("compSFused")],
+        ];
+        const max = Math.max(1e-6, ...rows.map(([, value]) => Number(value || 0)));
+        scoreCompositionPanel.innerHTML = rows
+          .map(([, value, name]) => `
+            <div class="decomp-row">
+              <span>${{name}}</span>
+              <span class="decomp-track"><span class="decomp-fill" style="width: ${{Math.max(0, Math.min(100, Math.round((Number(value || 0) / max) * 100))}}%;"></span></span>
+              <strong>${{fmt(value)}}</strong>
+            </div>
+          `).join("");
+      }}
+
+      function parseRangeToPixels(frameStart, frameEnd, rangeStart, rangeEnd) {{
+        if (frameEnd <= frameStart || rangeEnd <= rangeStart) {{
+          return {{ left: 0, width: 0 }};
+        }}
+        const left = Math.max(0, ((Number(frameStart) - rangeStart) / (rangeEnd - rangeStart)) * 100);
+        const right = Math.min(100, ((Number(frameEnd) - rangeStart) / (rangeEnd - rangeStart)) * 100);
+        return {{
+          left: Math.max(0, left),
+          width: Math.max(0, Math.min(100, right - left)),
+        }};
+      }}
+
+      function renderEventTimeline(track) {{
+        const data = currentPlayback();
+        if (!data) {{
+          eventTimelinePanel.textContent = t("noTimeline");
+          return;
+        }}
+        const range = data.frame_range || [0, 0];
+        const totalStart = Number(range[0] || 0);
+        const totalEnd = Number(range[1] || totalStart);
+        const duration = Math.max(1, totalEnd - totalStart);
+        const label = track ? trackLabel(track) : {{ label: 0 }};
+        const gtSegments = (((track || {{}}).task_segments || {{}})[state.task] || []).filter(item => Number(item.label || 0) === 1);
+        const predSegments = [];
+        if (track) {{
+          const row = selectedTrackScoreComponents(track);
+          const used = Number(row.event_score || 0);
+          const gtStart = Number(label.frame_start || totalStart);
+          const gtEnd = Number(label.frame_end || totalEnd);
+          const eventFrames = Array.isArray(row.event_segments) ? row.event_segments : [];
+          if (used > 0 && eventFrames.length) {{
+            eventFrames.forEach(item => {{
+              const start = Number(item.frame_start || gtStart);
+              const end = Number(item.frame_end || gtEnd);
+              if (end > start) {{
+                predSegments.push({{
+                  frame_start: start,
+                  frame_end: end,
+                  label: "event",
+                }});
+              }}
+            }});
+          }} else if (used > 0 && gtEnd > gtStart) {{
+            predSegments.push({{
+              frame_start: gtStart,
+              frame_end: gtEnd,
+              label: "event",
+            }});
+          }} else if (label.label === 1 && gtEnd > gtStart) {{
+            predSegments.push({{
+              frame_start: gtStart,
+              frame_end: gtEnd,
+              label: "event",
+            }});
+          }}
+        }}
+        const gtRow = gtSegments.map(item => {{
+          const rangeValue = parseRangeToPixels(item.frame_start, item.frame_end, totalStart, totalEnd);
+          return `<span class="timeline-segment gt" style="left:${{rangeValue.left}}%;width:${{rangeValue.width}}%"></span>`;
+        }}).join("");
+        const predRow = predSegments.map(item => {{
+          const rangeValue = parseRangeToPixels(item.frame_start, item.frame_end, totalStart, totalEnd);
+          return `<span class="timeline-segment pred" style="left:${{rangeValue.left}}%;width:${{rangeValue.width}}%"></span>`;
+        }}).join("");
+        eventTimelinePanel.innerHTML = `
+          <div class="timeline">
+            <div class="timeline-item">
+              <div class="timeline-label">${{t("timelineGt")}} (${{
+                gtSegments.length
+              }})</div>
+              <div class="timeline-strip">${{gtRow || `<span class="subtle">${{t("noTimeline")}}</span>`}}</div>
+            </div>
+            <div class="timeline-item">
+              <div class="timeline-label">${{t("timelinePred")}} (${{
+                predSegments.length
+              }})</div>
+              <div class="timeline-strip">${{predRow || `<span class="subtle">${{t("noTimeline")}}</span>`}}</div>
+            </div>
+          </div>
+        `;
       }}
 
       function renderProtocolOverview() {{
@@ -1171,6 +1645,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }} else {{
           groupInsightPanel.textContent = state.language === "zh" ? "Individual 任务主要解释单轨迹运动和多模态偏移；切换到 Group 后会显示群体中心、半径和邻近对象。" : "Individual focuses on single-track motion and multimodal offsets. Switch to Group for centroid, radius, and neighbors.";
         }}
+        renderMethodFlow(track);
+        renderSubmoduleTrack(track);
+        renderCompositionBars(track);
+        renderEventTimeline(track);
       }}
 
       function renderTrackRankList(ranked) {{
@@ -1741,6 +2219,13 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         state.layer = button.dataset.layer;
         layerButtons.forEach(item => item.classList.toggle("active", item === button));
         drawPlayback();
+      }}));
+      submoduleTabs.forEach(button => button.addEventListener("click", () => {{
+        state.submodule = button.dataset.submodule || "route";
+        submoduleTabs.forEach(item => item.classList.toggle("active", item === button));
+        const track = activeTrack(true);
+        renderSubmoduleTrack(track);
+        renderCompositionBars(track);
       }}));
       playToggle.addEventListener("click", () => {{
         state.playing ? stopPlayback() : startPlayback();
