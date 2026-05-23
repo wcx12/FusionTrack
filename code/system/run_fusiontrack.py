@@ -19,6 +19,7 @@ from fusiontrack.pipeline import (
     run_registration_experiment,
     run_smoke_pipeline,
 )
+from fusiontrack.registration_adapter import build_registration_experiment_bundle
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,6 +38,16 @@ def parse_args() -> argparse.Namespace:
         "--registration-benchmark-summary",
         type=Path,
         help="Path to non-learning registration baseline summary (run_registration_benchmark.py output).",
+    )
+    parser.add_argument(
+        "--registration-manifest",
+        type=Path,
+        help="Registration experiment manifest (to add registration task into final dashboard).",
+    )
+    parser.add_argument(
+        "--registration-fused-jsonl",
+        type=Path,
+        help="Registration fused trajectories JSONL for final dashboard merging.",
     )
     parser.add_argument(
         "--registration-result-method",
@@ -65,13 +76,35 @@ def main() -> None:
     if args.final_results_root:
         if args.individual_label_file is None or args.group_label_file is None:
             raise SystemExit("--individual-label-file and --group-label-file are required with --final-results-root")
-        score_roots = args.score_search_root or [args.final_results_root.parent]
+        registration_manifest = args.registration_manifest
+        registration_fused_jsonl = args.registration_fused_jsonl
+        if args.registration_benchmark_summary is not None and registration_manifest is None:
+            bundle = build_registration_experiment_bundle(
+                benchmark_summary=args.registration_benchmark_summary,
+                work_root=paths.work_root,
+            )
+            registration_manifest = Path(bundle["manifest_path"])
+            if registration_fused_jsonl is None:
+                registration_fused_jsonl = Path(bundle["fused_jsonl"])
+        default_root = args.final_results_root.parent
+        score_roots = list(args.score_search_root) if args.score_search_root else [default_root]
+        if registration_manifest is not None and paths.work_root is not None:
+            work_root = paths.work_root
+            normalized_work_roots = {p.resolve() for p in score_roots}
+            if work_root.resolve() not in normalized_work_roots:
+                score_roots.append(work_root)
+            elif work_root.resolve() != work_root:
+                work_root_resolved = work_root.resolve()
+                if work_root_resolved not in normalized_work_roots:
+                    score_roots.append(work_root_resolved)
         summary = build_final_results_report(
             paths=paths,
             final_results_root=args.final_results_root,
             individual_label_file=args.individual_label_file,
             group_label_file=args.group_label_file,
             score_search_roots=score_roots,
+            registration_manifest=registration_manifest,
+            registration_fused_jsonl=registration_fused_jsonl,
             fused_jsonl=args.fused_jsonl,
             top_sequences=args.top_sequences,
             top_k=args.top_k,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -105,6 +106,24 @@ def _write_manifest(paths: FusionTrackPaths, mode: str, split: str, payload: dic
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return str(manifest_path)
+
+
+def _sync_remote_report(source_dir: Path, target_dir: Path) -> None:
+    """Mirror generated dashboard outputs to the expected remote-result preview directory."""
+    if not source_dir.exists():
+        return
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for item in target_dir.iterdir():
+        if item.is_dir():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
+    for item in source_dir.iterdir():
+        destination = target_dir / item.name
+        if item.is_dir():
+            shutil.copytree(item, destination)
+        else:
+            shutil.copy2(item, destination)
 
 
 def extract_vt_tiny_mot(paths: FusionTrackPaths, split: str, force: bool = False) -> Path:
@@ -330,27 +349,41 @@ def build_final_results_report(
     individual_label_file: str | Path,
     group_label_file: str | Path,
     score_search_roots: list[str | Path],
+    registration_manifest: str | Path | None = None,
+    registration_fused_jsonl: str | Path | None = None,
     fused_jsonl: str | Path | None = None,
     top_sequences: int = 5,
     top_k: int = 100,
     case_limit: int = 12,
 ) -> dict[str, Any]:
     ensure_output_dirs(paths)
+    manifest_registration = Path(registration_manifest) if registration_manifest is not None else None
+    manifest_fused = Path(registration_fused_jsonl) if registration_fused_jsonl is not None else None
     dashboard = load_final_results_dashboard(
         final_results_root=final_results_root,
         individual_label_file=individual_label_file,
         group_label_file=group_label_file,
         score_search_roots=score_search_roots,
+        registration_manifest=registration_manifest,
         top_k=top_k,
         case_limit=case_limit,
     )
     output_dir = paths.work_root / "final_dashboard"
+    dashboard_fused_jsonl = _merge_fused_for_dashboard(
+        paths=paths,
+        fused_jsonl=fused_jsonl,
+        registration_fused_jsonl=manifest_fused,
+    )
     dashboard_summary = build_final_dashboard(
         dashboard=dashboard,
         output_dir=output_dir,
-        fused_jsonl=fused_jsonl,
+        fused_jsonl=dashboard_fused_jsonl,
         data_root=paths.data_root,
         top_sequences=top_sequences,
+    )
+    _sync_remote_report(
+        source_dir=output_dir,
+        target_dir=Path("server_artifacts") / "remote_result" / "report",
     )
     summary = {
         "mode": "final_results_dashboard",
@@ -360,7 +393,9 @@ def build_final_results_report(
         "individual_label_file": str(individual_label_file),
         "group_label_file": str(group_label_file),
         "score_search_roots": [str(path) for path in score_search_roots],
-        "fused_jsonl": None if fused_jsonl is None else str(fused_jsonl),
+        "fused_jsonl": None if dashboard_fused_jsonl is None else str(dashboard_fused_jsonl),
+        "registration_manifest": str(registration_manifest) if registration_manifest is not None else None,
+        "registration_fused_jsonl": str(registration_fused_jsonl) if registration_fused_jsonl is not None else None,
         "dashboard": dashboard_summary,
     }
     summary_path = paths.work_root / "pipeline_summary_final_dashboard.json"
@@ -376,6 +411,8 @@ def build_final_results_report(
             "individual_label_file": str(individual_label_file),
             "group_label_file": str(group_label_file),
             "score_search_roots": [str(path) for path in score_search_roots],
+            "registration_manifest": str(registration_manifest) if registration_manifest is not None else None,
+            "registration_fused_jsonl": str(manifest_fused) if manifest_fused is not None else None,
             "top_sequences": top_sequences,
             "top_k": top_k,
             "case_limit": case_limit,
@@ -384,3 +421,51 @@ def build_final_results_report(
         },
     )
     return summary
+
+
+def _merge_fused_for_dashboard(
+    paths: FusionTrackPaths,
+    fused_jsonl: str | Path | None,
+    registration_fused_jsonl: Path | None,
+) -> str | Path | None:
+    if registration_fused_jsonl is None:
+        return fused_jsonl
+    if not registration_fused_jsonl.exists():
+        raise FileNotFoundError(
+            f"Registration fused trajectory JSONL missing: {registration_fused_jsonl}"
+        )
+
+    if fused_jsonl is None:
+        return registration_fused_jsonl
+
+    base_fused_jsonl = Path(fused_jsonl)
+    if not base_fused_jsonl.exists():
+        raise FileNotFoundError(f"Missing fused trajectory JSONL: {fused_jsonl}")
+
+    merged_rows: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    output_path = paths.final_dir / "merged_final_dashboard_fused.jsonl"
+
+    for source in (base_fused_jsonl, registration_fused_jsonl):
+        with source.open("r", encoding="utf-8-sig") as handle:
+            for line in handle:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                row = json.loads(stripped)
+                if not isinstance(row, dict):
+                    continue
+                sample_id = str(row.get("sample_id", ""))
+                sequence = str(row.get("sequence", ""))
+                track_id = str(row.get("track_id", ""))
+                key = (sample_id, sequence, track_id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged_rows.append(row)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as handle:
+        for row in merged_rows:
+            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return output_path
