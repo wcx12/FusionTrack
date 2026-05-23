@@ -81,6 +81,7 @@ def load_final_results_dashboard(
     individual_label_file: str | Path,
     group_label_file: str | Path,
     score_search_roots: Iterable[str | Path],
+    registration_manifest: str | Path | None = None,
     top_k: int = 100,
     case_limit: int = 12,
 ) -> FinalResultsDashboard:
@@ -109,6 +110,19 @@ def load_final_results_dashboard(
             case_limit=case_limit,
         ),
     }
+    if registration_manifest is not None:
+        registration_path = Path(registration_manifest)
+        if registration_path.exists():
+            registration_task = _load_registration_task_dashboard(
+                registration_manifest=registration_path,
+                score_search_roots=[Path(root) for root in score_search_roots],
+                top_k=top_k,
+                case_limit=case_limit,
+            )
+            if registration_task.labels:
+                tasks["registration"] = registration_task
+            elif registration_task.methods:
+                tasks["registration"] = registration_task
     return FinalResultsDashboard(tasks=tasks, summary_text=summary_text)
 
 
@@ -167,6 +181,120 @@ def _load_task_dashboard(
         case_rows=case_rows,
         top_k=top_k,
     )
+
+
+def _load_registration_task_dashboard(
+    registration_manifest: Path,
+    score_search_roots: list[Path],
+    top_k: int,
+    case_limit: int,
+) -> TaskDashboard:
+    payload = json.loads(registration_manifest.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Registration manifest must be a JSON object.")
+    if "runs" not in payload:
+        raise ValueError("Registration manifest missing `runs` entries.")
+
+    task_name = str(payload.get("task", "registration"))
+    split = str(payload.get("split", "test"))
+    seed = payload.get("seed")
+    runs = payload.get("runs")
+    if not isinstance(runs, list) or not runs:
+        raise ValueError("Registration manifest runs is empty.")
+
+    methods: dict[str, MethodProfile] = {}
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        method_name = str(run.get("name", "unknown")).strip() or "unknown"
+        score_file = Path(str(run.get("score_file", "")))
+        if not score_file.name:
+            continue
+        if not score_file.is_absolute():
+            score_file = score_file if score_file.exists() else _resolve_registration_path(score_file, score_search_roots, task_name)
+        score_rows = _coerce_score_rowed(_load_jsonl(score_file)) if score_file.exists() else []
+        metric_path = Path(str(run.get("metrics_file", "")))
+        if metric_path.name and not metric_path.is_absolute():
+            if not metric_path.exists():
+                metric_path = _resolve_registration_path(metric_path, score_search_roots, task_name)
+        metrics_payload: dict[str, Any] = {}
+        if metric_path.name and metric_path.exists():
+            try:
+                metrics_payload = json.loads(metric_path.read_text(encoding="utf-8"))
+                if not isinstance(metrics_payload, dict):
+                    metrics_payload = {}
+            except json.JSONDecodeError:
+                metrics_payload = {}
+
+        methods[method_name] = MethodProfile(
+            method=method_name,
+            task=task_name,
+            split=split,
+            seed=_coerce_optional_int(seed),
+            metrics={
+                "auroc": _coerce_float(metrics_payload.get("auroc", metrics_payload.get("success_rate", 0.0))),
+                "auprc": _coerce_float(metrics_payload.get("auprc", 0.0)),
+                "f1": _coerce_float(metrics_payload.get("f1", 0.0)),
+                "precision_at_k": _coerce_float(metrics_payload.get("precision_at_k", 0.0)),
+                "recall_at_k": _coerce_float(metrics_payload.get("recall_at_k", 0.0)),
+                "num_score_rows": float(len(score_rows)),
+                "num_missing_score_keys": 0.0,
+                "num_pairs": _coerce_float(metrics_payload.get("num_pairs", len(score_rows))),
+                "num_successful_pairs": _coerce_float(metrics_payload.get("num_successful_pairs", 0.0)),
+                "num_failed_pairs": _coerce_float(metrics_payload.get("num_failed_pairs", metrics_payload.get("failures", 0.0))),
+                "success_rate": _coerce_float(metrics_payload.get("success_rate", metrics_payload.get("auroc", 0.0))),
+                "skip_rate": _coerce_float(metrics_payload.get("skip_rate", 0.0)),
+                "rotation_error_deg_mean": _coerce_float(metrics_payload.get("rotation_error_deg_mean", 0.0)),
+                "translation_error_mean": _coerce_float(metrics_payload.get("translation_error_mean", 0.0)),
+                "chamfer_distance_mean": _coerce_float(metrics_payload.get("chamfer_distance_mean", 0.0)),
+                "runtime_sec_mean": _coerce_float(metrics_payload.get("runtime_sec_mean", 0.0)),
+            },
+            category={
+                "owner": "registration_baseline",
+                "role": "registration",
+                "method_family": "registration_baseline",
+                "learning_type": "non_learning",
+            },
+            score_path=score_file,
+            score_rows=score_rows,
+        )
+
+    leaderboard = _build_leaderboard(methods)
+    anomaly_type_rows = _build_anomaly_type_rows(methods, labels=[], top_k=top_k)
+    case_rows = {
+        method_name: _build_registration_case_rows(method, case_limit=case_limit)
+        for method_name, method in methods.items()
+    }
+    return TaskDashboard(
+        task=task_name,
+        labels=[],
+        methods=methods,
+        leaderboard=leaderboard,
+        anomaly_type_rows=anomaly_type_rows,
+        case_rows=case_rows,
+        top_k=top_k,
+    )
+
+
+def _resolve_registration_path(path: Path, search_roots: list[Path], task_name: str) -> Path:
+    if not path.name:
+        raise FileNotFoundError(f"Registration manifest path missing file name: {path}")
+    for root in search_roots:
+        candidate = root / path
+        if candidate.exists():
+            return candidate
+        if task_name:
+            task_candidate = root / task_name / path.name
+            if task_candidate.exists():
+                return task_candidate
+        direct = root / "registration_scores" / path.name
+        if direct.exists():
+            return direct
+    raise FileNotFoundError(f"Could not resolve registration artifact path: {path}")
+
+
+def _coerce_score_rowed(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [_coerce_score_row(row) for row in rows]
 
 
 def resolve_score_path(source: str | Path, score_search_roots: Iterable[Path], task: str, method: str) -> Path:
@@ -308,6 +436,48 @@ def _build_case_rows(
         "true_positive": true_positive,
         "false_positive": false_positive,
         "false_negative": false_negative,
+    }
+
+
+def _build_registration_case_rows(method: MethodProfile, case_limit: int) -> dict[str, list[dict[str, Any]]]:
+    ranked_high = _rank_scores(method.score_rows)
+    ranked_low = sorted(method.score_rows, key=lambda row: float(row.get("score", 0.0) or 0.0))
+    failed = [
+        row for row in ranked_high
+        if row.get("success") in (False, "false", "False", 0, "0") or row.get("skipped") in (True, "true", "True", 1, "1")
+    ]
+    successful = [
+        row for row in ranked_low
+        if row.get("success") in (True, "true", "True", 1, "1") and row.get("skipped") not in (True, "true", "True", 1, "1")
+    ]
+    return {
+        "true_positive": [
+            _registration_case_row(row, "success", _rank_of(ranked_high, str(row.get("sample_id", ""))))
+            for row in successful[:case_limit]
+        ],
+        "false_positive": [
+            _registration_case_row(row, "high_error", rank)
+            for rank, row in enumerate(ranked_high[:case_limit], start=1)
+        ],
+        "false_negative": [
+            _registration_case_row(row, "failed_or_skipped", _rank_of(ranked_high, str(row.get("sample_id", ""))))
+            for row in failed[:case_limit]
+        ],
+    }
+
+
+def _registration_case_row(row: dict[str, Any], case_type: str, rank: int) -> dict[str, Any]:
+    return {
+        "case_type": case_type,
+        "sample_id": str(row.get("sample_id", "")),
+        "sequence": str(row.get("sequence", "")),
+        "track_id": str(row.get("track_id", "")),
+        "score": float(row.get("score", 0.0) or 0.0),
+        "rank": rank,
+        "label": 0,
+        "anomaly_type": case_type,
+        "frame_start": 0,
+        "frame_end": 0,
     }
 
 

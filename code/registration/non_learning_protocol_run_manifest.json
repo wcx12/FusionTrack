@@ -1,0 +1,98 @@
+{
+  "name": "mps_gaf_non_learning_protocol_run",
+  "date": "2026-05-23",
+  "scope": "non_learning_registration_baselines_only",
+  "protocol": {
+    "dataset_path": "datasets/modelnet40_ply_hdf5_2048",
+    "dataset_split": "test",
+    "noise_type": "crop",
+    "num_points": 1024,
+    "partial": [0.7, 0.7],
+    "rot_mag": 45,
+    "trans_mag": 0.5,
+    "num_sources_per_ref": 2,
+    "groups_per_batch": 1,
+    "max_eval_batches": 20,
+    "num_eval_iter_equivalent": 5,
+    "success_rotation_deg": 15,
+    "success_translation": 0.5,
+    "pose_trans_weight": 50
+  },
+  "remote_run": {
+    "output_dir": "runs/mps_gaf_nonlearn_schema_source2_crop_eval20_full",
+    "files": [
+      "baseline_summary.json",
+      "comparison_schema_summary.json",
+      "mps_gaf_eval_schema_summary.json"
+    ]
+  },
+  "local_artifacts": {
+    "raw_summary": "code/registration/non_learning_source2_crop_eval20_summary.json",
+    "mps_gaf_eval_schema": "code/registration/non_learning_mps_gaf_eval_schema_summary.json",
+    "comparison_schema": "code/registration/non_learning_comparison_schema_summary.json",
+    "main_table_markdown": "code/registration/non_learning_main_table.md",
+    "main_table_csv": "code/registration/non_learning_main_table.csv",
+    "report": "code/registration/non_learning_source2_crop_protocol_results.md",
+    "external_dependency_probe": "code/registration/non_learning_external_dependency_probe.json"
+  },
+  "data_status": {
+    "train_shapes": 9840,
+    "test_shapes": 2468,
+    "train_pairs_under_protocol": 19680,
+    "val_pairs_under_protocol": 4936,
+    "test_pairs_under_protocol": 4936,
+    "expected_pairs_for_20_batches": 40,
+    "evaluated_pairs": 40,
+    "status": "full_20_batch_protocol_completed"
+  },
+  "methods": {
+    "executed": [
+      "identity",
+      "icp_point_to_point",
+      "icp_point_to_plane",
+      "icp_trimmed",
+      "ransac_icp",
+      "fpfh_ransac",
+      "fpfh_fgr",
+      "gicp",
+      "cpd"
+    ],
+    "dependency_or_wrapper_skipped": [
+      "teaserpp",
+      "super4pcs",
+      "goicp"
+    ]
+  },
+  "dependency_status": {
+    "open3d": true,
+    "pycpd": true,
+    "teaserpp_python": false,
+    "teaserpp": false,
+    "super4pcs": false,
+    "goicp": false,
+    "cmake": true,
+    "cmake_invocation": "python -m cmake",
+    "pip_dry_run": {
+      "teaserpp-python": "No matching distribution found for teaserpp-python",
+      "super4pcs": "No matching distribution found for super4pcs",
+      "pygoicp": "No matching distribution found for pygoicp"
+    },
+    "source_probe": {
+      "super4pcs_remote_shallow_clone": "failed_connection_reset",
+      "super4pcs_local_shallow_clone": "did_not_complete_within_probe_window"
+    }
+  },
+  "verification": {
+    "local_schema_check": "schema-manifest-ok 12 methods",
+    "remote_output_check": "remote-artifacts-ok",
+    "script_syntax_check": "ast-ok",
+    "relative_path_policy_check": "no drive-letter or root-prefixed paths detected in current non-learning artifacts and benchmark entry scripts"
+  },
+  "completion_status": {
+    "non_learning_same_schema_step": "completed_for_full_20_batch_protocol_available_dependencies",
+    "full_goal": "not_complete",
+    "remaining_gaps": [
+      "teaserpp, super4pcs, and goicp still need external solver installation and wrappers before they can be measured"
+    ]
+  }
+}

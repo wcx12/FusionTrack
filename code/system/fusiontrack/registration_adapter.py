@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,20 @@ def _method_score(row: dict[str, Any]) -> float:
     return max(0.0, pose_error + 0.5 * runtime + (1.0 if not success else 0.0))
 
 
+def _registration_component_scores(row: dict[str, Any], score: float) -> dict[str, float]:
+    rotation = _coerce_float(row.get("rotation_error_deg", 0.0), 0.0)
+    translation = _coerce_float(row.get("translation_error", 0.0), 0.0)
+    chamfer = _coerce_float(row.get("chamfer_distance", 0.0), 0.0)
+    runtime = _coerce_float(row.get("runtime_sec", 0.0), 0.0)
+    return {
+        "registration_rotation_error": rotation,
+        "registration_translation_error": translation,
+        "registration_chamfer_distance": chamfer,
+        "registration_runtime_sec": runtime,
+        "registration_error_score": score,
+    }
+
+
 def _point_layout(seed_text: str) -> list[tuple[int, float, float]]:
     digest = hashlib.sha256(seed_text.encode("utf-8")).digest()
     base_x = int(digest[0]) / 255.0 * 40.0 + 20.0
@@ -43,6 +58,30 @@ def _point_layout(seed_text: str) -> list[tuple[int, float, float]]:
         (8, float(base_x + drift_x), float(base_y + drift_y)),
         (16, float(base_x + 2 * drift_x), float(base_y + 2 * drift_y)),
     ]
+
+
+def _registration_point_preview(seed_text: str, row: dict[str, Any]) -> dict[str, list[list[float]]]:
+    digest = hashlib.sha256(seed_text.encode("utf-8")).digest()
+    phase = int(digest[4]) / 255.0 * math.pi
+    rotation = min(_coerce_float(row.get("rotation_error_deg", 0.0), 0.0) / 45.0, 1.0)
+    translation = min(_coerce_float(row.get("translation_error", 0.0), 0.0), 1.0)
+    chamfer = min(_coerce_float(row.get("chamfer_distance", 0.0), 0.0) * 4.0, 1.0)
+    source: list[list[float]] = []
+    reference: list[list[float]] = []
+    aligned: list[list[float]] = []
+    for index in range(18):
+        angle = phase + index * (math.pi * 2.0 / 18.0)
+        radius = 0.7 + 0.22 * math.sin(index * 1.7 + phase)
+        x = radius * math.cos(angle)
+        y = radius * math.sin(angle)
+        z = 0.25 * math.sin(angle * 2.0)
+        source.append([round(x, 4), round(y, 4), round(z, 4)])
+        reference.append([round(x + 0.18, 4), round(y - 0.14, 4), round(z + 0.08, 4)])
+        residual_x = 0.18 * rotation + 0.12 * translation
+        residual_y = -0.14 * rotation + 0.08 * chamfer
+        residual_z = 0.08 * rotation
+        aligned.append([round(x + 0.18 - residual_x, 4), round(y - 0.14 - residual_y, 4), round(z + 0.08 - residual_z, 4)])
+    return {"source": source, "reference": reference, "aligned": aligned}
 
 
 def _iter_rows_by_method(payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -167,6 +206,23 @@ def build_registration_experiment_bundle(
                     "category_id": 0,
                     "category_name": "registration",
                     "score": score,
+                    "used_sources": "registration",
+                    "source": method,
+                    "rotation_error_deg": row.get("rotation_error_deg"),
+                    "translation_error": row.get("translation_error"),
+                    "chamfer_distance": row.get("chamfer_distance"),
+                    "runtime_sec": row.get("runtime_sec"),
+                    "success": bool(row.get("success", False)),
+                    "skipped": bool(row.get("skipped", False)),
+                    "component_scores": _registration_component_scores(row, score),
+                    "registration_points": _registration_point_preview(sample_id, row),
+                    "metadata": {
+                        "method": method,
+                        "group_ref_idx": int(row.get("group_ref_idx", 0)),
+                        "batch_idx": int(row.get("batch_idx", 0)),
+                        "sample_idx": int(row.get("sample_idx", 0)),
+                        "error": str(row.get("error", "")),
+                    },
                 }
                 row["sample_id"] = sample_id
                 trajectory_seed = f"{method}:{sample_id}"

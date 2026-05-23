@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import math
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -25,16 +26,16 @@ def build_final_dashboard(
     output_dir = Path(output_dir)
     assets_dir = output_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
-    dashboard_data = dashboard.to_public_dict()
+    dashboard_data = _json_safe(dashboard.to_public_dict())
     playback_payloads = {}
     if fused_jsonl is not None:
-        playback_payloads = _build_playback_payloads(
+        playback_payloads = _json_safe(_build_playback_payloads(
             dashboard=dashboard,
             fused_jsonl=Path(fused_jsonl),
             data_root=Path(data_root) if data_root is not None else Path("data") / "VT-Tiny-MOT",
             assets_dir=assets_dir,
             top_sequences=top_sequences,
-        )
+        ))
     (assets_dir / "final_dashboard_data.json").write_text(
         json.dumps(dashboard_data, ensure_ascii=True, separators=(",", ":")),
         encoding="utf-8",
@@ -169,8 +170,17 @@ def _build_playback_payloads(
                         "score": round(float(method_rows.get("score", 0.0) or 0.0), 6),
                         "used_sources": str(method_rows.get("used_sources", "")),
                         "source": str(method_rows.get("source", "")),
+                        "event_score": method_rows.get("event_score", 0.0),
+                        "event_segments": method_rows.get("event_segments", []),
                         "component_scores": method_rows.get("component_scores", {}),
                         "metadata": method_rows.get("metadata", {}),
+                        "rotation_error_deg": method_rows.get("rotation_error_deg"),
+                        "translation_error": method_rows.get("translation_error"),
+                        "chamfer_distance": method_rows.get("chamfer_distance"),
+                        "runtime_sec": method_rows.get("runtime_sec"),
+                        "success": method_rows.get("success"),
+                        "skipped": method_rows.get("skipped"),
+                        "registration_points": method_rows.get("registration_points"),
                     }
                     for method_name, method_rows in method_rows_by_method.items()
                 }
@@ -211,9 +221,22 @@ def _build_playback_payloads(
         stats_by_task = {}
         for task_name, labels_by_sequence in labels_by_task_sequence.items():
             sequence_labels = labels_by_sequence.get(sequence, [])
+            scored_tracks = [
+                track
+                for track in tracks
+                if any(
+                    float(value or 0.0) != 0.0
+                    for value in (track.get("task_scores", {}).get(task_name, {}) or {}).values()
+                )
+            ]
+            has_labels = bool(sequence_labels)
             stats_by_task[task_name] = {
-                "sequence_sample_count": len(sequence_labels),
-                "sequence_anomaly_count": sum(1 for row in sequence_labels if int(row.get("label", 0) or 0) == 1),
+                "sequence_sample_count": len(sequence_labels) if has_labels else len(scored_tracks),
+                "sequence_anomaly_count": (
+                    sum(1 for row in sequence_labels if int(row.get("label", 0) or 0) == 1)
+                    if has_labels
+                    else sum(1 for track in scored_tracks if float(next(iter((track.get("task_scores", {}).get(task_name, {}) or {"": 0}).values()), 0.0) or 0.0) > 0.0)
+                ),
                 "frame_start": frame_start,
                 "frame_end": frame_end,
                 "visualized_tracks": len(tracks),
@@ -268,6 +291,22 @@ def _selected_case_samples_for_task(task: Any) -> list[tuple[str, str]]:
             sample_id = str(row.get("sample_id", ""))
             sequence = str(row.get("sequence") or sample_id.split(":", 1)[0])
             samples.append((sample_id, sequence))
+    if samples:
+        return samples
+    method = task.methods.get(default_method)
+    if method is None and task.methods:
+        method = next(iter(task.methods.values()))
+    if method is not None:
+        ranked = sorted(
+            method.score_rows,
+            key=lambda row: float(row.get("score", 0.0) or 0.0),
+            reverse=True,
+        )
+        for row in ranked[:12]:
+            sample_id = str(row.get("sample_id", ""))
+            sequence = str(row.get("sequence") or sample_id.split(":", 1)[0])
+            if sample_id and sequence:
+                samples.append((sample_id, sequence))
     return samples
 
 
@@ -358,9 +397,22 @@ def _group_labels_by_sample(labels: list[dict[str, Any]]) -> dict[str, list[dict
 
 def _coerce_float(value: Any, default: float = 0.0) -> float:
     try:
-        return float(value)
+        result = float(value)
     except (TypeError, ValueError):
         return float(default)
+    return result if math.isfinite(result) else float(default)
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    return value
 
 
 def _normalize_weighted_score(row: dict[str, Any], key_prefix: str, fallback_weight: float = 1.0) -> float:
@@ -384,6 +436,7 @@ def _score_decomposition(row: dict[str, Any]) -> dict[str, float]:
     used_sources = str(row.get("used_sources", ""))
     has_individual = "individual" in used_sources
     has_group = "group" in used_sources
+    has_registration = "registration" in used_sources
     metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
     individual_raw = _coerce_float(metadata.get("individual_raw_score", 0.0), 0.0)
     group_raw = _coerce_float(metadata.get("group_raw_score", 0.0), 0.0)
@@ -395,6 +448,14 @@ def _score_decomposition(row: dict[str, Any]) -> dict[str, float]:
     ind = 0.0
     grp = 0.0
     evt = _coerce_float(row.get("event_score", 0.0), 0.0)
+
+    if has_registration:
+        registration_values = [
+            _coerce_float(value, 0.0)
+            for key, value in components.items()
+            if isinstance(key, str) and key.startswith("registration_")
+        ]
+        evt = max(registration_values or [fused])
 
     if has_individual and has_group:
         ind = _normalize_weighted_score(row, "individual", fallback_weight=alpha)
@@ -516,7 +577,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .table-scroll table {{ background: white; }}
     .help-button {{ background: #0f766e; border-color: #0f766e; color: white; }}
     .help-button:hover {{ background: #115e59; border-color: #115e59; }}
-    .protocol-strip {{ display: grid; grid-template-columns: minmax(260px, 0.9fr) repeat(2, minmax(260px, 1fr)); gap: 12px; margin: 0 0 16px; }}
+    .protocol-strip {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 0 0 16px; }}
     .protocol-note {{ border-left: 4px solid #0f766e; }}
     .protocol-note strong {{ display: block; margin-bottom: 6px; color: #0f172a; }}
     .protocol-card h3, .insight-card h3 {{ margin: 0 0 8px; font-size: 15px; }}
@@ -564,6 +625,18 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .method-summary-item {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 8px 10px; }}
     .method-summary-item span {{ display: block; color: #64748b; font-size: 12px; }}
     .method-summary-item strong {{ display: block; margin-top: 2px; }}
+    .data-flow-grid {{ display: grid; grid-template-columns: repeat(4, minmax(170px, 1fr)); gap: 10px; }}
+    .data-flow-card {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 10px; }}
+    .data-flow-card span {{ display: block; color: #64748b; font-size: 12px; }}
+    .data-flow-card strong {{ display: block; margin-top: 3px; font-size: 18px; font-variant-numeric: tabular-nums; }}
+    .mini-chart {{ width: 100%; height: 96px; margin-top: 10px; border: 1px solid #dbe4ee; border-radius: 7px; background: white; }}
+    .event-card-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin-top: 10px; }}
+    .event-card {{ border: 1px solid #dbe4ee; border-radius: 7px; background: white; padding: 9px; font-size: 12px; }}
+    .event-card strong {{ display: block; margin-bottom: 4px; color: #0f172a; }}
+    .registration-preview {{ margin-top: 10px; border: 1px solid #dbe4ee; border-radius: 7px; background: white; padding: 8px; }}
+    .registration-preview svg {{ display: block; width: 100%; height: 170px; }}
+    .legend-row {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; color: #475569; font-size: 12px; }}
+    .legend-dot {{ display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }}
     dialog {{ width: min(920px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 32px)); border: 1px solid #cbd5e1; border-radius: 8px; padding: 0; color: #172033; box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28); }}
     dialog::backdrop {{ background: rgba(15, 23, 42, 0.42); }}
     .help-dialog-head {{ display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 16px 18px; border-bottom: 1px solid #e5e7eb; background: #f8fafc; }}
@@ -591,7 +664,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       .section-heading .subtle {{ text-align: left; }}
       .control-surface {{ padding: 10px; }}
       .mode-switch button, .layer-switch button {{ flex: 1 1 140px; }}
-      .protocol-strip, .insight-grid, .method-summary {{ grid-template-columns: 1fr; }}
+      .protocol-strip, .insight-grid, .method-summary, .data-flow-grid {{ grid-template-columns: 1fr; }}
       .insight-grid-large {{ grid-template-columns: 1fr; }}
       .explain-metrics {{ grid-template-columns: 1fr; }}
     }}
@@ -632,6 +705,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       </div>
       <div class="panel protocol-card" id="individualProtocol"></div>
       <div class="panel protocol-card" id="groupProtocol"></div>
+      <div class="panel protocol-card" id="registrationProtocol"></div>
     </section>
 
     <section class="panel player">
@@ -663,6 +737,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           </label>
           <label><span data-i18n="timeWindowLabel">时间窗口</span>
             <input id="heatWindow" type="range" min="12" max="120" value="36">
+          </label>
+          <label><span data-i18n="playSpeedLabel">播放速度</span>
+            <input id="playSpeed" type="range" min="20" max="300" step="10" value="100">
+            <span id="playSpeedReadout" class="subtle">1.0x</span>
           </label>
         </div>
         <div id="sequenceStats" class="sequence-stats"></div>
@@ -735,6 +813,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         <button type="button" class="analysis-tab" data-panel="types" data-i18n="tabTypes">异常类型分析</button>
         <button type="button" class="analysis-tab" data-panel="cases" data-i18n="tabCases">典型案例</button>
         <button type="button" class="analysis-tab" data-panel="methods" data-i18n="tabMethods">算法接入</button>
+        <button type="button" class="analysis-tab" data-panel="dataflow" data-i18n="tabDataFlow">数据流审计</button>
       </div>
       <div class="analysis-panel-block" data-analysis-panel="leaderboard">
         <div class="table-scroll"><table class="leaderboard" id="leaderboardTable"></table></div>
@@ -754,6 +833,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         <div id="methodSummary" class="method-summary"></div>
         <div class="table-scroll"><table class="leaderboard" id="methodStatusTable"></table></div>
       </div>
+      <div class="analysis-panel-block" data-analysis-panel="dataflow" hidden>
+        <div id="dataFlowPanel" class="data-flow-grid"></div>
+      </div>
     </section>
     <dialog id="helpDialog">
       <div class="help-dialog-head">
@@ -763,8 +845,8 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       <div class="help-dialog-body" id="helpBody"></div>
     </dialog>
   </main>
-  <script id="dashboardData" type="application/json">{{dashboard_json}}</script>
-  <script id="playbackData" type="application/json">{{playback_json}}</script>
+  <script id="dashboardData" type="application/json">{dashboard_json}</script>
+  <script id="playbackData" type="application/json">{playback_json}</script>
   <script>
     (() => {{
       const dashboard = JSON.parse(document.getElementById("dashboardData").textContent);
@@ -775,11 +857,13 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       const cards = document.getElementById("cards");
       const individualProtocol = document.getElementById("individualProtocol");
       const groupProtocol = document.getElementById("groupProtocol");
+      const registrationProtocol = document.getElementById("registrationProtocol");
       const leaderboardTable = document.getElementById("leaderboardTable");
       const typeTable = document.getElementById("typeTable");
       const caseTable = document.getElementById("caseTable");
       const methodSummary = document.getElementById("methodSummary");
       const methodStatusTable = document.getElementById("methodStatusTable");
+      const dataFlowPanel = document.getElementById("dataFlowPanel");
       const helpButton = document.getElementById("helpButton");
       const helpDialog = document.getElementById("helpDialog");
       const helpClose = document.getElementById("helpClose");
@@ -814,11 +898,13 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       const frameBadge = document.getElementById("frameBadge");
       const heatOpacity = document.getElementById("heatOpacity");
       const heatWindow = document.getElementById("heatWindow");
+      const playSpeed = document.getElementById("playSpeed");
+      const playSpeedReadout = document.getElementById("playSpeedReadout");
       const sequenceStats = document.getElementById("sequenceStats");
       const viewModeButtons = Array.from(document.querySelectorAll(".view-mode-button"));
       const layerButtons = Array.from(document.querySelectorAll(".layer-button"));
       const translations = {{
-        zh: {{
+        zh: {{}}, /*
           documentTitle: "FusionTrack 最终结果看板",
           title: "FusionTrack 最终结果看板",
           subtitle: "多方法多模态异常检测实验展示",
@@ -860,6 +946,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           layerHeatmap: "热力图",
           heatOpacityLabel: "热力透明度",
           timeWindowLabel: "时间窗口",
+          playSpeedLabel: "播放速度",
           noPlayback: "当前任务没有可播放轨迹。",
           playbackPrefix: "可视化",
           visibleTracks: "条轨迹",
@@ -937,7 +1024,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           compSFused: "融合分数",
           compNoData: "当前轨迹无分数分解数据。"
         }},
-        en: {{
+        */ en: {{
           documentTitle: "FusionTrack Final Results Dashboard",
           title: "Final Results Dashboard",
           subtitle: "Multi-method FusionTrack anomaly benchmark",
@@ -979,6 +1066,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           layerHeatmap: "Heatmap",
           heatOpacityLabel: "Heat opacity",
           timeWindowLabel: "Time window",
+          playSpeedLabel: "Play speed",
           noPlayback: "Playback is not available for the current task.",
           playbackPrefix: "Playback",
           visibleTracks: "visible tracks",
@@ -1057,6 +1145,196 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           compNoData: "No score decomposition data for this track."
         }}
       }};
+      Object.assign(translations.zh, {{
+        documentTitle: "FusionTrack 最终结果看板",
+        title: "FusionTrack 最终结果看板",
+        subtitle: "多方法、多模态异常检测实验展示",
+        language: "语言",
+        task: "任务",
+        method: "方法",
+        sequence: "序列",
+        helpButton: "说明",
+        helpTitle: "网页说明",
+        closeHelp: "关闭",
+        protocolTitle: "异常协议",
+        protocolNote: "当前标签来自规则化 synthetic anomaly injection；背景帧仍是原始视频，异常主要体现在轨迹、热力和群体关系层。",
+        cardMethods: "方法数",
+        cardLabels: "总标签数",
+        cardPositives: "总异常数",
+        cardAuroc: "当前 AUROC",
+        registrationSuccessRate: "当前成功率",
+        registrationPairCount: "配准样本数",
+        registrationFailedCount: "失败/跳过数",
+        sequenceSampleCount: "当前序列样本数",
+        sequenceAnomalyCount: "当前序列异常/高误差数",
+        sequenceFrameRange: "当前序列帧范围",
+        sequenceVisualizedTracks: "可视化轨迹数",
+        analysisTitle: "实验分析",
+        tabLeaderboard: "方法排名",
+        tabTypes: "异常类型分析",
+        tabCases: "典型案例",
+        tabMethods: "算法接入",
+        tabDataFlow: "数据流审计",
+        interactivePlayback: "动态可视化",
+        frame: "帧",
+        play: "播放",
+        pause: "暂停",
+        viewComparison: "四画面对比",
+        viewSingle: "单画面模式",
+        singleLayerLabel: "单画面图层",
+        panelOriginal: "原视频",
+        panelHeatmap: "热力图",
+        panelTracks: "轨迹",
+        panelBoth: "热力 + 轨迹",
+        layerTracks: "轨迹",
+        layerBoth: "热力 + 轨迹",
+        layerHeatmap: "热力图",
+        heatOpacityLabel: "热力透明度",
+        timeWindowLabel: "时间窗口",
+        playSpeedLabel: "播放速度",
+        noPlayback: "当前任务没有可播放轨迹。",
+        playbackPrefix: "可视化",
+        visibleTracks: "条轨迹",
+        methodHeader: "方法",
+        roleHeader: "角色",
+        anomalyTypeHeader: "异常类型",
+        hitsHeader: "命中@K",
+        totalHeader: "总数",
+        recallHeader: "召回@K",
+        meanScoreHeader: "正样本平均分",
+        sampleHeader: "样本",
+        typeHeader: "类型",
+        scoreHeader: "分数",
+        rankHeader: "排名",
+        framesHeader: "帧范围",
+        sourceHeader: "来源",
+        familyHeader: "方法族",
+        learningHeader: "学习类型",
+        statusHeader: "状态",
+        trackRankTitle: "当前高风险轨迹",
+        explainTitle: "为什么判为异常",
+        groupInsightTitle: "群体/配准证据",
+        selectedTrack: "选中轨迹",
+        anomalyLabel: "标签",
+        anomalyScore: "异常分数",
+        anomalyTypeLabel: "异常类型",
+        frameRangeLabel: "标签帧段",
+        motionLengthLabel: "轨迹长度",
+        avgSpeedLabel: "平均速度",
+        displacementLabel: "首尾位移",
+        currentNeighborsLabel: "当前邻近对象",
+        centroidRadiusLabel: "群体半径",
+        syntheticLabel: "规则注入异常",
+        normalLabel: "正常/未标注异常",
+        methodSummaryTitle: "算法接入状态",
+        integratedStatus: "已接入最终结果",
+        proposedStatus: "当前主方法",
+        baselineStatus: "对比基线",
+        noTrackSelected: "当前没有可解释轨迹。",
+        truePositive: "正确检出",
+        falsePositive: "误报/高风险",
+        falseNegative: "漏报/失败",
+        taskIndividual: "Individual",
+        taskGroup: "Group",
+        taskRegistration: "Registration",
+        view_comparison: "四画面对比",
+        view_single: "单画面模式",
+        layer_tracks: "轨迹",
+        layer_both: "热力 + 轨迹",
+        layer_heatmap: "热力图",
+        methodFlowTitle: "方法流程",
+        flowStepPrepare: "准备输入",
+        flowStepFeatures: "特征构建",
+        flowStepIndividual: "单目标分支",
+        flowStepGroup: "群体分支",
+        flowStepFusion: "融合得分",
+        flowStepRegistrationPair: "点云配准对",
+        flowStepRegistrationFeature: "几何匹配/变换估计",
+        flowStepRegistrationMetric: "误差度量",
+        flowStepRegistrationScore: "配准风险得分",
+        flowReadoutTask: "任务",
+        flowReadoutMethod: "方法",
+        flowReadoutScore: "当前轨迹分数",
+        methodFlowDone: "已完成",
+        methodFlowActive: "进行中",
+        methodFlowPending: "待执行",
+        submoduleTitle: "子模块证据",
+        submodulePrefix: "子模块",
+        submoduleRoute: "轨迹/路由",
+        submoduleSpeed: "速度",
+        submoduleShape: "形状",
+        noSubmoduleData: "当前轨迹暂无单目标子模块证据。",
+        timelineTitle: "事件级时间线",
+        timelineGt: "真实异常段",
+        timelinePred: "模型预测段",
+        noTimeline: "无可展示时间线",
+        compSInd: "个体分数",
+        compSGrp: "群体分数",
+        compSEvent: "事件分数",
+        compSFused: "融合分数",
+        compNoData: "当前轨迹无分数分解数据。",
+        registrationProtocolTitle: "Registration",
+        registrationProtocolText: "配准任务展示非学习基线的旋转误差、平移误差、Chamfer、耗时和成功率；它不是合成异常标签任务，而是系统几何对齐能力的独立证据。",
+        registrationMetricRotation: "旋转误差",
+        registrationMetricTranslation: "平移误差",
+        registrationMetricChamfer: "Chamfer",
+        registrationMetricRuntime: "耗时",
+        registrationMetricSuccess: "是否成功",
+        registrationSuccess: "成功",
+        registrationFailed: "失败/跳过",
+        registrationNoMetric: "暂无配准误差字段；请先用 registration_adapter 生成带误差字段的 manifest 和 score rows。",
+        dataFlowSequences: "可播放序列",
+        dataFlowTracks: "可视化轨迹",
+        dataFlowFrames: "帧跨度",
+        dataFlowBackgrounds: "背景帧资源",
+        dataFlowTaskAudit: "任务审计",
+        dataFlowScoreCoverage: "分数覆盖",
+        dataFlowLabelCoverage: "标签覆盖",
+        dataFlowNoBackground: "无背景帧",
+        groupEventTitle: "群体事件聚合",
+        groupEventTracks: "涉及轨迹",
+        groupEventDuration: "持续帧",
+        groupEventCenter: "事件中心",
+        noGroupEvents: "当前序列没有可聚合的群体事件。",
+        registration3DTitle: "配准 3D 投影诊断",
+        registration3DNote: "蓝色为 source，绿色为 reference，红色为 estimated aligned；当前是由 benchmark 误差生成的轻量投影预览。",
+        chartNoData: "暂无逐帧曲线数据"
+      }});
+      Object.assign(translations.en, {{
+        tabDataFlow: "Data Flow Audit",
+        registrationPairCount: "Registration samples",
+        registrationFailedCount: "Failed/skipped",
+        flowStepRegistrationPair: "Point-cloud pair",
+        flowStepRegistrationFeature: "Match / estimate transform",
+        flowStepRegistrationMetric: "Measure error",
+        flowStepRegistrationScore: "Registration risk score",
+        registrationProtocolTitle: "Registration",
+        registrationProtocolText: "Registration shows rotation error, translation error, Chamfer, runtime, and success rate for non-learning baselines. It is a geometry-alignment evidence module, not a synthetic anomaly-label task.",
+        registrationMetricRotation: "Rotation error",
+        registrationMetricTranslation: "Translation error",
+        registrationMetricChamfer: "Chamfer",
+        registrationMetricRuntime: "Runtime",
+        registrationMetricSuccess: "Success",
+        registrationSuccess: "Success",
+        registrationFailed: "Failed/skipped",
+        registrationNoMetric: "No registration metrics are available. Generate manifest and score rows with registration_adapter first.",
+        dataFlowSequences: "Playable sequences",
+        dataFlowTracks: "Visualized tracks",
+        dataFlowFrames: "Frame span",
+        dataFlowBackgrounds: "Background assets",
+        dataFlowTaskAudit: "Task audit",
+        dataFlowScoreCoverage: "Score coverage",
+        dataFlowLabelCoverage: "Label coverage",
+        dataFlowNoBackground: "No background frames",
+        groupEventTitle: "Group event aggregation",
+        groupEventTracks: "Tracks",
+        groupEventDuration: "Duration",
+        groupEventCenter: "Event center",
+        noGroupEvents: "No aggregatable group events in this sequence.",
+        registration3DTitle: "Registration 3D projection",
+        registration3DNote: "Blue is source, green is reference, red is estimated aligned. This is a lightweight projection preview generated from benchmark error fields.",
+        chartNoData: "No frame-level curve data"
+      }});
       const backgroundCache = new Map();
       const state = {{
         language: localStorage.getItem("fusiontrack.finalDashboard.language") || "zh",
@@ -1071,14 +1349,19 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         layer: "both",
         heatOpacity: 0.64,
         heatWindow: 36,
+        playSpeed: 1.0,
         selectedSampleId: "",
         image: null,
         imageKey: null,
         timer: null
       }};
+      const rawSavedSpeed = Number(localStorage.getItem("fusiontrack.finalDashboard.playSpeed"));
+      if (Number.isFinite(rawSavedSpeed)) {{
+        state.playSpeed = Math.max(0.2, Math.min(3, rawSavedSpeed));
+      }}
 
       const anomalyDescriptions = {{
-        zh: {{
+        zh: {{}}, /*
           route_shift: "单条轨迹整体偏移，用来模拟目标偏离常规航线。",
           speed_spike: "目标速度突然增大，轨迹点间距离异常放大。",
           stop_or_slowdown: "目标在中后段突然停住或明显减速。",
@@ -1092,7 +1375,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           dispersion_change: "群体离散程度异常变大。",
           split_merge: "群体出现分裂或合并式变化。"
         }},
-        en: {{
+        */ en: {{
           route_shift: "The whole trajectory is shifted away from its regular route.",
           speed_spike: "Motion speed suddenly increases with enlarged point-to-point distance.",
           stop_or_slowdown: "The object stops or slows down in the later segment.",
@@ -1107,9 +1390,27 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           split_merge: "The group shows a split or merge pattern."
         }}
       }};
+      Object.assign(anomalyDescriptions.zh, {{
+        route_shift: "单条轨迹整体偏移，用来模拟目标偏离常规航线。",
+        speed_spike: "目标速度突然增大，轨迹点间距离异常放大。",
+        stop_or_slowdown: "目标在中后段突然停住或明显减速。",
+        jump: "轨迹中某一帧发生突跳。",
+        shape_warp: "轨迹形状被拉伸或压缩。",
+        modal_offset: "RGB/thermal 等模态中心发生偏移，模拟多模态不一致。",
+        leave_group: "对象偏离群体中心或群体运动区域。",
+        against_motion: "对象运动方向与群体趋势相反。",
+        neighbor_replacement: "对象轨迹被邻近对象替代。",
+        population_change: "群体数量发生变化，当前协议通过复制对象模拟。",
+        dispersion_change: "群体离散程度异常变大。",
+        split_merge: "群体出现分裂或合并式变化。"
+      }});
 
       function taskData() {{ return dashboard.tasks[state.task]; }}
       function fmt(value) {{ return Number(value || 0).toFixed(3); }}
+      function finiteNumber(value, fallback = 0) {{
+        const number = Number(value);
+        return Number.isFinite(number) ? number : fallback;
+      }}
       function esc(value) {{ return String(value ?? "").replace(/[&<>"']/g, ch => ({{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"}})[ch]); }}
       function methodsForTask(task) {{ return task.leaderboard.map(row => row.method); }}
       function sequences() {{ return Object.keys(playbackData); }}
@@ -1142,6 +1443,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       }}
       function clamp(value, min, max) {{ return Math.max(min, Math.min(max, value)); }}
       function t(key) {{ return (translations[state.language] || translations.zh)[key] || translations.en[key] || key; }}
+      function isRegistrationTask(taskName = state.task) {{ return taskName === "registration"; }}
       function trackScoresForTask(track, taskName) {{
         return ((track.task_scores || {{}})[taskName]) || (taskName === "individual" ? track.method_scores : {{}}) || {{}};
       }}
@@ -1238,6 +1540,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
 
       function renderMethodFlow(track) {{
         const task = taskData();
+        const decomp = selectedTrackDecomposition(track);
         const labels = {{
           prepare: t("flowStepPrepare"),
           features: t("flowStepFeatures"),
@@ -1245,8 +1548,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           group: t("flowStepGroup"),
           fusion: t("flowStepFusion"),
         }};
-        const decomp = selectedTrackDecomposition(track);
-        const steps = [
+        const steps = isRegistrationTask() ? [
+          {{ text: t("flowStepRegistrationPair"), state: "done" }},
+          {{ text: t("flowStepRegistrationFeature"), state: "done" }},
+          {{ text: t("flowStepRegistrationMetric"), state: track ? "active" : "pending" }},
+          {{ text: t("flowStepRegistrationScore") + " (" + (track ? fmt(trackScore(track)) : "0.000") + ")", state: decomp ? "done" : "pending" }},
+        ] : [
           {{ text: labels.prepare, state: task?.data_root ? "done" : "done" }},
           {{ text: labels.features, state: decomp ? "done" : "pending" }},
           {{ text: labels.individual, state: state.task === "individual" ? "active" : "pending" }},
@@ -1261,7 +1568,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         methodFlowPanel.innerHTML = steps
           .map(item => `<div class="flow-step ${{item.state}}"><span class="flow-step-text">${{item.text}}</span> <span class="flow-step-state">${{statusLabel[item.state]}}</span></div>`)
           .join("");
-        const taskLabel = state.task === "group" ? t("taskGroup") : t("taskIndividual");
+        const taskLabel = isRegistrationTask() ? t("taskRegistration") : state.task === "group" ? t("taskGroup") : t("taskIndividual");
         const scoreText = track ? fmt(trackScore(track)) : t("noTrackSelected");
         flowReadout.textContent = `${{t("flowReadoutTask")}}: ${{taskLabel}} / ${{t("flowReadoutMethod")}}: ${{state.method}} / ${{t("flowReadoutScore")}}: ${{scoreText}}`;
       }}
@@ -1301,7 +1608,156 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         return 0;
       }}
 
+      function metricValue(row, key) {{
+        const value = row ? row[key] : null;
+        return value === null || value === undefined || value === "" ? null : Number(value);
+      }}
+
+      function projectPoint3d(point, width = 260, height = 150) {{
+        const x = Number(point?.[0] || 0);
+        const y = Number(point?.[1] || 0);
+        const z = Number(point?.[2] || 0);
+        return {{
+          x: width / 2 + x * 62 + z * 22,
+          y: height / 2 - y * 48 + z * 16,
+        }};
+      }}
+
+      function renderRegistrationPointCloud(track) {{
+        const row = selectedTrackScoreComponents(track);
+        const preview = row.registration_points || {{}};
+        const groups = [
+          ["source", preview.source || [], "#2563eb"],
+          ["reference", preview.reference || [], "#16a34a"],
+          ["aligned", preview.aligned || [], "#dc2626"],
+        ];
+        const hasPoints = groups.some(([, points]) => points.length);
+        if (!hasPoints) {{
+          return "";
+        }}
+        const dots = groups.map(([name, points, color]) => points.map(point => {{
+          const projected = projectPoint3d(point);
+          return `<circle cx="${{projected.x.toFixed(1)}}" cy="${{projected.y.toFixed(1)}}" r="3.5" fill="${{color}}" opacity="0.82"><title>${{name}}</title></circle>`;
+        }}).join("")).join("");
+        return `
+          <div class="registration-preview">
+            <strong>${{t("registration3DTitle")}}</strong>
+            <svg viewBox="0 0 260 150" role="img" aria-label="${{t("registration3DTitle")}}">
+              <line x1="24" y1="126" x2="230" y2="126" stroke="#e2e8f0" />
+              <line x1="42" y1="136" x2="42" y2="24" stroke="#e2e8f0" />
+              <line x1="42" y1="126" x2="78" y2="92" stroke="#e2e8f0" />
+              ${{dots}}
+            </svg>
+            <div class="legend-row">
+              <span><i class="legend-dot" style="background:#2563eb"></i>source</span>
+              <span><i class="legend-dot" style="background:#16a34a"></i>reference</span>
+              <span><i class="legend-dot" style="background:#dc2626"></i>aligned</span>
+            </div>
+            <div class="subtle">${{t("registration3DNote")}}</div>
+          </div>
+        `;
+      }}
+
+      function renderRegistrationEvidence(track) {{
+        const row = selectedTrackScoreComponents(track);
+        const hasMetrics = row && (
+          row.rotation_error_deg !== null && row.rotation_error_deg !== undefined ||
+          row.translation_error !== null && row.translation_error !== undefined ||
+          row.chamfer_distance !== null && row.chamfer_distance !== undefined ||
+          row.runtime_sec !== null && row.runtime_sec !== undefined
+        );
+        if (!hasMetrics) {{
+          submodulePanel.textContent = t("registrationNoMetric");
+          return;
+        }}
+        const success = row.success === true || row.success === "true" || row.success === 1 || row.success === "1";
+        const skipped = row.skipped === true || row.skipped === "true" || row.skipped === 1 || row.skipped === "1";
+        const rows = [
+          [t("registrationMetricRotation"), metricValue(row, "rotation_error_deg"), "deg"],
+          [t("registrationMetricTranslation"), metricValue(row, "translation_error"), ""],
+          [t("registrationMetricChamfer"), metricValue(row, "chamfer_distance"), ""],
+          [t("registrationMetricRuntime"), metricValue(row, "runtime_sec"), "s"],
+        ];
+        submodulePanel.innerHTML = `
+          <div class="explain-metrics">
+            ${{rows.map(([label, value, unit]) => `
+              <div class="explain-metric"><span>${{label}}</span><strong>${{value === null || Number.isNaN(value) ? "-" : `${{fmt(value)}}${{unit ? " " + unit : ""}}`}}</strong></div>
+            `).join("")}}
+            <div class="explain-metric"><span>${{t("registrationMetricSuccess")}}</span><strong>${{success && !skipped ? t("registrationSuccess") : t("registrationFailed")}}</strong></div>
+            <div class="explain-metric"><span>${{t("anomalyScore")}}</span><strong>${{fmt(track ? trackScore(track) : 0)}}</strong></div>
+          </div>
+          ${{renderRegistrationPointCloud(track)}}
+        `;
+      }}
+
+      function submoduleCurve(track, kind) {{
+        const points = (track?.points || []).slice().sort((a, b) => Number(a.frame) - Number(b.frame));
+        if (points.length < 2) {{
+          return [];
+        }}
+        if (kind === "speed") {{
+          return points.slice(1).map((point, index) => {{
+            const previous = points[index];
+            const frameDelta = Math.max(1, Number(point.frame) - Number(previous.frame));
+            return {{
+              frame: Number(point.frame),
+              value: Math.hypot(Number(point.x) - Number(previous.x), Number(point.y) - Number(previous.y)) / frameDelta,
+            }};
+          }});
+        }}
+        const first = points[0];
+        const last = points[points.length - 1];
+        const dx = Number(last.x) - Number(first.x);
+        const dy = Number(last.y) - Number(first.y);
+        const base = Math.max(1e-6, Math.hypot(dx, dy));
+        if (kind === "route") {{
+          return points.map(point => {{
+            const value = Math.abs(dy * Number(point.x) - dx * Number(point.y) + Number(last.x) * Number(first.y) - Number(last.y) * Number(first.x)) / base;
+            return {{ frame: Number(point.frame), value }};
+          }});
+        }}
+        return points.slice(1, -1).map((point, index) => {{
+          const previous = points[index];
+          const next = points[index + 2];
+          const ax = Number(point.x) - Number(previous.x);
+          const ay = Number(point.y) - Number(previous.y);
+          const bx = Number(next.x) - Number(point.x);
+          const by = Number(next.y) - Number(point.y);
+          const denom = Math.max(1e-6, Math.hypot(ax, ay) * Math.hypot(bx, by));
+          const angle = Math.acos(clamp((ax * bx + ay * by) / denom, -1, 1));
+          return {{ frame: Number(point.frame), value: angle }};
+        }});
+      }}
+
+      function renderMiniChart(curve) {{
+        if (!curve.length) {{
+          return `<div class="subtle">${{t("chartNoData")}}</div>`;
+        }}
+        const width = 320;
+        const height = 96;
+        const minFrame = Math.min(...curve.map(item => item.frame));
+        const maxFrame = Math.max(...curve.map(item => item.frame));
+        const maxValue = Math.max(1e-6, ...curve.map(item => Number(item.value || 0)));
+        const points = curve.map(item => {{
+          const x = 10 + ((item.frame - minFrame) / Math.max(1, maxFrame - minFrame)) * (width - 20);
+          const y = height - 12 - (Number(item.value || 0) / maxValue) * (height - 24);
+          return `${{x.toFixed(1)}},${{y.toFixed(1)}}`;
+        }}).join(" ");
+        return `
+          <svg class="mini-chart" viewBox="0 0 ${{width}} ${{height}}" preserveAspectRatio="none">
+            <polyline points="${{points}}" fill="none" stroke="#0f766e" stroke-width="2.2" />
+            <line x1="10" y1="${{height - 12}}" x2="${{width - 10}}" y2="${{height - 12}}" stroke="#e2e8f0" />
+          </svg>
+        `;
+      }}
+
       function renderSubmoduleTrack(track) {{
+        if (isRegistrationTask()) {{
+          submoduleSwitch.hidden = true;
+          renderRegistrationEvidence(track);
+          return;
+        }}
+        submoduleSwitch.hidden = false;
         const stats = trajectoryStats(track || {{}});  
         const score = submoduleFeatureValue(track, stats, state.submodule);
         const label = track ? trackLabel(track) : {{ anomaly_type: "normal" }};
@@ -1311,6 +1767,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           speed: t("submoduleSpeed"),
           shape: t("submoduleShape"),
         }};
+        const curve = submoduleCurve(track, state.submodule);
         submodulePanel.innerHTML = `
           <div class="explain-metric">
             <span>${{t("submodulePrefix")}}</span>
@@ -1322,10 +1779,35 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           </div>
           <div class="explain-reason">${{source ? `Used source: ${{source}}` : t("noSubmoduleData")}}</div>
           <div class="explain-reason">Proxy score: ${{fmt(score)}} (dynamic evidence)</div>
+          ${{renderMiniChart(curve)}}
         `;
       }}
 
       function renderCompositionBars(track) {{
+        if (isRegistrationTask()) {{
+          const row = selectedTrackScoreComponents(track);
+          const rows = [
+            [t("registrationMetricRotation"), metricValue(row, "rotation_error_deg")],
+            [t("registrationMetricTranslation"), metricValue(row, "translation_error")],
+            [t("registrationMetricChamfer"), metricValue(row, "chamfer_distance")],
+            [t("registrationMetricRuntime"), metricValue(row, "runtime_sec")],
+            [t("compSFused"), track ? trackScore(track) : 0],
+          ].filter(([, value]) => value !== null && !Number.isNaN(value));
+          if (!rows.length) {{
+            scoreCompositionPanel.textContent = t("compNoData");
+            return;
+          }}
+          const max = Math.max(1e-6, ...rows.map(([, value]) => Math.abs(Number(value || 0))));
+          scoreCompositionPanel.innerHTML = rows
+            .map(([name, value]) => `
+              <div class="decomp-row">
+                <span>${{name}}</span>
+                <span class="decomp-track"><span class="decomp-fill" style="width: ${{Math.max(2, Math.min(100, Math.round((Math.abs(Number(value || 0)) / max) * 100)))}}%;"></span></span>
+                <strong>${{fmt(value)}}</strong>
+              </div>
+            `).join("");
+          return;
+        }}
         const decomp = selectedTrackDecomposition(track);
         if (!decomp) {{
           scoreCompositionPanel.textContent = t("compNoData");
@@ -1342,7 +1824,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           .map(([, value, name]) => `
             <div class="decomp-row">
               <span>${{name}}</span>
-              <span class="decomp-track"><span class="decomp-fill" style="width: ${{Math.max(0, Math.min(100, Math.round((Number(value || 0) / max) * 100))}}%;"></span></span>
+              <span class="decomp-track"><span class="decomp-fill" style="width: ${{Math.max(0, Math.min(100, Math.round((Number(value || 0) / max) * 100)))}}%;"></span></span>
               <strong>${{fmt(value)}}</strong>
             </div>
           `).join("");
@@ -1360,7 +1842,78 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }};
       }}
 
+      function aggregateGroupEvents(data) {{
+        if (state.task !== "group" || !data) {{
+          return [];
+        }}
+        const grouped = new Map();
+        for (const track of data.tracks || []) {{
+          const segments = (((track || {{}}).task_segments || {{}})[state.task] || []).filter(item => Number(item.label || 0) === 1);
+          for (const segment of segments) {{
+            const typeName = String(segment.anomaly_type || "group_event");
+            const start = Number(segment.frame_start || 0);
+            const end = Number(segment.frame_end || start);
+            const bucketStart = Math.round(start / 8) * 8;
+            const bucketEnd = Math.round(end / 8) * 8;
+            const key = `${{typeName}}:${{bucketStart}}:${{bucketEnd}}`;
+            const current = grouped.get(key) || {{
+              anomaly_type: typeName,
+              frame_start: start,
+              frame_end: end,
+              tracks: new Set(),
+              points: [],
+            }};
+            current.frame_start = Math.min(current.frame_start, start);
+            current.frame_end = Math.max(current.frame_end, end);
+            current.tracks.add(track.track_id);
+            for (const point of track.points || []) {{
+              const frame = Number(point.frame);
+              if (frame >= start && frame <= end) {{
+                current.points.push(point);
+              }}
+            }}
+            grouped.set(key, current);
+          }}
+        }}
+        return [...grouped.values()].map(item => {{
+          const center = item.points.length ? {{
+            x: item.points.reduce((sum, point) => sum + Number(point.x), 0) / item.points.length,
+            y: item.points.reduce((sum, point) => sum + Number(point.y), 0) / item.points.length,
+          }} : null;
+          return {{
+            anomaly_type: item.anomaly_type,
+            frame_start: item.frame_start,
+            frame_end: item.frame_end,
+            track_count: item.tracks.size,
+            center,
+          }};
+        }}).sort((a, b) => b.track_count - a.track_count || a.frame_start - b.frame_start).slice(0, 6);
+      }}
+
+      function renderGroupEventCards(data) {{
+        const events = aggregateGroupEvents(data);
+        if (!events.length) {{
+          return `<div class="subtle">${{t("noGroupEvents")}}</div>`;
+        }}
+        return `
+          <div class="event-card-grid">
+            ${{events.map(event => `
+              <div class="event-card">
+                <strong>${{esc(event.anomaly_type)}}</strong>
+                <div>${{event.frame_start}}-${{event.frame_end}} / ${{t("groupEventDuration")}} ${{Math.max(0, event.frame_end - event.frame_start)}}</div>
+                <div>${{t("groupEventTracks")}}: ${{event.track_count}}</div>
+                <div>${{t("groupEventCenter")}}: ${{event.center ? `${{fmt(event.center.x)}}, ${{fmt(event.center.y)}}` : "-"}}</div>
+              </div>
+            `).join("")}}
+          </div>
+        `;
+      }}
+
       function renderEventTimeline(track) {{
+        if (isRegistrationTask()) {{
+          eventTimelinePanel.textContent = t("registrationProtocolText");
+          return;
+        }}
         const data = currentPlayback();
         if (!data) {{
           eventTimelinePanel.textContent = t("noTimeline");
@@ -1428,14 +1981,33 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
               <div class="timeline-strip">${{predRow || `<span class="subtle">${{t("noTimeline")}}</span>`}}</div>
             </div>
           </div>
+          ${{state.task === "group" ? `<h4>${{t("groupEventTitle")}}</h4>${{renderGroupEventCards(data)}}` : ""}}
         `;
       }}
 
       function renderProtocolOverview() {{
-        const labels = {{ individual: t("taskIndividual"), group: t("taskGroup") }};
-        for (const [taskName, target] of [["individual", individualProtocol], ["group", groupProtocol]]) {{
+        const labels = {{ individual: t("taskIndividual"), group: t("taskGroup"), registration: t("taskRegistration") }};
+        for (const [taskName, target] of [["individual", individualProtocol], ["group", groupProtocol], ["registration", registrationProtocol]]) {{
           const task = dashboard.tasks[taskName];
           if (!task || !target) {{
+            if (target) {{
+              target.hidden = true;
+            }}
+            continue;
+          }}
+          target.hidden = false;
+          if (isRegistrationTask(taskName)) {{
+            const rows = task.leaderboard || [];
+            const best = rows[0] || {{}};
+            target.innerHTML = `
+              <h3>${{t("registrationProtocolTitle")}}</h3>
+              <div class="subtle">${{t("registrationProtocolText")}}</div>
+              <div class="type-cloud">
+                <span class="type-chip">${{t("cardMethods")}} <strong>${{rows.length}}</strong></span>
+                <span class="type-chip">${{t("registrationSuccessRate")}} <strong>${{fmt(best.success_rate || best.auroc || 0)}}</strong></span>
+                <span class="type-chip">${{t("registrationMetricChamfer")}} <strong>${{fmt(best.chamfer_distance_mean || 0)}}</strong></span>
+              </div>
+            `;
             continue;
           }}
           const typeItems = anomalyTypeSummary(task).map(([typeName, count]) => `
@@ -1452,6 +2024,35 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       function renderHelp() {{
         const individualTypes = anomalyTypeSummary(dashboard.tasks.individual || {{}}).map(([typeName]) => `<li><strong>${{esc(typeName)}}</strong>: ${{esc(anomalyDescription(typeName))}}</li>`).join("");
         const groupTypes = anomalyTypeSummary(dashboard.tasks.group || {{}}).map(([typeName]) => `<li><strong>${{esc(typeName)}}</strong>: ${{esc(anomalyDescription(typeName))}}</li>`).join("");
+        if (state.language === "zh") {{
+          helpBody.innerHTML = `
+            <section class="help-section">
+              <h3>页面内容</h3>
+              <p>顶部指标卡展示当前任务的方法数、标签数、异常数和当前方法指标。中间动态可视化提供原视频、热力图、轨迹、热力+轨迹四画面对比，也可以切换成单画面模式。</p>
+            </section>
+            <section class="help-section">
+              <h3>异常来源</h3>
+              <p>Individual 和 Group 任务使用 synthetic anomaly injection protocol。VT-Tiny-MOT 本身没有这些异常标签，我们在清洗后的正常轨迹或群体窗口上按规则注入异常。背景帧仍是原始视频，异常主要体现在轨迹坐标、多模态中心偏移和群体关系变化上。</p>
+            </section>
+            <section class="help-section">
+              <h3>Registration 任务</h3>
+              <p>Registration 是配准模块的独立诊断入口，用来展示非学习配准基线的旋转误差、平移误差、Chamfer、耗时和成功率。它不是合成异常标签任务，而是论文系统中几何对齐能力的证据层。</p>
+            </section>
+            <section class="help-section">
+              <h3>Individual 异常类型</h3>
+              <ul>${{individualTypes}}</ul>
+            </section>
+            <section class="help-section">
+              <h3>Group 异常类型</h3>
+              <ul>${{groupTypes}}</ul>
+            </section>
+            <section class="help-section">
+              <h3>如何解读</h3>
+              <p>热力越强表示当前方法给出的异常分数越高；红色轨迹表示当前任务标签下的正样本。下方解释面板会显示选中轨迹的分数、标签、帧段、运动长度、邻近关系或配准误差。</p>
+            </section>
+          `;
+          return;
+        }}
         helpBody.innerHTML = state.language === "zh" ? `
           <section class="help-section">
             <h3>页面内容</h3>
@@ -1514,6 +2115,23 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           [t("proposedStatus"), proposed],
           [t("baselineStatus"), baselines]
         ].map(([label, value]) => `<div class="method-summary-item"><span>${{label}}</span><strong>${{value}}</strong></div>`).join("");
+        if (isRegistrationTask()) {{
+          methodStatusTable.innerHTML = `
+            <thead><tr><th>${{t("methodHeader")}}</th><th>${{t("familyHeader")}}</th><th class="metric">${{t("registrationSuccessRate")}}</th><th class="metric">${{t("registrationMetricRotation")}}</th><th class="metric">${{t("registrationMetricTranslation")}}</th><th class="metric">${{t("registrationMetricChamfer")}}</th><th class="metric">${{t("registrationMetricRuntime")}}</th></tr></thead>
+            <tbody>${{rows.map(row => `
+              <tr>
+                <td><strong>${{esc(row.method)}}</strong></td>
+                <td>${{esc(row.method_family || "")}}</td>
+                <td class="metric">${{fmt(row.success_rate || row.auroc || 0)}}</td>
+                <td class="metric">${{fmt(row.rotation_error_deg_mean || 0)}}</td>
+                <td class="metric">${{fmt(row.translation_error_mean || 0)}}</td>
+                <td class="metric">${{fmt(row.chamfer_distance_mean || 0)}}</td>
+                <td class="metric">${{fmt(row.runtime_sec_mean || 0)}}</td>
+              </tr>
+            `).join("")}}</tbody>
+          `;
+          return;
+        }}
         methodStatusTable.innerHTML = `
           <thead><tr><th>${{t("methodHeader")}}</th><th>${{t("sourceHeader")}}</th><th>${{t("familyHeader")}}</th><th>${{t("learningHeader")}}</th><th>${{t("statusHeader")}}</th><th class="metric">AUROC</th></tr></thead>
           <tbody>${{rows.map(row => `
@@ -1598,6 +2216,17 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       }}
 
       function explanationReason(track, stats, groupStats) {{
+        if (isRegistrationTask()) {{
+          const row = selectedTrackScoreComponents(track);
+          const rotation = metricValue(row, "rotation_error_deg");
+          const translation = metricValue(row, "translation_error");
+          const chamfer = metricValue(row, "chamfer_distance");
+          const runtime = metricValue(row, "runtime_sec");
+          const success = row.success === true || row.success === "true" || row.success === 1 || row.success === "1";
+          return state.language === "zh"
+            ? `配准证据：旋转误差 ${{rotation === null ? "-" : fmt(rotation)}}，平移误差 ${{translation === null ? "-" : fmt(translation)}}，Chamfer ${{chamfer === null ? "-" : fmt(chamfer)}}，耗时 ${{runtime === null ? "-" : fmt(runtime)}}s，状态 ${{success ? t("registrationSuccess") : t("registrationFailed")}}。`
+            : `Registration evidence: rotation error ${{rotation === null ? "-" : fmt(rotation)}}, translation error ${{translation === null ? "-" : fmt(translation)}}, Chamfer ${{chamfer === null ? "-" : fmt(chamfer)}}, runtime ${{runtime === null ? "-" : fmt(runtime)}}s, status ${{success ? t("registrationSuccess") : t("registrationFailed")}}.`;
+        }}
         const label = trackLabel(track);
         const typeName = String(label.anomaly_type || "normal");
         const base = typeName !== "normal" ? anomalyDescription(typeName) : (state.language === "zh" ? "当前轨迹未被协议标为正样本，若分数较高则属于候选误报或模型认为的高风险轨迹。" : "This track is not labeled positive by the protocol; a high score means a candidate false positive or high-risk model output.");
@@ -1616,7 +2245,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         renderTrackRankList(ranked);
         if (!data || !track) {{
           explanationPanel.textContent = t("noTrackSelected");
-          groupInsightPanel.textContent = state.task === "group" ? t("noTrackSelected") : (state.language === "zh" ? "切换到 Group 任务可查看群体中心、半径和邻近关系。" : "Switch to Group to inspect centroid, radius, and neighborhood relations.");
+          groupInsightPanel.textContent = isRegistrationTask() ? t("registrationNoMetric") : state.task === "group" ? t("noTrackSelected") : (state.language === "zh" ? "切换到 Group 任务可查看群体中心、半径和邻近关系。" : "Switch to Group to inspect centroid, radius, and neighborhood relations.");
           return;
         }}
         const label = trackLabel(track);
@@ -1634,7 +2263,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           </div>
           <div class="explain-reason">${{esc(explanationReason(track, stats, groupStats))}}</div>
         `;
-        if (state.task === "group") {{
+        if (isRegistrationTask()) {{
+          renderRegistrationEvidence(track);
+          groupInsightPanel.innerHTML = submodulePanel.innerHTML;
+        }} else if (state.task === "group") {{
           groupInsightPanel.innerHTML = `
             <div class="explain-metrics">
               <div class="explain-metric"><span>${{t("currentNeighborsLabel")}}</span><strong>${{groupStats.neighbors.length}}</strong></div>
@@ -1670,7 +2302,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       }}
 
       function setTaskOptions() {{
-        const labels = {{ individual: t("taskIndividual"), group: t("taskGroup") }};
+        const labels = {{ individual: t("taskIndividual"), group: t("taskGroup"), registration: t("taskRegistration") }};
         taskSelector.innerHTML = Object.keys(dashboard.tasks).map(task =>
           `<option value="${{esc(task)}}"${{task === state.task ? " selected" : ""}}>${{esc(labels[task] || task)}}</option>`
         ).join("");
@@ -1721,12 +2353,55 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         const task = taskData();
         const current = task.methods[state.method];
         const metrics = current.metrics;
+        const metricLabel = isRegistrationTask() ? t("registrationSuccessRate") : t("cardAuroc");
+        const metricValue = isRegistrationTask() ? (metrics.success_rate ?? metrics.auroc ?? 0) : metrics.auroc;
+        const labelCount = isRegistrationTask() ? Math.round(Number(metrics.num_score_rows || 0)) : task.num_labels;
+        const positiveCount = isRegistrationTask() ? Math.round(Number(metrics.num_failed_pairs || 0)) : task.num_positive;
         cards.innerHTML = [
           [t("cardMethods"), Object.keys(task.methods).length],
-          [t("cardLabels"), task.num_labels],
-          [t("cardPositives"), task.num_positive],
-          [t("cardAuroc"), fmt(metrics.auroc)]
+          [isRegistrationTask() ? t("registrationPairCount") : t("cardLabels"), labelCount],
+          [isRegistrationTask() ? t("registrationFailedCount") : t("cardPositives"), positiveCount],
+          [metricLabel, fmt(metricValue)]
         ].map(([label, value]) => `<div class="card"><div>${{label}}</div><div class="value">${{value}}</div></div>`).join("");
+      }}
+
+      function renderDataFlowAudit() {{
+        const sequenceNames = sequences();
+        const allTracks = sequenceNames.flatMap(name => playbackData[name]?.tracks || []);
+        const backgroundCount = sequenceNames.reduce((sum, name) => sum + ((playbackData[name]?.background_frames || []).length), 0);
+        const frameStarts = sequenceNames.map(name => Number(playbackData[name]?.frame_range?.[0] || 0));
+        const frameEnds = sequenceNames.map(name => Number(playbackData[name]?.frame_range?.[1] || 0));
+        const frameText = sequenceNames.length ? `${{Math.min(...frameStarts)}}-${{Math.max(...frameEnds)}}` : "-";
+        const cards = [
+          [t("dataFlowSequences"), sequenceNames.length],
+          [t("dataFlowTracks"), allTracks.length],
+          [t("dataFlowFrames"), frameText],
+          [t("dataFlowBackgrounds"), backgroundCount || t("dataFlowNoBackground")],
+        ];
+        const taskRows = Object.entries(dashboard.tasks || {{}}).map(([taskName, task]) => {{
+          const scored = allTracks.filter(track => Object.keys(trackScoresForTask(track, taskName) || {{}}).length > 0).length;
+          const labeled = allTracks.filter(track => Number(trackLabelForTask(track, taskName).num_windows || 0) > 0 || Number(trackLabelForTask(track, taskName).label || 0) === 1).length;
+          const label = taskName === "registration" ? t("taskRegistration") : taskName === "group" ? t("taskGroup") : t("taskIndividual");
+          return `
+            <tr>
+              <td><strong>${{esc(label)}}</strong></td>
+              <td class="metric">${{task.num_labels || 0}}</td>
+              <td class="metric">${{task.num_positive || 0}}</td>
+              <td class="metric">${{Object.keys(task.methods || {{}}).length}}</td>
+              <td class="metric">${{scored}}</td>
+              <td class="metric">${{labeled}}</td>
+            </tr>
+          `;
+        }}).join("");
+        dataFlowPanel.innerHTML = `
+          ${{cards.map(([label, value]) => `<div class="data-flow-card"><span>${{label}}</span><strong>${{value}}</strong></div>`).join("")}}
+          <div class="table-scroll" style="grid-column: 1 / -1;">
+            <table class="leaderboard">
+              <thead><tr><th>${{t("dataFlowTaskAudit")}}</th><th class="metric">${{t("cardLabels")}}</th><th class="metric">${{t("cardPositives")}}</th><th class="metric">${{t("cardMethods")}}</th><th class="metric">${{t("dataFlowScoreCoverage")}}</th><th class="metric">${{t("dataFlowLabelCoverage")}}</th></tr></thead>
+              <tbody>${{taskRows}}</tbody>
+            </table>
+          </div>
+        `;
       }}
 
       function renderSequenceStats() {{
@@ -1767,6 +2442,15 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       }}
 
       function renderTypeTable() {{
+        if (isRegistrationTask()) {{
+          typeTable.innerHTML = `
+            <thead><tr><th>${{t("methodHeader")}}</th><th class="metric">${{t("registrationSuccessRate")}}</th><th class="metric">${{t("registrationMetricRotation")}}</th><th class="metric">${{t("registrationMetricTranslation")}}</th><th class="metric">${{t("registrationMetricChamfer")}}</th></tr></thead>
+            <tbody>${{(taskData().leaderboard || []).map(row => `
+              <tr><td>${{esc(row.method)}}</td><td class="metric">${{fmt(row.success_rate || row.auroc || 0)}}</td><td class="metric">${{fmt(row.rotation_error_deg_mean || 0)}}</td><td class="metric">${{fmt(row.translation_error_mean || 0)}}</td><td class="metric">${{fmt(row.chamfer_distance_mean || 0)}}</td></tr>
+            `).join("")}}</tbody>
+          `;
+          return;
+        }}
         const rows = taskData().anomaly_type_rows.filter(row => row.method === state.method);
         typeTable.innerHTML = `
           <thead><tr><th>${{t("anomalyTypeHeader")}}</th><th class="metric">${{t("hitsHeader")}}</th><th class="metric">${{t("totalHeader")}}</th><th class="metric">${{t("recallHeader")}}</th><th class="metric">${{t("meanScoreHeader")}}</th></tr></thead>
@@ -1787,7 +2471,11 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       }}
 
       function renderCaseTabs() {{
-        const labels = {{
+        const labels = isRegistrationTask() ? {{
+          true_positive: t("registrationSuccess"),
+          false_positive: t("falsePositive"),
+          false_negative: t("registrationFailed")
+        }} : {{
           true_positive: t("truePositive"),
           false_positive: t("falsePositive"),
           false_negative: t("falseNegative")
@@ -2079,6 +2767,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         const maxScore = Math.max(...scores, 1e-6);
         const ranked = rankedTracks(data);
         ensureSelectedTrack(data, ranked);
+        const speedText = `x${{state.playSpeed.toFixed(1)}}`;
         if (state.viewMode === "comparison") {{
           drawComparisonView(data, ranked, maxScore);
         }} else {{
@@ -2086,7 +2775,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }}
         renderTrackInsights(ranked);
         const viewLabel = state.viewMode === "comparison" ? t("view_comparison") : `${{t("view_single")}} - ${{t(`layer_${{state.layer}}`)}}`;
-        playbackReadout.textContent = `${{t("playbackPrefix")}} / ${{data.sequence}} / ${{state.method}} / ${{t("frame")}} ${{state.frame}} / ${{viewLabel}} / ${{ranked.length}} ${{t("visibleTracks")}}`;
+        playbackReadout.textContent = `${{t("playbackPrefix")}} / ${{data.sequence}} / ${{state.method}} / ${{t("frame")}} ${{state.frame}} / ${{t("play")}} ${{speedText}} / ${{viewLabel}} / ${{ranked.length}} ${{t("visibleTracks")}}`;
       }}
 
       function stopPlayback() {{
@@ -2099,6 +2788,18 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }}
       }}
 
+      function updatePlaySpeedDisplay() {{
+        const speed = Math.max(0.2, Math.min(3, Number(state.playSpeed) || 1));
+        state.playSpeed = speed;
+        if (playSpeed) {{
+          playSpeed.value = String(Math.round(speed * 100));
+        }}
+        if (playSpeedReadout) {{
+          playSpeedReadout.textContent = `${{speed.toFixed(1)}}x`;
+        }}
+        localStorage.setItem("fusiontrack.finalDashboard.playSpeed", String(speed));
+      }}
+
       function startPlayback() {{
         if (!currentPlayback()) {{
           return;
@@ -2106,6 +2807,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         state.playing = true;
         playToggle.textContent = t("pause");
         playToggle.classList.add("active");
+        const speed = Math.max(0.2, Number(state.playSpeed || 1));
         state.timer = window.setInterval(() => {{
           const data = currentPlayback();
           const start = Number(data.frame_range?.[0] || 0);
@@ -2113,7 +2815,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           state.frame = state.frame >= end ? start : state.frame + 1;
           frameSlider.value = state.frame;
           drawPlayback();
-        }}, 90);
+        }}, 120 / speed);
       }}
 
       function pickTrackFromCanvas(event, targetCanvas) {{
@@ -2155,6 +2857,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         renderTypeTable();
         renderCases();
         renderMethodStatus();
+        renderDataFlowAudit();
         renderProtocolOverview();
         renderHelp();
         drawPlayback();
@@ -2210,6 +2913,15 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         state.heatWindow = Number(heatWindow.value);
         drawPlayback();
       }});
+      playSpeed.addEventListener("input", () => {{
+        state.playSpeed = Number(playSpeed.value || 100) / 100;
+        updatePlaySpeedDisplay();
+        if (state.playing) {{
+          stopPlayback();
+          startPlayback();
+        }}
+        drawPlayback();
+      }});
       viewModeButtons.forEach(button => button.addEventListener("click", () => {{
         state.viewMode = button.dataset.viewMode || "comparison";
         setViewModeVisibility();
@@ -2247,6 +2959,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         helpDialog.close();
       }});
       applyLanguage(state.language);
+      updatePlaySpeedDisplay();
       setAnalysisPanel("leaderboard");
       renderMethodView();
     }})();

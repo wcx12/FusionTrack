@@ -318,6 +318,9 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert summary["playback_sequences"] == ["S1", "G1"]
     html = (tmp_path / "dashboard" / "index.html").read_text(encoding="utf-8")
     playback_data = json.loads((tmp_path / "dashboard" / "assets" / "final_playback_data.json").read_text(encoding="utf-8"))
+    assert "{dashboard_json}" not in html
+    assert "{playback_json}" not in html
+    assert '"tasks"' in html
     assert playback_data["S1"]["stats"] == {
         "sequence_sample_count": 2,
         "sequence_anomaly_count": 2,
@@ -365,6 +368,10 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "renderProtocolOverview" in html
     assert "renderMethodStatus" in html
     assert "renderTrackInsights" in html
+    assert "renderDataFlowAudit" in html
+    assert "submoduleCurve" in html
+    assert "aggregateGroupEvents" in html
+    assert "dataFlowPanel" in html
     assert "anomalyDescriptions" in html
     assert 'state.task !== "individual"' not in html
     assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in html
@@ -407,3 +414,137 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "renderMethodView" in html
     assert "playbackData" in html
     assert "fusiontrack_individual_nn" in html
+
+
+def test_final_dashboard_includes_registration_playback_without_labels(tmp_path: Path) -> None:
+    final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
+    registration_root = tmp_path / "registration_work"
+    registration_score = registration_root / "registration_scores" / "icp_registration_scores.jsonl"
+    registration_metrics = registration_root / "registration_metrics" / "icp_registration_metrics.json"
+    registration_manifest = registration_root / "registration_artifacts" / "registration_experiment_manifest.json"
+    _write_jsonl(
+        registration_score,
+        [
+            {
+                "sample_id": "icp:0:0:0",
+                "sequence": "R1",
+                "track_id": "0",
+                "score": 0.41,
+                "used_sources": "registration",
+                "rotation_error_deg": 4.2,
+                "translation_error": 0.12,
+                "chamfer_distance": 0.08,
+                "runtime_sec": 0.03,
+                "success": True,
+                "skipped": False,
+                "component_scores": {"registration_error_score": 0.41},
+            },
+            {
+                "sample_id": "icp:0:1:0",
+                "sequence": "R1",
+                "track_id": "1",
+                "score": 1.4,
+                "used_sources": "registration",
+                "rotation_error_deg": 18.0,
+                "translation_error": 0.7,
+                "chamfer_distance": 0.34,
+                "runtime_sec": 0.04,
+                "success": False,
+                "skipped": False,
+                "component_scores": {"registration_error_score": 1.4},
+            },
+        ],
+    )
+    registration_metrics.parent.mkdir(parents=True, exist_ok=True)
+    registration_metrics.write_text(
+        json.dumps(
+            {
+                "success_rate": 0.5,
+                "num_pairs": 2,
+                "num_successful_pairs": 1,
+                "num_failed_pairs": 1,
+                "rotation_error_deg_mean": 11.1,
+                "translation_error_mean": 0.41,
+                "chamfer_distance_mean": 0.21,
+                "runtime_sec_mean": 0.035,
+            }
+        ),
+        encoding="utf-8",
+    )
+    registration_manifest.parent.mkdir(parents=True, exist_ok=True)
+    registration_manifest.write_text(
+        json.dumps(
+            {
+                "task": "registration",
+                "split": "test",
+                "runs": [
+                    {
+                        "name": "icp",
+                        "score_file": "registration_scores/icp_registration_scores.jsonl",
+                        "metrics_file": "registration_metrics/icp_registration_metrics.json",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    dashboard = load_final_results_dashboard(
+        final_results_root=final_root,
+        individual_label_file=individual_labels,
+        group_label_file=group_labels,
+        score_search_roots=[score_root, registration_root],
+        registration_manifest=registration_manifest,
+        top_k=2,
+        case_limit=3,
+    )
+    fused_jsonl = tmp_path / "fused_with_registration.jsonl"
+    _write_jsonl(
+        fused_jsonl,
+        [
+            {
+                "sample_id": "S1:1",
+                "sequence": "S1",
+                "track_id": "1",
+                "points": [{"frame_id": 10, "fused": {"center_xy": [10, 20], "confidence": 0.9}}],
+            },
+            {
+                "sample_id": "G1:1",
+                "sequence": "G1",
+                "track_id": "1",
+                "points": [{"frame_id": 1, "fused": {"center_xy": [15, 25], "confidence": 0.9}}],
+            },
+            {
+                "sample_id": "icp:0:0:0",
+                "sequence": "R1",
+                "track_id": "0",
+                "points": [{"frame_id": 0, "fused": {"center_xy": [20, 30], "confidence": 0.41}}],
+            },
+            {
+                "sample_id": "icp:0:1:0",
+                "sequence": "R1",
+                "track_id": "1",
+                "points": [{"frame_id": 0, "fused": {"center_xy": [40, 50], "confidence": 1.4}}],
+            },
+        ],
+    )
+
+    summary = build_final_dashboard(
+        dashboard=dashboard,
+        output_dir=tmp_path / "registration_dashboard",
+        fused_jsonl=fused_jsonl,
+        data_root=tmp_path / "data",
+        top_sequences=1,
+    )
+
+    playback_data = json.loads(
+        (tmp_path / "registration_dashboard" / "assets" / "final_playback_data.json").read_text(encoding="utf-8")
+    )
+    assert "registration" in dashboard.tasks
+    assert "R1" in summary["playback_sequences"]
+    assert playback_data["R1"]["stats_by_task"]["registration"]["sequence_sample_count"] == 2
+    assert playback_data["R1"]["tracks"][0]["task_score_components"]["registration"]["icp"]["rotation_error_deg"] is not None
+    html = (tmp_path / "registration_dashboard" / "index.html").read_text(encoding="utf-8")
+    assert "registrationMetricRotation" in html
+    assert "配准任务展示非学习基线" in html
+    assert "registration3DTitle" in html
+    assert "renderRegistrationPointCloud" in html

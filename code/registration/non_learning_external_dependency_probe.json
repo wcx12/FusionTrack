@@ -1,0 +1,70 @@
+{
+  "date": "2026-05-23",
+  "scope": "optional_external_non_learning_registration_baselines",
+  "methods": {
+    "teaserpp": {
+      "python_modules": {
+        "teaserpp_python": false,
+        "teaserpp": false
+      },
+      "cli_binaries": {
+        "teaserpp": false
+      },
+      "pip_dry_run": {
+        "package": "teaserpp-python",
+        "status": "not_available",
+        "evidence": "No matching distribution found for teaserpp-python"
+      }
+    },
+    "super4pcs": {
+      "python_modules": {
+        "super4pcs": false
+      },
+      "cli_binaries": {
+        "Super4PCS": false,
+        "super4pcs": false
+      },
+      "pip_dry_run": {
+        "package": "super4pcs",
+        "status": "not_available",
+        "evidence": "No matching distribution found for super4pcs"
+      }
+    },
+    "goicp": {
+      "python_modules": {
+        "pygoicp": false,
+        "goicp": false
+      },
+      "cli_binaries": {
+        "GoICP": false,
+        "goicp": false
+      },
+      "pip_dry_run": {
+        "package": "pygoicp",
+        "status": "not_available",
+        "evidence": "No matching distribution found for pygoicp"
+      }
+    }
+  },
+  "build_tools": {
+    "gcc": true,
+    "gpp": true,
+    "git": true,
+    "cmake": true,
+    "cmake_invocation": "python -m cmake",
+    "make_or_ninja": true,
+    "ninja_invocation": "python -m ninja"
+  },
+  "source_probe": {
+    "teaserpp_repository_metadata": "reachable",
+    "super4pcs_repository_metadata": "reachable",
+    "goicp_repository_metadata": "reachable_from_local_probe",
+    "super4pcs_remote_shallow_clone": "failed_connection_reset",
+    "super4pcs_local_shallow_clone": "did_not_complete_within_probe_window"
+  },
+  "conclusion": {
+    "status": "external_methods_not_executable_in_current_remote_environment",
+    "reason": "No Python wheels or existing CLI binaries are available. CMake/Ninja can be invoked through Python modules, but source retrieval/build did not produce a usable solver CLI during the probe, and method-specific wrappers are still required.",
+    "benchmark_action": "Keep teaserpp, super4pcs, and goicp as dependency_or_wrapper_skipped in the MPS-GAF-schema non-learning benchmark."
+  }
+}

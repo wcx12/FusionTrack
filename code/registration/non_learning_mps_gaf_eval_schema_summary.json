@@ -1,0 +1,98 @@
+{
+  "identity": {
+    "rotation_error_deg_mean": 39.37747305165344,
+    "rotation_error_deg_rmse": 41.36063507755394,
+    "translation_error_mean": 0.46255819126963615,
+    "translation_error_rmse": 0.48323566284103864,
+    "chamfer_distance_mean": 0.2400946722365916,
+    "num_pairs": 40
+  },
+  "icp_point_to_point": {
+    "rotation_error_deg_mean": 24.86771066367286,
+    "rotation_error_deg_rmse": 34.24539785639581,
+    "translation_error_mean": 0.24430365975713358,
+    "translation_error_rmse": 0.3124664115760675,
+    "chamfer_distance_mean": 0.024374169943621384,
+    "num_pairs": 40
+  },
+  "icp_point_to_plane": {
+    "rotation_error_deg_mean": 32.144374831717116,
+    "rotation_error_deg_rmse": 52.74774062518097,
+    "translation_error_mean": 0.27734758307924495,
+    "translation_error_rmse": 0.4434972541444588,
+    "chamfer_distance_mean": 0.05039813299663365,
+    "num_pairs": 40
+  },
+  "icp_trimmed": {
+    "rotation_error_deg_mean": 27.30343841904409,
+    "rotation_error_deg_rmse": 34.340480570346294,
+    "translation_error_mean": 0.27423824146972037,
+    "translation_error_rmse": 0.33151055384816697,
+    "chamfer_distance_mean": 0.04628573213703931,
+    "num_pairs": 40
+  },
+  "ransac_icp": {
+    "rotation_error_deg_mean": 45.843526540075054,
+    "rotation_error_deg_rmse": 65.13981376602457,
+    "translation_error_mean": 0.3685021533863619,
+    "translation_error_rmse": 0.4853533903990174,
+    "chamfer_distance_mean": 0.036512824008241296,
+    "num_pairs": 40
+  },
+  "fpfh_ransac": {
+    "rotation_error_deg_mean": 102.45193854904535,
+    "rotation_error_deg_rmse": 112.68970558681127,
+    "translation_error_mean": 0.4241492784582078,
+    "translation_error_rmse": 0.5482369188629498,
+    "chamfer_distance_mean": 0.27773737218230965,
+    "num_pairs": 40
+  },
+  "fpfh_fgr": {
+    "rotation_error_deg_mean": 80.80069334911086,
+    "rotation_error_deg_rmse": 93.06573194369663,
+    "translation_error_mean": 0.41026770435273646,
+    "translation_error_rmse": 0.5235599261220214,
+    "chamfer_distance_mean": 0.24612829298712313,
+    "num_pairs": 40
+  },
+  "gicp": {
+    "rotation_error_deg_mean": 62.95848514359407,
+    "rotation_error_deg_rmse": 67.19413806088414,
+    "translation_error_mean": 0.34457822907716035,
+    "translation_error_rmse": 0.4268973201529845,
+    "chamfer_distance_mean": 0.3125853884965181,
+    "num_pairs": 40
+  },
+  "cpd": {
+    "rotation_error_deg_mean": 39.22584870519275,
+    "rotation_error_deg_rmse": 49.68445825183476,
+    "translation_error_mean": 0.2465142571600154,
+    "translation_error_rmse": 0.31536996156938446,
+    "chamfer_distance_mean": 0.02030553388176486,
+    "num_pairs": 40
+  },
+  "teaserpp": {
+    "rotation_error_deg_mean": Infinity,
+    "rotation_error_deg_rmse": Infinity,
+    "translation_error_mean": Infinity,
+    "translation_error_rmse": Infinity,
+    "chamfer_distance_mean": Infinity,
+    "num_pairs": 40
+  },
+  "super4pcs": {
+    "rotation_error_deg_mean": Infinity,
+    "rotation_error_deg_rmse": Infinity,
+    "translation_error_mean": Infinity,
+    "translation_error_rmse": Infinity,
+    "chamfer_distance_mean": Infinity,
+    "num_pairs": 40
+  },
+  "goicp": {
+    "rotation_error_deg_mean": Infinity,
+    "rotation_error_deg_rmse": Infinity,
+    "translation_error_mean": Infinity,
+    "translation_error_rmse": Infinity,
+    "chamfer_distance_mean": Infinity,
+    "num_pairs": 40
+  }
+}

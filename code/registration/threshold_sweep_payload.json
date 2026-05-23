@@ -1,0 +1,2237 @@
+{
+  "runs": {
+    "rot_5p_trans_0p2": {
+      "args": {
+        "cpd": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 80.75791884752175,
+          "translation_error_mean": 0.3763267869750659,
+          "chamfer_distance_mean": 0.5542944988442792,
+          "runtime_sec_mean": 0.1257307194399699,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_fgr": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 30.901001066984282,
+          "translation_error_mean": 0.5045348955318332,
+          "chamfer_distance_mean": 0.47823382417360943,
+          "runtime_sec_mean": 0.02133664722593191,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_ransac": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 64.87291143358148,
+          "translation_error_mean": 0.7830791175365448,
+          "chamfer_distance_mean": 0.9423359996742673,
+          "runtime_sec_mean": 0.3559368444386766,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "gicp": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.694882554801065,
+          "translation_error_mean": 0.3288680323296123,
+          "chamfer_distance_mean": 0.8062080244223276,
+          "runtime_sec_mean": 0.023398758332607236,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "goicp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "icp_point_to_plane": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0004480416698950446,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_point_to_point": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.354458385652904,
+          "translation_error_mean": 0.5291344929072591,
+          "chamfer_distance_mean": 0.397870246734884,
+          "runtime_sec_mean": 0.0091201805561367,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_trimmed": {
+          "success_rate": 0.08333333333333333,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 24.47463323354046,
+          "translation_error_mean": 0.35762380467106897,
+          "chamfer_distance_mean": 0.47979105098379976,
+          "runtime_sec_mean": 0.008987136120494042,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "identity": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "ransac_icp": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 49.018972795310226,
+          "translation_error_mean": 0.5309753602163659,
+          "chamfer_distance_mean": 0.40563969189922017,
+          "runtime_sec_mean": 0.2582840944459248,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "super4pcs": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "teaserpp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        }
+      }
+    },
+    "rot_5p_trans_0p3": {
+      "args": {
+        "cpd": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 80.75791884752175,
+          "translation_error_mean": 0.3763267869750659,
+          "chamfer_distance_mean": 0.5542944988442792,
+          "runtime_sec_mean": 0.11729378333095357,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_fgr": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 27.933352526124793,
+          "translation_error_mean": 0.532112944767707,
+          "chamfer_distance_mean": 0.4639031853940752,
+          "runtime_sec_mean": 0.020123936113021854,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_ransac": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 88.85477987924214,
+          "translation_error_mean": 0.8418083687623342,
+          "chamfer_distance_mean": 0.8148446728785833,
+          "runtime_sec_mean": 0.3100093916647085,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "gicp": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.694882554801065,
+          "translation_error_mean": 0.3288680323296123,
+          "chamfer_distance_mean": 0.8062080244223276,
+          "runtime_sec_mean": 0.01960940833022404,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "goicp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "icp_point_to_plane": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0005787416626440568,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_point_to_point": {
+          "success_rate": 0.027777777777777776,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.354458385652904,
+          "translation_error_mean": 0.5291344929072591,
+          "chamfer_distance_mean": 0.397870246734884,
+          "runtime_sec_mean": 0.011052649988818705,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_trimmed": {
+          "success_rate": 0.08333333333333333,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 24.47463323354046,
+          "translation_error_mean": 0.35762380467106897,
+          "chamfer_distance_mean": 0.47979105098379976,
+          "runtime_sec_mean": 0.009328799988401847,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "identity": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "ransac_icp": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 49.018972795310226,
+          "translation_error_mean": 0.5309753602163659,
+          "chamfer_distance_mean": 0.40563969189922017,
+          "runtime_sec_mean": 0.24647568889001073,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "super4pcs": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "teaserpp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        }
+      }
+    },
+    "rot_5p_trans_0p5": {
+      "args": {
+        "cpd": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 80.75791884752175,
+          "translation_error_mean": 0.3763267869750659,
+          "chamfer_distance_mean": 0.5542944988442792,
+          "runtime_sec_mean": 0.11627466666525127,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_fgr": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 28.457473383315925,
+          "translation_error_mean": 0.5090782198434075,
+          "chamfer_distance_mean": 0.4467996872133679,
+          "runtime_sec_mean": 0.023778777773259208,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_ransac": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 79.23760606737243,
+          "translation_error_mean": 0.9576452266838816,
+          "chamfer_distance_mean": 1.002054042286343,
+          "runtime_sec_mean": 0.3035448499819419,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "gicp": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.694882554801065,
+          "translation_error_mean": 0.3288680323296123,
+          "chamfer_distance_mean": 0.8062080244223276,
+          "runtime_sec_mean": 0.015403258336138809,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "goicp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "icp_point_to_plane": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.00046606665839337645,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_point_to_point": {
+          "success_rate": 0.027777777777777776,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.354458385652904,
+          "translation_error_mean": 0.5291344929072591,
+          "chamfer_distance_mean": 0.397870246734884,
+          "runtime_sec_mean": 0.009978197227206288,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_trimmed": {
+          "success_rate": 0.08333333333333333,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 24.47463323354046,
+          "translation_error_mean": 0.35762380467106897,
+          "chamfer_distance_mean": 0.47979105098379976,
+          "runtime_sec_mean": 0.00909996388428327,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "identity": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "ransac_icp": {
+          "success_rate": 0.027777777777777776,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 49.018972795310226,
+          "translation_error_mean": 0.5309753602163659,
+          "chamfer_distance_mean": 0.40563969189922017,
+          "runtime_sec_mean": 0.25370003056013957,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "super4pcs": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "teaserpp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        }
+      }
+    },
+    "rot_10p_trans_0p2": {
+      "args": {
+        "cpd": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 80.75791884752175,
+          "translation_error_mean": 0.3763267869750659,
+          "chamfer_distance_mean": 0.5542944988442792,
+          "runtime_sec_mean": 0.11829783332197824,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_fgr": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.661773474911467,
+          "translation_error_mean": 0.5228831224764386,
+          "chamfer_distance_mean": 0.4442930751376682,
+          "runtime_sec_mean": 0.031522827782383606,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_ransac": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 66.83493625714418,
+          "translation_error_mean": 0.8319950670831734,
+          "chamfer_distance_mean": 0.9582107530699835,
+          "runtime_sec_mean": 0.3104715749925364,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "gicp": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.694882554801065,
+          "translation_error_mean": 0.3288680323296123,
+          "chamfer_distance_mean": 0.8062080244223276,
+          "runtime_sec_mean": 0.01774470277854966,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "goicp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "icp_point_to_plane": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.00039677776900740963,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_point_to_point": {
+          "success_rate": 0.05555555555555555,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.354458385652904,
+          "translation_error_mean": 0.5291344929072591,
+          "chamfer_distance_mean": 0.397870246734884,
+          "runtime_sec_mean": 0.007756847228544454,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_trimmed": {
+          "success_rate": 0.08333333333333333,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 24.47463323354046,
+          "translation_error_mean": 0.35762380467106897,
+          "chamfer_distance_mean": 0.47979105098379976,
+          "runtime_sec_mean": 0.008187752773260904,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "identity": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "ransac_icp": {
+          "success_rate": 0.027777777777777776,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 49.018972795310226,
+          "translation_error_mean": 0.5309753602163659,
+          "chamfer_distance_mean": 0.40563969189922017,
+          "runtime_sec_mean": 0.24736724722768286,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "super4pcs": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "teaserpp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        }
+      }
+    },
+    "rot_10p_trans_0p3": {
+      "args": {
+        "cpd": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 80.75791884752175,
+          "translation_error_mean": 0.3763267869750659,
+          "chamfer_distance_mean": 0.5542944988442792,
+          "runtime_sec_mean": 0.11832397222234349,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_fgr": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.5102093239418335,
+          "chamfer_distance_mean": 0.4326133330663045,
+          "runtime_sec_mean": 0.03672510555609026,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_ransac": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 75.98080241898022,
+          "translation_error_mean": 0.7776416962345443,
+          "chamfer_distance_mean": 0.8522118123041259,
+          "runtime_sec_mean": 0.3062223361145395,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "gicp": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.694882554801065,
+          "translation_error_mean": 0.3288680323296123,
+          "chamfer_distance_mean": 0.8062080244223276,
+          "runtime_sec_mean": 0.018255550000402663,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "goicp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "icp_point_to_plane": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.00041785556499639317,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_point_to_point": {
+          "success_rate": 0.08333333333333333,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.354458385652904,
+          "translation_error_mean": 0.5291344929072591,
+          "chamfer_distance_mean": 0.397870246734884,
+          "runtime_sec_mean": 0.009009822203855341,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_trimmed": {
+          "success_rate": 0.16666666666666666,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 24.47463323354046,
+          "translation_error_mean": 0.35762380467106897,
+          "chamfer_distance_mean": 0.47979105098379976,
+          "runtime_sec_mean": 0.008376183340765743,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "identity": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "ransac_icp": {
+          "success_rate": 0.027777777777777776,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 49.018972795310226,
+          "translation_error_mean": 0.5309753602163659,
+          "chamfer_distance_mean": 0.40563969189922017,
+          "runtime_sec_mean": 0.24514218333772284,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "super4pcs": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "teaserpp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        }
+      }
+    },
+    "rot_10p_trans_0p5": {
+      "args": {
+        "cpd": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 80.75791884752175,
+          "translation_error_mean": 0.3763267869750659,
+          "chamfer_distance_mean": 0.5542944988442792,
+          "runtime_sec_mean": 0.11426898610403036,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_fgr": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.5102093239418335,
+          "chamfer_distance_mean": 0.4326133330663045,
+          "runtime_sec_mean": 0.03117938888155752,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_ransac": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 80.3858178391725,
+          "translation_error_mean": 0.8570669152670436,
+          "chamfer_distance_mean": 1.0128876128130488,
+          "runtime_sec_mean": 0.3030400722184115,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "gicp": {
+          "success_rate": 0.027777777777777776,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.694882554801065,
+          "translation_error_mean": 0.3288680323296123,
+          "chamfer_distance_mean": 0.8062080244223276,
+          "runtime_sec_mean": 0.022435224990153477,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "goicp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "icp_point_to_plane": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0004312083377347639,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_point_to_point": {
+          "success_rate": 0.13888888888888887,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.354458385652904,
+          "translation_error_mean": 0.5291344929072591,
+          "chamfer_distance_mean": 0.397870246734884,
+          "runtime_sec_mean": 0.00917243332757304,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_trimmed": {
+          "success_rate": 0.16666666666666666,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 24.47463323354046,
+          "translation_error_mean": 0.35762380467106897,
+          "chamfer_distance_mean": 0.47979105098379976,
+          "runtime_sec_mean": 0.008617597221422734,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "identity": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "ransac_icp": {
+          "success_rate": 0.05555555555555555,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 49.018972795310226,
+          "translation_error_mean": 0.5309753602163659,
+          "chamfer_distance_mean": 0.40563969189922017,
+          "runtime_sec_mean": 0.24492903610613817,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "super4pcs": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "teaserpp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        }
+      }
+    },
+    "rot_15p_trans_0p2": {
+      "args": {
+        "cpd": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 80.75791884752175,
+          "translation_error_mean": 0.3763267869750659,
+          "chamfer_distance_mean": 0.5542944988442792,
+          "runtime_sec_mean": 0.11188326111813594,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_fgr": {
+          "success_rate": 0.05555555555555555,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 28.75704845558157,
+          "translation_error_mean": 0.5060433864386545,
+          "chamfer_distance_mean": 0.4669104442000389,
+          "runtime_sec_mean": 0.021659827781453107,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_ransac": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 79.98871519533235,
+          "translation_error_mean": 0.768277570605278,
+          "chamfer_distance_mean": 0.7834462457233005,
+          "runtime_sec_mean": 0.3043148750083573,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "gicp": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.694882554801065,
+          "translation_error_mean": 0.3288680323296123,
+          "chamfer_distance_mean": 0.8062080244223276,
+          "runtime_sec_mean": 0.017280325008970168,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "goicp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "icp_point_to_plane": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.00043189722863543365,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_point_to_point": {
+          "success_rate": 0.05555555555555555,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.354458385652904,
+          "translation_error_mean": 0.5291344929072591,
+          "chamfer_distance_mean": 0.397870246734884,
+          "runtime_sec_mean": 0.008697397224346383,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_trimmed": {
+          "success_rate": 0.08333333333333333,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 24.47463323354046,
+          "translation_error_mean": 0.35762380467106897,
+          "chamfer_distance_mean": 0.47979105098379976,
+          "runtime_sec_mean": 0.00794337221628262,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "identity": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "ransac_icp": {
+          "success_rate": 0.027777777777777776,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 49.018972795310226,
+          "translation_error_mean": 0.5309753602163659,
+          "chamfer_distance_mean": 0.40563969189922017,
+          "runtime_sec_mean": 0.24684099723041678,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "super4pcs": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "teaserpp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        }
+      }
+    },
+    "rot_15p_trans_0p3": {
+      "args": {
+        "cpd": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 80.75791884752175,
+          "translation_error_mean": 0.3763267869750659,
+          "chamfer_distance_mean": 0.5542944988442792,
+          "runtime_sec_mean": 0.11749503332733487,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_fgr": {
+          "success_rate": 0.08333333333333333,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 31.945747305159717,
+          "translation_error_mean": 0.5315999193117023,
+          "chamfer_distance_mean": 0.4820078826612897,
+          "runtime_sec_mean": 0.02576612778163205,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_ransac": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 87.9870732942585,
+          "translation_error_mean": 0.8930258630878395,
+          "chamfer_distance_mean": 0.8856485568814807,
+          "runtime_sec_mean": 0.2954167861187469,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "gicp": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.694882554801065,
+          "translation_error_mean": 0.3288680323296123,
+          "chamfer_distance_mean": 0.8062080244223276,
+          "runtime_sec_mean": 0.015350369445513934,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "goicp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "icp_point_to_plane": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.000421291679635437,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_point_to_point": {
+          "success_rate": 0.13888888888888887,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.354458385652904,
+          "translation_error_mean": 0.5291344929072591,
+          "chamfer_distance_mean": 0.397870246734884,
+          "runtime_sec_mean": 0.00805952777995521,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_trimmed": {
+          "success_rate": 0.16666666666666666,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 24.47463323354046,
+          "translation_error_mean": 0.35762380467106897,
+          "chamfer_distance_mean": 0.47979105098379976,
+          "runtime_sec_mean": 0.008084208339116432,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "identity": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "ransac_icp": {
+          "success_rate": 0.08333333333333333,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 49.018972795310226,
+          "translation_error_mean": 0.5309753602163659,
+          "chamfer_distance_mean": 0.40563969189922017,
+          "runtime_sec_mean": 0.25912885277648456,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "super4pcs": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "teaserpp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        }
+      }
+    },
+    "rot_15p_trans_0p5": {
+      "args": {
+        "cpd": {
+          "success_rate": 0.0,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 80.75791884752175,
+          "translation_error_mean": 0.3763267869750659,
+          "chamfer_distance_mean": 0.5542944988442792,
+          "runtime_sec_mean": 0.10199993611442754,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_fgr": {
+          "success_rate": 0.13888888888888887,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 32.05654052355732,
+          "translation_error_mean": 0.49726810089002055,
+          "chamfer_distance_mean": 0.45672188368108535,
+          "runtime_sec_mean": 0.017102861114027392,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "fpfh_ransac": {
+          "success_rate": 0.1111111111111111,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 70.19753175845713,
+          "translation_error_mean": 0.8702959546612369,
+          "chamfer_distance_mean": 1.0231567016906211,
+          "runtime_sec_mean": 0.2689426666571914,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "gicp": {
+          "success_rate": 0.1111111111111111,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.694882554801065,
+          "translation_error_mean": 0.3288680323296123,
+          "chamfer_distance_mean": 0.8062080244223276,
+          "runtime_sec_mean": 0.013993494451925574,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "goicp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "icp_point_to_plane": {
+          "success_rate": 0.16666666666666666,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0004389055700610495,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_point_to_point": {
+          "success_rate": 0.25000000000000006,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 26.354458385652904,
+          "translation_error_mean": 0.5291344929072591,
+          "chamfer_distance_mean": 0.397870246734884,
+          "runtime_sec_mean": 0.008297694446001615,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "icp_trimmed": {
+          "success_rate": 0.19444444444444442,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 24.47463323354046,
+          "translation_error_mean": 0.35762380467106897,
+          "chamfer_distance_mean": 0.47979105098379976,
+          "runtime_sec_mean": 0.0077604944364995584,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "identity": {
+          "success_rate": 0.16666666666666666,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 25.324415933945843,
+          "translation_error_mean": 0.33660978823900223,
+          "chamfer_distance_mean": 0.8025781454311477,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "ransac_icp": {
+          "success_rate": 0.1111111111111111,
+          "skip_rate": 0.0,
+          "rotation_error_deg_mean": 49.018972795310226,
+          "translation_error_mean": 0.5309753602163659,
+          "chamfer_distance_mean": 0.40563969189922017,
+          "runtime_sec_mean": 0.24803064165300584,
+          "num_pairs": 36,
+          "num_failed_pairs": 0
+        },
+        "super4pcs": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        },
+        "teaserpp": {
+          "success_rate": 0.0,
+          "skip_rate": 1.0,
+          "rotation_error_deg_mean": Infinity,
+          "translation_error_mean": Infinity,
+          "chamfer_distance_mean": Infinity,
+          "runtime_sec_mean": 0.0,
+          "num_pairs": 36,
+          "num_failed_pairs": 36
+        }
+      }
+    }
+  },
+  "summary": {
+    "rot_5p_trans_0p2": {
+      "cpd": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 80.75791884752175,
+        "translation_error_mean": 0.3763267869750659,
+        "chamfer_distance_mean": 0.5542944988442792,
+        "runtime_sec_mean": 0.1257307194399699,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_fgr": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 30.901001066984282,
+        "translation_error_mean": 0.5045348955318332,
+        "chamfer_distance_mean": 0.47823382417360943,
+        "runtime_sec_mean": 0.02133664722593191,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_ransac": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 64.87291143358148,
+        "translation_error_mean": 0.7830791175365448,
+        "chamfer_distance_mean": 0.9423359996742673,
+        "runtime_sec_mean": 0.3559368444386766,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "gicp": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.694882554801065,
+        "translation_error_mean": 0.3288680323296123,
+        "chamfer_distance_mean": 0.8062080244223276,
+        "runtime_sec_mean": 0.023398758332607236,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "goicp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "icp_point_to_plane": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0004480416698950446,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_point_to_point": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.354458385652904,
+        "translation_error_mean": 0.5291344929072591,
+        "chamfer_distance_mean": 0.397870246734884,
+        "runtime_sec_mean": 0.0091201805561367,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_trimmed": {
+        "success_rate": 0.08333333333333333,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 24.47463323354046,
+        "translation_error_mean": 0.35762380467106897,
+        "chamfer_distance_mean": 0.47979105098379976,
+        "runtime_sec_mean": 0.008987136120494042,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "identity": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "ransac_icp": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 49.018972795310226,
+        "translation_error_mean": 0.5309753602163659,
+        "chamfer_distance_mean": 0.40563969189922017,
+        "runtime_sec_mean": 0.2582840944459248,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "super4pcs": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "teaserpp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      }
+    },
+    "rot_5p_trans_0p3": {
+      "cpd": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 80.75791884752175,
+        "translation_error_mean": 0.3763267869750659,
+        "chamfer_distance_mean": 0.5542944988442792,
+        "runtime_sec_mean": 0.11729378333095357,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_fgr": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 27.933352526124793,
+        "translation_error_mean": 0.532112944767707,
+        "chamfer_distance_mean": 0.4639031853940752,
+        "runtime_sec_mean": 0.020123936113021854,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_ransac": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 88.85477987924214,
+        "translation_error_mean": 0.8418083687623342,
+        "chamfer_distance_mean": 0.8148446728785833,
+        "runtime_sec_mean": 0.3100093916647085,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "gicp": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.694882554801065,
+        "translation_error_mean": 0.3288680323296123,
+        "chamfer_distance_mean": 0.8062080244223276,
+        "runtime_sec_mean": 0.01960940833022404,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "goicp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "icp_point_to_plane": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0005787416626440568,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_point_to_point": {
+        "success_rate": 0.027777777777777776,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.354458385652904,
+        "translation_error_mean": 0.5291344929072591,
+        "chamfer_distance_mean": 0.397870246734884,
+        "runtime_sec_mean": 0.011052649988818705,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_trimmed": {
+        "success_rate": 0.08333333333333333,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 24.47463323354046,
+        "translation_error_mean": 0.35762380467106897,
+        "chamfer_distance_mean": 0.47979105098379976,
+        "runtime_sec_mean": 0.009328799988401847,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "identity": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "ransac_icp": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 49.018972795310226,
+        "translation_error_mean": 0.5309753602163659,
+        "chamfer_distance_mean": 0.40563969189922017,
+        "runtime_sec_mean": 0.24647568889001073,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "super4pcs": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "teaserpp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      }
+    },
+    "rot_5p_trans_0p5": {
+      "cpd": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 80.75791884752175,
+        "translation_error_mean": 0.3763267869750659,
+        "chamfer_distance_mean": 0.5542944988442792,
+        "runtime_sec_mean": 0.11627466666525127,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_fgr": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 28.457473383315925,
+        "translation_error_mean": 0.5090782198434075,
+        "chamfer_distance_mean": 0.4467996872133679,
+        "runtime_sec_mean": 0.023778777773259208,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_ransac": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 79.23760606737243,
+        "translation_error_mean": 0.9576452266838816,
+        "chamfer_distance_mean": 1.002054042286343,
+        "runtime_sec_mean": 0.3035448499819419,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "gicp": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.694882554801065,
+        "translation_error_mean": 0.3288680323296123,
+        "chamfer_distance_mean": 0.8062080244223276,
+        "runtime_sec_mean": 0.015403258336138809,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "goicp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "icp_point_to_plane": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.00046606665839337645,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_point_to_point": {
+        "success_rate": 0.027777777777777776,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.354458385652904,
+        "translation_error_mean": 0.5291344929072591,
+        "chamfer_distance_mean": 0.397870246734884,
+        "runtime_sec_mean": 0.009978197227206288,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_trimmed": {
+        "success_rate": 0.08333333333333333,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 24.47463323354046,
+        "translation_error_mean": 0.35762380467106897,
+        "chamfer_distance_mean": 0.47979105098379976,
+        "runtime_sec_mean": 0.00909996388428327,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "identity": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "ransac_icp": {
+        "success_rate": 0.027777777777777776,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 49.018972795310226,
+        "translation_error_mean": 0.5309753602163659,
+        "chamfer_distance_mean": 0.40563969189922017,
+        "runtime_sec_mean": 0.25370003056013957,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "super4pcs": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "teaserpp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      }
+    },
+    "rot_10p_trans_0p2": {
+      "cpd": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 80.75791884752175,
+        "translation_error_mean": 0.3763267869750659,
+        "chamfer_distance_mean": 0.5542944988442792,
+        "runtime_sec_mean": 0.11829783332197824,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_fgr": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.661773474911467,
+        "translation_error_mean": 0.5228831224764386,
+        "chamfer_distance_mean": 0.4442930751376682,
+        "runtime_sec_mean": 0.031522827782383606,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_ransac": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 66.83493625714418,
+        "translation_error_mean": 0.8319950670831734,
+        "chamfer_distance_mean": 0.9582107530699835,
+        "runtime_sec_mean": 0.3104715749925364,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "gicp": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.694882554801065,
+        "translation_error_mean": 0.3288680323296123,
+        "chamfer_distance_mean": 0.8062080244223276,
+        "runtime_sec_mean": 0.01774470277854966,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "goicp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "icp_point_to_plane": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.00039677776900740963,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_point_to_point": {
+        "success_rate": 0.05555555555555555,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.354458385652904,
+        "translation_error_mean": 0.5291344929072591,
+        "chamfer_distance_mean": 0.397870246734884,
+        "runtime_sec_mean": 0.007756847228544454,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_trimmed": {
+        "success_rate": 0.08333333333333333,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 24.47463323354046,
+        "translation_error_mean": 0.35762380467106897,
+        "chamfer_distance_mean": 0.47979105098379976,
+        "runtime_sec_mean": 0.008187752773260904,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "identity": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "ransac_icp": {
+        "success_rate": 0.027777777777777776,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 49.018972795310226,
+        "translation_error_mean": 0.5309753602163659,
+        "chamfer_distance_mean": 0.40563969189922017,
+        "runtime_sec_mean": 0.24736724722768286,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "super4pcs": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "teaserpp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      }
+    },
+    "rot_10p_trans_0p3": {
+      "cpd": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 80.75791884752175,
+        "translation_error_mean": 0.3763267869750659,
+        "chamfer_distance_mean": 0.5542944988442792,
+        "runtime_sec_mean": 0.11832397222234349,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_fgr": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.5102093239418335,
+        "chamfer_distance_mean": 0.4326133330663045,
+        "runtime_sec_mean": 0.03672510555609026,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_ransac": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 75.98080241898022,
+        "translation_error_mean": 0.7776416962345443,
+        "chamfer_distance_mean": 0.8522118123041259,
+        "runtime_sec_mean": 0.3062223361145395,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "gicp": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.694882554801065,
+        "translation_error_mean": 0.3288680323296123,
+        "chamfer_distance_mean": 0.8062080244223276,
+        "runtime_sec_mean": 0.018255550000402663,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "goicp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "icp_point_to_plane": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.00041785556499639317,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_point_to_point": {
+        "success_rate": 0.08333333333333333,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.354458385652904,
+        "translation_error_mean": 0.5291344929072591,
+        "chamfer_distance_mean": 0.397870246734884,
+        "runtime_sec_mean": 0.009009822203855341,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_trimmed": {
+        "success_rate": 0.16666666666666666,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 24.47463323354046,
+        "translation_error_mean": 0.35762380467106897,
+        "chamfer_distance_mean": 0.47979105098379976,
+        "runtime_sec_mean": 0.008376183340765743,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "identity": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "ransac_icp": {
+        "success_rate": 0.027777777777777776,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 49.018972795310226,
+        "translation_error_mean": 0.5309753602163659,
+        "chamfer_distance_mean": 0.40563969189922017,
+        "runtime_sec_mean": 0.24514218333772284,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "super4pcs": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "teaserpp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      }
+    },
+    "rot_10p_trans_0p5": {
+      "cpd": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 80.75791884752175,
+        "translation_error_mean": 0.3763267869750659,
+        "chamfer_distance_mean": 0.5542944988442792,
+        "runtime_sec_mean": 0.11426898610403036,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_fgr": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.5102093239418335,
+        "chamfer_distance_mean": 0.4326133330663045,
+        "runtime_sec_mean": 0.03117938888155752,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_ransac": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 80.3858178391725,
+        "translation_error_mean": 0.8570669152670436,
+        "chamfer_distance_mean": 1.0128876128130488,
+        "runtime_sec_mean": 0.3030400722184115,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "gicp": {
+        "success_rate": 0.027777777777777776,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.694882554801065,
+        "translation_error_mean": 0.3288680323296123,
+        "chamfer_distance_mean": 0.8062080244223276,
+        "runtime_sec_mean": 0.022435224990153477,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "goicp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "icp_point_to_plane": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0004312083377347639,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_point_to_point": {
+        "success_rate": 0.13888888888888887,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.354458385652904,
+        "translation_error_mean": 0.5291344929072591,
+        "chamfer_distance_mean": 0.397870246734884,
+        "runtime_sec_mean": 0.00917243332757304,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_trimmed": {
+        "success_rate": 0.16666666666666666,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 24.47463323354046,
+        "translation_error_mean": 0.35762380467106897,
+        "chamfer_distance_mean": 0.47979105098379976,
+        "runtime_sec_mean": 0.008617597221422734,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "identity": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "ransac_icp": {
+        "success_rate": 0.05555555555555555,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 49.018972795310226,
+        "translation_error_mean": 0.5309753602163659,
+        "chamfer_distance_mean": 0.40563969189922017,
+        "runtime_sec_mean": 0.24492903610613817,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "super4pcs": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "teaserpp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      }
+    },
+    "rot_15p_trans_0p2": {
+      "cpd": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 80.75791884752175,
+        "translation_error_mean": 0.3763267869750659,
+        "chamfer_distance_mean": 0.5542944988442792,
+        "runtime_sec_mean": 0.11188326111813594,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_fgr": {
+        "success_rate": 0.05555555555555555,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 28.75704845558157,
+        "translation_error_mean": 0.5060433864386545,
+        "chamfer_distance_mean": 0.4669104442000389,
+        "runtime_sec_mean": 0.021659827781453107,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_ransac": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 79.98871519533235,
+        "translation_error_mean": 0.768277570605278,
+        "chamfer_distance_mean": 0.7834462457233005,
+        "runtime_sec_mean": 0.3043148750083573,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "gicp": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.694882554801065,
+        "translation_error_mean": 0.3288680323296123,
+        "chamfer_distance_mean": 0.8062080244223276,
+        "runtime_sec_mean": 0.017280325008970168,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "goicp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "icp_point_to_plane": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.00043189722863543365,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_point_to_point": {
+        "success_rate": 0.05555555555555555,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.354458385652904,
+        "translation_error_mean": 0.5291344929072591,
+        "chamfer_distance_mean": 0.397870246734884,
+        "runtime_sec_mean": 0.008697397224346383,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_trimmed": {
+        "success_rate": 0.08333333333333333,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 24.47463323354046,
+        "translation_error_mean": 0.35762380467106897,
+        "chamfer_distance_mean": 0.47979105098379976,
+        "runtime_sec_mean": 0.00794337221628262,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "identity": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "ransac_icp": {
+        "success_rate": 0.027777777777777776,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 49.018972795310226,
+        "translation_error_mean": 0.5309753602163659,
+        "chamfer_distance_mean": 0.40563969189922017,
+        "runtime_sec_mean": 0.24684099723041678,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "super4pcs": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "teaserpp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      }
+    },
+    "rot_15p_trans_0p3": {
+      "cpd": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 80.75791884752175,
+        "translation_error_mean": 0.3763267869750659,
+        "chamfer_distance_mean": 0.5542944988442792,
+        "runtime_sec_mean": 0.11749503332733487,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_fgr": {
+        "success_rate": 0.08333333333333333,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 31.945747305159717,
+        "translation_error_mean": 0.5315999193117023,
+        "chamfer_distance_mean": 0.4820078826612897,
+        "runtime_sec_mean": 0.02576612778163205,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_ransac": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 87.9870732942585,
+        "translation_error_mean": 0.8930258630878395,
+        "chamfer_distance_mean": 0.8856485568814807,
+        "runtime_sec_mean": 0.2954167861187469,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "gicp": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.694882554801065,
+        "translation_error_mean": 0.3288680323296123,
+        "chamfer_distance_mean": 0.8062080244223276,
+        "runtime_sec_mean": 0.015350369445513934,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "goicp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "icp_point_to_plane": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.000421291679635437,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_point_to_point": {
+        "success_rate": 0.13888888888888887,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.354458385652904,
+        "translation_error_mean": 0.5291344929072591,
+        "chamfer_distance_mean": 0.397870246734884,
+        "runtime_sec_mean": 0.00805952777995521,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_trimmed": {
+        "success_rate": 0.16666666666666666,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 24.47463323354046,
+        "translation_error_mean": 0.35762380467106897,
+        "chamfer_distance_mean": 0.47979105098379976,
+        "runtime_sec_mean": 0.008084208339116432,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "identity": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "ransac_icp": {
+        "success_rate": 0.08333333333333333,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 49.018972795310226,
+        "translation_error_mean": 0.5309753602163659,
+        "chamfer_distance_mean": 0.40563969189922017,
+        "runtime_sec_mean": 0.25912885277648456,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "super4pcs": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "teaserpp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      }
+    },
+    "rot_15p_trans_0p5": {
+      "cpd": {
+        "success_rate": 0.0,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 80.75791884752175,
+        "translation_error_mean": 0.3763267869750659,
+        "chamfer_distance_mean": 0.5542944988442792,
+        "runtime_sec_mean": 0.10199993611442754,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_fgr": {
+        "success_rate": 0.13888888888888887,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 32.05654052355732,
+        "translation_error_mean": 0.49726810089002055,
+        "chamfer_distance_mean": 0.45672188368108535,
+        "runtime_sec_mean": 0.017102861114027392,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "fpfh_ransac": {
+        "success_rate": 0.1111111111111111,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 70.19753175845713,
+        "translation_error_mean": 0.8702959546612369,
+        "chamfer_distance_mean": 1.0231567016906211,
+        "runtime_sec_mean": 0.2689426666571914,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "gicp": {
+        "success_rate": 0.1111111111111111,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.694882554801065,
+        "translation_error_mean": 0.3288680323296123,
+        "chamfer_distance_mean": 0.8062080244223276,
+        "runtime_sec_mean": 0.013993494451925574,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "goicp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "icp_point_to_plane": {
+        "success_rate": 0.16666666666666666,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0004389055700610495,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_point_to_point": {
+        "success_rate": 0.25000000000000006,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 26.354458385652904,
+        "translation_error_mean": 0.5291344929072591,
+        "chamfer_distance_mean": 0.397870246734884,
+        "runtime_sec_mean": 0.008297694446001615,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "icp_trimmed": {
+        "success_rate": 0.19444444444444442,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 24.47463323354046,
+        "translation_error_mean": 0.35762380467106897,
+        "chamfer_distance_mean": 0.47979105098379976,
+        "runtime_sec_mean": 0.0077604944364995584,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "identity": {
+        "success_rate": 0.16666666666666666,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 25.324415933945843,
+        "translation_error_mean": 0.33660978823900223,
+        "chamfer_distance_mean": 0.8025781454311477,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "ransac_icp": {
+        "success_rate": 0.1111111111111111,
+        "skip_rate": 0.0,
+        "rotation_error_deg_mean": 49.018972795310226,
+        "translation_error_mean": 0.5309753602163659,
+        "chamfer_distance_mean": 0.40563969189922017,
+        "runtime_sec_mean": 0.24803064165300584,
+        "num_pairs": 36,
+        "num_failed_pairs": 0
+      },
+      "super4pcs": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      },
+      "teaserpp": {
+        "success_rate": 0.0,
+        "skip_rate": 1.0,
+        "rotation_error_deg_mean": Infinity,
+        "translation_error_mean": Infinity,
+        "chamfer_distance_mean": Infinity,
+        "runtime_sec_mean": 0.0,
+        "num_pairs": 36,
+        "num_failed_pairs": 36
+      }
+    }
+  },
+  "sweep_args": {
+    "success_rotation_degs": [
+      5.0,
+      10.0,
+      15.0
+    ],
+    "success_translations": [
+      0.2,
+      0.3,
+      0.5
+    ],
+    "dataset_split": "train",
+    "methods": "identity,icp_point_to_point,icp_point_to_plane,icp_trimmed,ransac_icp,fpfh_ransac,fpfh_fgr,gicp,cpd,teaserpp,super4pcs,goicp",
+    "num_sources_per_ref": 2,
+    "groups_per_batch": 1,
+    "reuse_existing": true
+  }
+}

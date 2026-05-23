@@ -5,12 +5,22 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Sequence
 
 
-def build_cases() -> List[Dict[str, object]]:
+def build_cases(case_set: str) -> List[Dict[str, object]]:
+    if case_set == "protocol":
+        return [
+            {
+                "name": "source2_crop",
+                "noise_type": "crop",
+                "num_points": 1024,
+                "partial": [0.7, 0.7],
+            }
+        ]
+    if case_set != "robustness":
+        raise ValueError(f"Unknown case set: {case_set}")
     return [
         {
             "name": "base_crop",
@@ -61,25 +71,37 @@ def parse_args() -> argparse.Namespace:
         help="Dataset path, relative to repository root.",
     )
     parser.add_argument(
+        "--dataset_split",
+        default="test",
+        choices=["test", "train"],
+        help="Dataset split to evaluate.",
+    )
+    parser.add_argument(
         "--output_root",
         default="runs/mps_gaf_nonlearn_suite",
         help="Root directory for suite output.",
     )
     parser.add_argument(
         "--methods",
-        default="icp_point_to_point,icp_point_to_plane,icp_trimmed,ransac_icp,identity",
+        default="identity,icp_point_to_point,icp_point_to_plane,icp_trimmed,ransac_icp,fpfh_ransac,fpfh_fgr,gicp,cpd",
         help="Comma-separated non-learning methods to benchmark.",
     )
-    parser.add_argument("--rot_mag", type=float, default=30.0)
-    parser.add_argument("--trans_mag", type=float, default=0.3)
+    parser.add_argument(
+        "--case_set",
+        default="protocol",
+        choices=["protocol", "robustness"],
+        help="Case preset. protocol matches source-2/crop validation; robustness keeps exploratory stress cases.",
+    )
+    parser.add_argument("--rot_mag", type=float, default=45.0)
+    parser.add_argument("--trans_mag", type=float, default=0.5)
     parser.add_argument("--num_sources_per_ref", type=int, default=2)
     parser.add_argument("--groups_per_batch", type=int, default=1)
     parser.add_argument("--num_workers", type=int, default=0)
-    parser.add_argument("--max_eval_batches", type=int, default=2)
+    parser.add_argument("--max_eval_batches", type=int, default=20)
     parser.add_argument("--icp_iterations", type=int, default=20)
     parser.add_argument("--icp_trim_fraction", type=float, default=0.7)
-    parser.add_argument("--success_rotation_deg", type=float, default=5.0)
-    parser.add_argument("--success_translation", type=float, default=0.2)
+    parser.add_argument("--success_rotation_deg", type=float, default=15.0)
+    parser.add_argument("--success_translation", type=float, default=0.5)
     parser.add_argument(
         "--icp_point_max_angle_deg",
         type=float,
@@ -98,7 +120,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fpfh_max_correspondence_distance", type=float, default=0.075)
     parser.add_argument("--fpfh_ransac_n", type=int, default=4)
     parser.add_argument("--fpfh_ransac_max_iterations", type=int, default=100000)
-    parser.add_argument("--python", default=sys.executable, help="Python executable.")
+    parser.add_argument("--python", default="python", help="Python executable.")
     parser.add_argument("--dry_run", action="store_true")
     return parser.parse_args()
 
@@ -119,6 +141,8 @@ def _build_case_args(args: argparse.Namespace, case: Dict[str, object]) -> List[
     return [
         "--dataset_path",
         str(args.dataset_path),
+        "--dataset_split",
+        args.dataset_split,
         "--output_dir",
         f"runs/mps_gaf_nonlearn_suite/{case['name']}",
         "--methods",
@@ -174,7 +198,7 @@ def _build_case_args(args: argparse.Namespace, case: Dict[str, object]) -> List[
 
 
 def run_benchmark_cases(args: argparse.Namespace) -> List[Dict[str, object]]:
-    cases = build_cases()
+    cases = build_cases(args.case_set)
     results: List[Dict[str, object]] = []
     output_root = Path(args.output_root)
     output_root.mkdir(parents=True, exist_ok=True)
@@ -193,6 +217,7 @@ def run_benchmark_cases(args: argparse.Namespace) -> List[Dict[str, object]]:
                 "case": case["name"],
                 "output_dir": str(summary_path.parent),
                 "dataset_path": args.dataset_path,
+                "case_set": args.case_set,
                 "noise_type": case["noise_type"],
                 "num_points": case["num_points"],
                 "partial": list(case["partial"]),

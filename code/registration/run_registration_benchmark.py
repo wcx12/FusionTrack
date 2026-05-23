@@ -30,6 +30,7 @@ try:
     )
     from .mps_gaf_data_pipeline import (
         MPSGAFDataConfig,
+        get_train_datasets,
         get_test_dataset,
         make_grouped_dataloader,
     )
@@ -43,6 +44,7 @@ except Exception:
     )
     from mps_gaf_data_pipeline import (
         MPSGAFDataConfig,
+        get_train_datasets,
         get_test_dataset,
         make_grouped_dataloader,
     )
@@ -59,6 +61,12 @@ def parse_args() -> argparse.Namespace:
         "--dataset_path",
         required=True,
         help="Path to modelnet40_ply_hdf5_2048 (recommend repository-relative path)",
+    )
+    parser.add_argument(
+        "--dataset_split",
+        default="test",
+        choices=["test", "train"],
+        help="Dataset split to evaluate.",
     )
     parser.add_argument(
         "--output_dir",
@@ -79,7 +87,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--groups_per_batch", type=int, default=1)
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--max_eval_batches", type=int, default=None)
+    parser.add_argument("--max_eval_batches", type=int, default=20)
     parser.add_argument("--icp_iterations", type=int, default=20)
     parser.add_argument("--icp_tolerance", type=float, default=1e-6)
     parser.add_argument("--icp_trim_fraction", type=float, default=0.7)
@@ -106,8 +114,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cpd_w", type=float, default=0.0)
     parser.add_argument("--ransac_iterations", type=int, default=500)
     parser.add_argument("--ransac_inlier_distance", type=float, default=0.05)
-    parser.add_argument("--success_rotation_deg", type=float, default=5.0)
-    parser.add_argument("--success_translation", type=float, default=0.2)
+    parser.add_argument("--success_rotation_deg", type=float, default=15.0)
+    parser.add_argument("--success_translation", type=float, default=0.5)
     return parser.parse_args()
 
 
@@ -235,6 +243,29 @@ def finalize_metrics(acc: Dict[str, float]) -> Dict[str, float]:
     }
 
 
+def to_mps_gaf_eval_schema(metrics: Dict[str, float]) -> Dict[str, float]:
+    """Project baseline metrics onto the schema emitted by mps_gaf_run.py eval."""
+
+    return {
+        "rotation_error_deg_mean": metrics["rotation_error_deg_mean"],
+        "rotation_error_deg_rmse": metrics["rotation_error_deg_rmse"],
+        "translation_error_mean": metrics["translation_error_mean"],
+        "translation_error_rmse": metrics["translation_error_rmse"],
+        "chamfer_distance_mean": metrics["chamfer_distance_mean"],
+        "num_pairs": metrics["num_pairs"],
+    }
+
+
+def to_comparison_schema(metrics: Dict[str, float], pose_trans_weight: float = 50.0) -> Dict[str, float]:
+    out = to_mps_gaf_eval_schema(metrics)
+    out["pose_metric"] = out["rotation_error_deg_mean"] + pose_trans_weight * out["translation_error_mean"]
+    out["num_failed_pairs"] = metrics["num_failed_pairs"]
+    out["skip_rate"] = metrics["skip_rate"]
+    out["success_rate"] = metrics["success_rate"]
+    out["runtime_sec_mean"] = metrics["runtime_sec_mean"]
+    return out
+
+
 def _to_torch_matrix(result: BaselineResult) -> torch.Tensor:
     return torch.tensor(result.transform, dtype=torch.float32)
 
@@ -346,7 +377,10 @@ def benchmark_methods(args: argparse.Namespace) -> Dict[str, object]:
         num_sources_per_ref=args.num_sources_per_ref,
         seed=args.seed,
     )
-    test_dataset = get_test_dataset(data_config)
+    if args.dataset_split == "train":
+        test_dataset, _ = get_train_datasets(data_config)
+    else:
+        test_dataset = get_test_dataset(data_config)
     test_loader = make_grouped_dataloader(
         test_dataset,
         groups_per_batch=args.groups_per_batch,
@@ -423,6 +457,12 @@ def benchmark_methods(args: argparse.Namespace) -> Dict[str, object]:
         "methods": methods,
         "supported_methods": baseline_method_names(),
         "benchmark": summary,
+        "mps_gaf_eval_schema": {
+            method: to_mps_gaf_eval_schema(metrics) for method, metrics in summary.items()
+        },
+        "comparison_schema": {
+            method: to_comparison_schema(metrics) for method, metrics in summary.items()
+        },
         "pair_results": pair_results,
     }
 
@@ -445,6 +485,14 @@ def main() -> None:
 
     (output_dir / "baseline_summary.json").write_text(
         json.dumps(payload, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / "mps_gaf_eval_schema_summary.json").write_text(
+        json.dumps(payload["mps_gaf_eval_schema"], indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / "comparison_schema_summary.json").write_text(
+        json.dumps(payload["comparison_schema"], indent=2),
         encoding="utf-8",
     )
     print(json.dumps(payload["benchmark"], indent=2))

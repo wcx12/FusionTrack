@@ -80,7 +80,7 @@ def main() -> None:
         registration_fused_jsonl = args.registration_fused_jsonl
         if args.registration_benchmark_summary is not None and registration_manifest is None:
             bundle = build_registration_experiment_bundle(
-                benchmark_summary=args.registration_benchmark_summary,
+                summary_path=args.registration_benchmark_summary,
                 work_root=paths.work_root,
             )
             registration_manifest = Path(bundle["manifest_path"])
