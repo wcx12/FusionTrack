@@ -388,6 +388,39 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .analysis-panel-block[hidden] {{ display: none; }}
     .table-scroll {{ overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #eef2f7; border-radius: 8px; }}
     .table-scroll table {{ background: white; }}
+    .help-button {{ background: #0f766e; border-color: #0f766e; color: white; }}
+    .help-button:hover {{ background: #115e59; border-color: #115e59; }}
+    .protocol-strip {{ display: grid; grid-template-columns: minmax(260px, 0.9fr) repeat(2, minmax(260px, 1fr)); gap: 12px; margin: 0 0 16px; }}
+    .protocol-note {{ border-left: 4px solid #0f766e; }}
+    .protocol-note strong {{ display: block; margin-bottom: 6px; color: #0f172a; }}
+    .protocol-card h3, .insight-card h3 {{ margin: 0 0 8px; font-size: 15px; }}
+    .type-cloud {{ display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }}
+    .type-chip {{ display: inline-flex; gap: 6px; align-items: center; min-height: 30px; border: 1px solid #dbe4ee; border-radius: 999px; padding: 4px 9px; background: #f8fafc; color: #334155; font-size: 12px; }}
+    .type-chip strong {{ color: #0f172a; font-variant-numeric: tabular-nums; }}
+    .insight-grid {{ display: grid; grid-template-columns: minmax(250px, 0.9fr) minmax(280px, 1.1fr) minmax(260px, 0.9fr); gap: 12px; margin-top: 12px; }}
+    .insight-card {{ border: 1px solid #e1e7ef; border-radius: 8px; background: #f8fafc; padding: 12px; min-width: 0; }}
+    .track-rank-list {{ display: grid; gap: 7px; max-height: 260px; overflow: auto; padding-right: 2px; }}
+    .track-rank-item {{ display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; min-height: 44px; border: 1px solid #dbe4ee; border-radius: 7px; background: white; padding: 8px 10px; text-align: left; }}
+    .track-rank-item.active {{ border-color: #0f766e; box-shadow: inset 3px 0 0 #0f766e; }}
+    .track-rank-item .score {{ font-weight: 800; font-variant-numeric: tabular-nums; color: #be123c; }}
+    .explain-metrics {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }}
+    .explain-metric {{ border: 1px solid #dbe4ee; border-radius: 7px; background: white; padding: 8px; }}
+    .explain-metric span {{ display: block; color: #64748b; font-size: 12px; }}
+    .explain-metric strong {{ display: block; margin-top: 2px; font-variant-numeric: tabular-nums; }}
+    .explain-reason {{ margin-top: 10px; color: #334155; font-size: 13px; }}
+    .method-summary {{ display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; }}
+    .method-summary-item {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 8px 10px; }}
+    .method-summary-item span {{ display: block; color: #64748b; font-size: 12px; }}
+    .method-summary-item strong {{ display: block; margin-top: 2px; }}
+    dialog {{ width: min(920px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 32px)); border: 1px solid #cbd5e1; border-radius: 8px; padding: 0; color: #172033; box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28); }}
+    dialog::backdrop {{ background: rgba(15, 23, 42, 0.42); }}
+    .help-dialog-head {{ display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 16px 18px; border-bottom: 1px solid #e5e7eb; background: #f8fafc; }}
+    .help-dialog-body {{ padding: 16px 18px 20px; overflow: auto; }}
+    .help-section {{ margin-top: 16px; }}
+    .help-section:first-child {{ margin-top: 0; }}
+    .help-section h3 {{ margin: 0 0 8px; font-size: 16px; }}
+    .help-section p {{ margin: 6px 0; }}
+    .help-section ul {{ margin: 8px 0 0; padding-left: 20px; }}
     @media (prefers-reduced-motion: reduce) {{
       button {{ transition: none; }}
     }}
@@ -406,6 +439,8 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       .section-heading .subtle {{ text-align: left; }}
       .control-surface {{ padding: 10px; }}
       .mode-switch button, .layer-switch button {{ flex: 1 1 140px; }}
+      .protocol-strip, .insight-grid, .method-summary {{ grid-template-columns: 1fr; }}
+      .explain-metrics {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -432,9 +467,19 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         <label><span data-i18n="sequence">序列</span>
           <select id="sequenceSelector"></select>
         </label>
+        <button type="button" class="help-button" id="helpButton" data-i18n="helpButton">说明</button>
       </div>
     </header>
     <div id="cards" class="cards"></div>
+
+    <section class="protocol-strip" aria-label="Anomaly protocol overview">
+      <div class="panel protocol-note">
+        <strong data-i18n="protocolTitle">异常协议</strong>
+        <div class="subtle" data-i18n="protocolNote">当前标签来自规则化 synthetic anomaly injection；背景帧仍是原始视频，异常主要体现在轨迹、热力和群体关系层。</div>
+      </div>
+      <div class="panel protocol-card" id="individualProtocol"></div>
+      <div class="panel protocol-card" id="groupProtocol"></div>
+    </section>
 
     <section class="panel player">
       <div class="section-heading">
@@ -490,6 +535,20 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       <div id="singleView" class="single-view" hidden>
         <div class="canvas-shell"><canvas id="singleCanvas" width="960" height="612"></canvas></div>
       </div>
+      <div class="insight-grid">
+        <div class="insight-card">
+          <h3 data-i18n="trackRankTitle">当前高风险轨迹</h3>
+          <div class="track-rank-list" id="trackRankList"></div>
+        </div>
+        <div class="insight-card">
+          <h3 data-i18n="explainTitle">为什么判为异常</h3>
+          <div id="explanationPanel" class="subtle"></div>
+        </div>
+        <div class="insight-card">
+          <h3 data-i18n="groupInsightTitle">群体关系</h3>
+          <div id="groupInsightPanel" class="subtle"></div>
+        </div>
+      </div>
     </section>
 
     <section class="panel">
@@ -500,6 +559,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         <button type="button" class="analysis-tab active" data-panel="leaderboard" data-i18n="tabLeaderboard">方法排名</button>
         <button type="button" class="analysis-tab" data-panel="types" data-i18n="tabTypes">异常类型分析</button>
         <button type="button" class="analysis-tab" data-panel="cases" data-i18n="tabCases">典型案例</button>
+        <button type="button" class="analysis-tab" data-panel="methods" data-i18n="tabMethods">算法接入</button>
       </div>
       <div class="analysis-panel-block" data-analysis-panel="leaderboard">
         <div class="table-scroll"><table class="leaderboard" id="leaderboardTable"></table></div>
@@ -515,7 +575,18 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         </div>
         <div class="table-scroll"><table class="case-list" id="caseTable"></table></div>
       </div>
+      <div class="analysis-panel-block" data-analysis-panel="methods" hidden>
+        <div id="methodSummary" class="method-summary"></div>
+        <div class="table-scroll"><table class="leaderboard" id="methodStatusTable"></table></div>
+      </div>
     </section>
+    <dialog id="helpDialog">
+      <div class="help-dialog-head">
+        <h2 data-i18n="helpTitle">网页说明</h2>
+        <button type="button" class="secondary-button" id="helpClose" data-i18n="closeHelp">关闭</button>
+      </div>
+      <div class="help-dialog-body" id="helpBody"></div>
+    </dialog>
   </main>
   <script id="dashboardData" type="application/json">{dashboard_json}</script>
   <script id="playbackData" type="application/json">{playback_json}</script>
@@ -527,9 +598,20 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       const taskSelector = document.getElementById("taskSelector");
       const methodSelector = document.getElementById("methodSelector");
       const cards = document.getElementById("cards");
+      const individualProtocol = document.getElementById("individualProtocol");
+      const groupProtocol = document.getElementById("groupProtocol");
       const leaderboardTable = document.getElementById("leaderboardTable");
       const typeTable = document.getElementById("typeTable");
       const caseTable = document.getElementById("caseTable");
+      const methodSummary = document.getElementById("methodSummary");
+      const methodStatusTable = document.getElementById("methodStatusTable");
+      const helpButton = document.getElementById("helpButton");
+      const helpDialog = document.getElementById("helpDialog");
+      const helpClose = document.getElementById("helpClose");
+      const helpBody = document.getElementById("helpBody");
+      const trackRankList = document.getElementById("trackRankList");
+      const explanationPanel = document.getElementById("explanationPanel");
+      const groupInsightPanel = document.getElementById("groupInsightPanel");
       const caseTabs = Array.from(document.querySelectorAll(".case-tab"));
       const analysisTabs = Array.from(document.querySelectorAll(".analysis-tab"));
       const analysisPanels = Array.from(document.querySelectorAll("[data-analysis-panel]"));
@@ -562,6 +644,11 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           task: "任务",
           method: "方法",
           sequence: "序列",
+          helpButton: "说明",
+          helpTitle: "网页说明",
+          closeHelp: "关闭",
+          protocolTitle: "异常协议",
+          protocolNote: "当前标签来自规则化 synthetic anomaly injection；背景帧仍是原始视频，异常主要体现在轨迹、热力和群体关系层。",
           cardMethods: "方法数",
           cardLabels: "总标签数",
           cardPositives: "总异常数",
@@ -574,6 +661,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           tabLeaderboard: "方法排名",
           tabTypes: "异常类型分析",
           tabCases: "典型案例",
+          tabMethods: "算法接入",
           interactivePlayback: "动态可视化",
           frame: "帧",
           play: "播放",
@@ -605,6 +693,30 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           scoreHeader: "分数",
           rankHeader: "排名",
           framesHeader: "帧范围",
+          sourceHeader: "来源",
+          familyHeader: "方法族",
+          learningHeader: "学习类型",
+          statusHeader: "状态",
+          trackRankTitle: "当前高风险轨迹",
+          explainTitle: "为什么判为异常",
+          groupInsightTitle: "群体关系",
+          selectedTrack: "选中轨迹",
+          anomalyLabel: "标签",
+          anomalyScore: "异常分数",
+          anomalyTypeLabel: "异常类型",
+          frameRangeLabel: "标签帧段",
+          motionLengthLabel: "轨迹长度",
+          avgSpeedLabel: "平均速度",
+          displacementLabel: "首尾位移",
+          currentNeighborsLabel: "当前邻近对象",
+          centroidRadiusLabel: "群体半径",
+          syntheticLabel: "规则注入异常",
+          normalLabel: "正常/未标注异常",
+          methodSummaryTitle: "算法接入状态",
+          integratedStatus: "已接入最终结果",
+          proposedStatus: "当前主方法",
+          baselineStatus: "对比基线",
+          noTrackSelected: "当前没有可解释轨迹。",
           truePositive: "正确检出",
           falsePositive: "误报",
           falseNegative: "漏报",
@@ -624,6 +736,11 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           task: "Task",
           method: "Method",
           sequence: "Sequence",
+          helpButton: "Help",
+          helpTitle: "Dashboard Help",
+          closeHelp: "Close",
+          protocolTitle: "Anomaly Protocol",
+          protocolNote: "Labels come from a rule-based synthetic anomaly injection protocol. The background frames are original video frames; anomalies are expressed in tracks, heatmaps, and group relations.",
           cardMethods: "Methods",
           cardLabels: "Total labels",
           cardPositives: "Total anomalies",
@@ -636,6 +753,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           tabLeaderboard: "Method Ranking",
           tabTypes: "Anomaly-Type Analysis",
           tabCases: "Representative Cases",
+          tabMethods: "Algorithm Status",
           interactivePlayback: "Interactive Playback",
           frame: "Frame",
           play: "Play",
@@ -667,6 +785,30 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           scoreHeader: "Score",
           rankHeader: "Rank",
           framesHeader: "Frames",
+          sourceHeader: "Source",
+          familyHeader: "Family",
+          learningHeader: "Learning",
+          statusHeader: "Status",
+          trackRankTitle: "High-Risk Tracks",
+          explainTitle: "Why Anomaly",
+          groupInsightTitle: "Group Relations",
+          selectedTrack: "Selected track",
+          anomalyLabel: "Label",
+          anomalyScore: "Anomaly score",
+          anomalyTypeLabel: "Anomaly type",
+          frameRangeLabel: "Label frames",
+          motionLengthLabel: "Path length",
+          avgSpeedLabel: "Mean speed",
+          displacementLabel: "Displacement",
+          currentNeighborsLabel: "Current neighbors",
+          centroidRadiusLabel: "Group radius",
+          syntheticLabel: "Synthetic anomaly",
+          normalLabel: "Normal / unlabeled",
+          methodSummaryTitle: "Algorithm integration status",
+          integratedStatus: "Integrated final result",
+          proposedStatus: "Current proposed method",
+          baselineStatus: "Comparison baseline",
+          noTrackSelected: "No explainable track is selected.",
           truePositive: "True Positive",
           falsePositive: "False Positive",
           falseNegative: "False Negative",
@@ -692,9 +834,41 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         layer: "both",
         heatOpacity: 0.64,
         heatWindow: 36,
+        selectedSampleId: "",
         image: null,
         imageKey: null,
         timer: null
+      }};
+
+      const anomalyDescriptions = {{
+        zh: {{
+          route_shift: "单条轨迹整体偏移，用来模拟目标偏离常规航线。",
+          speed_spike: "目标速度突然增大，轨迹点间距离异常放大。",
+          stop_or_slowdown: "目标在中后段突然停住或明显减速。",
+          jump: "轨迹中某一帧发生突跳。",
+          shape_warp: "轨迹形状被拉伸或压缩。",
+          modal_offset: "RGB/thermal 等模态中心发生偏移，模拟多模态不一致。",
+          leave_group: "对象偏离群体中心或群体运动区域。",
+          against_motion: "对象运动方向与群体趋势相反。",
+          neighbor_replacement: "对象轨迹被邻近对象替代。",
+          population_change: "群体数量发生变化，当前协议通过复制对象模拟。",
+          dispersion_change: "群体离散程度异常变大。",
+          split_merge: "群体出现分裂或合并式变化。"
+        }},
+        en: {{
+          route_shift: "The whole trajectory is shifted away from its regular route.",
+          speed_spike: "Motion speed suddenly increases with enlarged point-to-point distance.",
+          stop_or_slowdown: "The object stops or slows down in the later segment.",
+          jump: "One frame in the trajectory has an abrupt jump.",
+          shape_warp: "The trajectory shape is stretched or compressed.",
+          modal_offset: "RGB/thermal centers are shifted to simulate multimodal inconsistency.",
+          leave_group: "An object moves away from the group center or motion region.",
+          against_motion: "An object moves against the group trend.",
+          neighbor_replacement: "An object's trajectory is replaced by a neighboring object.",
+          population_change: "The group population changes; this protocol simulates it by copying an object.",
+          dispersion_change: "The group's spatial dispersion increases abnormally.",
+          split_merge: "The group shows a split or merge pattern."
+        }}
       }};
 
       function taskData() {{ return dashboard.tasks[state.task]; }}
@@ -767,6 +941,254 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           return maxScoreB - maxScoreA;
         }}
         return sequences().indexOf(a) - sequences().indexOf(b);
+      }}
+
+      function anomalyDescription(typeName) {{
+        return (anomalyDescriptions[state.language] || anomalyDescriptions.zh)[typeName] || typeName;
+      }}
+
+      function anomalyTypeSummary(task) {{
+        const byType = new Map();
+        for (const row of task.anomaly_type_rows || []) {{
+          const typeName = String(row.anomaly_type || "anomaly");
+          const current = byType.get(typeName) || 0;
+          byType.set(typeName, Math.max(current, Number(row.total_positive || 0)));
+        }}
+        return [...byType.entries()].sort((a, b) => b[1] - a[1]);
+      }}
+
+      function renderProtocolOverview() {{
+        const labels = {{ individual: t("taskIndividual"), group: t("taskGroup") }};
+        for (const [taskName, target] of [["individual", individualProtocol], ["group", groupProtocol]]) {{
+          const task = dashboard.tasks[taskName];
+          if (!task || !target) {{
+            continue;
+          }}
+          const typeItems = anomalyTypeSummary(task).map(([typeName, count]) => `
+            <span class="type-chip" title="${{esc(anomalyDescription(typeName))}}">${{esc(typeName)}} <strong>${{count}}</strong></span>
+          `).join("");
+          target.innerHTML = `
+            <h3>${{esc(labels[taskName] || taskName)}}</h3>
+            <div class="subtle">${{t("cardLabels")}} ${{task.num_labels}} / ${{t("cardPositives")}} ${{task.num_positive}}</div>
+            <div class="type-cloud">${{typeItems}}</div>
+          `;
+        }}
+      }}
+
+      function renderHelp() {{
+        const individualTypes = anomalyTypeSummary(dashboard.tasks.individual || {{}}).map(([typeName]) => `<li><strong>${{esc(typeName)}}</strong>: ${{esc(anomalyDescription(typeName))}}</li>`).join("");
+        const groupTypes = anomalyTypeSummary(dashboard.tasks.group || {{}}).map(([typeName]) => `<li><strong>${{esc(typeName)}}</strong>: ${{esc(anomalyDescription(typeName))}}</li>`).join("");
+        helpBody.innerHTML = state.language === "zh" ? `
+          <section class="help-section">
+            <h3>页面内容</h3>
+            <p>顶部指标卡展示当前任务的方法数、标签总数、异常正样本数和当前方法 AUROC。中间动态可视化提供原视频、热力图、轨迹、热力+轨迹四画面对比，也可以切换成单画面模式。</p>
+          </section>
+          <section class="help-section">
+            <h3>异常来源</h3>
+            <p>当前实验使用 synthetic anomaly injection protocol：原始 VT-Tiny-MOT 本身没有这些异常标签，我们在清洗后的正常轨迹或群体窗口上按规则注入异常。背景帧仍是原始视频，异常主要体现在轨迹坐标、多模态中心偏移和群体关系变化上。</p>
+          </section>
+          <section class="help-section">
+            <h3>Individual 异常类型</h3>
+            <ul>${{individualTypes}}</ul>
+          </section>
+          <section class="help-section">
+            <h3>Group 异常类型</h3>
+            <ul>${{groupTypes}}</ul>
+          </section>
+          <section class="help-section">
+            <h3>如何解读</h3>
+            <p>热力越强表示当前方法给出的异常分数越高；红色轨迹表示该任务标签下的正样本。下方“为什么判为异常”会显示选中轨迹的分数、标签、帧段、运动长度和邻近关系。</p>
+          </section>
+        ` : `
+          <section class="help-section">
+            <h3>Page contents</h3>
+            <p>The top cards show method count, total labels, positive anomalies, and AUROC for the selected method. The playback area compares original video, heatmap, tracks, and heat+tracks, with a single-view mode for focused inspection.</p>
+          </section>
+          <section class="help-section">
+            <h3>Anomaly source</h3>
+            <p>The experiment uses a synthetic anomaly injection protocol. VT-Tiny-MOT does not provide these anomaly labels; rules are injected on cleaned normal trajectories or group windows. Original frames remain unchanged, while anomalies appear in trajectories, multimodal offsets, and group relations.</p>
+          </section>
+          <section class="help-section">
+            <h3>Individual anomaly types</h3>
+            <ul>${{individualTypes}}</ul>
+          </section>
+          <section class="help-section">
+            <h3>Group anomaly types</h3>
+            <ul>${{groupTypes}}</ul>
+          </section>
+          <section class="help-section">
+            <h3>How to read it</h3>
+            <p>Stronger heat means a higher anomaly score from the selected method. Red tracks are positive labels for the current task. The explanation panel shows score, label, frame range, motion length, and neighborhood evidence for the selected track.</p>
+          </section>
+        `;
+      }}
+
+      function methodStatus(row) {{
+        if (row.is_our_method) {{
+          return t("proposedStatus");
+        }}
+        return t("baselineStatus");
+      }}
+
+      function renderMethodStatus() {{
+        const task = taskData();
+        const rows = task.leaderboard || [];
+        const proposed = rows.filter(row => row.is_our_method).length;
+        const baselines = rows.length - proposed;
+        methodSummary.innerHTML = [
+          [t("cardMethods"), rows.length],
+          [t("proposedStatus"), proposed],
+          [t("baselineStatus"), baselines]
+        ].map(([label, value]) => `<div class="method-summary-item"><span>${{label}}</span><strong>${{value}}</strong></div>`).join("");
+        methodStatusTable.innerHTML = `
+          <thead><tr><th>${{t("methodHeader")}}</th><th>${{t("sourceHeader")}}</th><th>${{t("familyHeader")}}</th><th>${{t("learningHeader")}}</th><th>${{t("statusHeader")}}</th><th class="metric">AUROC</th></tr></thead>
+          <tbody>${{rows.map(row => `
+            <tr>
+              <td><strong>${{esc(row.method)}}</strong></td>
+              <td>${{esc(row.owner || "")}}</td>
+              <td>${{esc(row.method_family || "")}}</td>
+              <td>${{esc(row.learning_type || "")}}</td>
+              <td>${{methodStatus(row)}} · ${{t("integratedStatus")}}</td>
+              <td class="metric">${{fmt(row.auroc)}}</td>
+            </tr>
+          `).join("")}}</tbody>
+        `;
+      }}
+
+      function rankedTracks(data) {{
+        return [...(data?.tracks || [])].sort((a, b) => trackScore(b) - trackScore(a)).slice(0, 80);
+      }}
+
+      function ensureSelectedTrack(data, ranked) {{
+        if (!data || !ranked.length) {{
+          state.selectedSampleId = "";
+          return null;
+        }}
+        const current = ranked.find(track => track.sample_id === state.selectedSampleId);
+        if (current) {{
+          return current;
+        }}
+        const labeled = ranked.find(track => trackLabelValue(track) === 1);
+        const selected = labeled || ranked[0];
+        state.selectedSampleId = selected.sample_id;
+        return selected;
+      }}
+
+      function selectedTrack(data) {{
+        return (data?.tracks || []).find(track => track.sample_id === state.selectedSampleId) || null;
+      }}
+
+      function pointAtFrame(track, frame) {{
+        const points = activePoints(track, frame);
+        return points[points.length - 1] || null;
+      }}
+
+      function trajectoryStats(track) {{
+        const points = track.points || [];
+        let length = 0;
+        for (let index = 1; index < points.length; index += 1) {{
+          const previous = points[index - 1];
+          const current = points[index];
+          length += Math.hypot(Number(current.x) - Number(previous.x), Number(current.y) - Number(previous.y));
+        }}
+        const first = points[0] || {{ x: 0, y: 0, frame: 0 }};
+        const last = points[points.length - 1] || first;
+        const frameSpan = Math.max(1, Number(last.frame || 0) - Number(first.frame || 0));
+        return {{
+          length,
+          avgSpeed: length / frameSpan,
+          displacement: Math.hypot(Number(last.x) - Number(first.x), Number(last.y) - Number(first.y))
+        }};
+      }}
+
+      function groupFrameStats(data, selected) {{
+        const frame = Number(state.frame);
+        const points = (data?.tracks || []).map(track => ({{ track, point: pointAtFrame(track, frame) }})).filter(item => item.point);
+        if (!points.length) {{
+          return {{ neighbors: [], radius: 0, centroid: null }};
+        }}
+        const centroid = {{
+          x: points.reduce((sum, item) => sum + Number(item.point.x), 0) / points.length,
+          y: points.reduce((sum, item) => sum + Number(item.point.y), 0) / points.length
+        }};
+        const radius = points.reduce((sum, item) => sum + Math.hypot(Number(item.point.x) - centroid.x, Number(item.point.y) - centroid.y), 0) / points.length;
+        const selectedPoint = selected ? pointAtFrame(selected, frame) : null;
+        const neighbors = selectedPoint
+          ? points
+              .filter(item => item.track.sample_id !== selected.sample_id)
+              .map(item => ({{ track: item.track, distance: Math.hypot(Number(item.point.x) - selectedPoint.x, Number(item.point.y) - selectedPoint.y) }}))
+              .sort((a, b) => a.distance - b.distance)
+              .slice(0, 3)
+          : [];
+        return {{ neighbors, radius, centroid }};
+      }}
+
+      function explanationReason(track, stats, groupStats) {{
+        const label = trackLabel(track);
+        const typeName = String(label.anomaly_type || "normal");
+        const base = typeName !== "normal" ? anomalyDescription(typeName) : (state.language === "zh" ? "当前轨迹未被协议标为正样本，若分数较高则属于候选误报或模型认为的高风险轨迹。" : "This track is not labeled positive by the protocol; a high score means a candidate false positive or high-risk model output.");
+        const motion = state.language === "zh"
+          ? `运动证据：轨迹长度 ${{fmt(stats.length)}}，平均速度 ${{fmt(stats.avgSpeed)}}，首尾位移 ${{fmt(stats.displacement)}}。`
+          : `Motion evidence: path length ${{fmt(stats.length)}}, mean speed ${{fmt(stats.avgSpeed)}}, displacement ${{fmt(stats.displacement)}}.`;
+        const group = state.task === "group"
+          ? (state.language === "zh" ? `群体证据：当前帧邻近对象 ${{groupStats.neighbors.length}} 个，群体半径 ${{fmt(groupStats.radius)}}。` : `Group evidence: ${{groupStats.neighbors.length}} nearby objects at the current frame, group radius ${{fmt(groupStats.radius)}}.`)
+          : "";
+        return [base, motion, group].filter(Boolean).join(" ");
+      }}
+
+      function renderTrackInsights(ranked) {{
+        const data = currentPlayback();
+        const track = ensureSelectedTrack(data, ranked);
+        renderTrackRankList(ranked);
+        if (!data || !track) {{
+          explanationPanel.textContent = t("noTrackSelected");
+          groupInsightPanel.textContent = state.task === "group" ? t("noTrackSelected") : (state.language === "zh" ? "切换到 Group 任务可查看群体中心、半径和邻近关系。" : "Switch to Group to inspect centroid, radius, and neighborhood relations.");
+          return;
+        }}
+        const label = trackLabel(track);
+        const stats = trajectoryStats(track);
+        const groupStats = groupFrameStats(data, track);
+        explanationPanel.innerHTML = `
+          <div><strong>${{t("selectedTrack")}}</strong> ${{esc(track.sequence)}} / ${{esc(track.track_id)}} <span class="badge ${{trackLabelValue(track) === 1 ? "our" : "baseline"}}">${{trackLabelValue(track) === 1 ? t("syntheticLabel") : t("normalLabel")}}</span></div>
+          <div class="explain-metrics">
+            <div class="explain-metric"><span>${{t("anomalyScore")}}</span><strong>${{fmt(trackScore(track))}}</strong></div>
+            <div class="explain-metric"><span>${{t("anomalyTypeLabel")}}</span><strong>${{esc(label.anomaly_type || "normal")}}</strong></div>
+            <div class="explain-metric"><span>${{t("frameRangeLabel")}}</span><strong>${{label.frame_start ?? "-"}}-${{label.frame_end ?? "-"}}</strong></div>
+            <div class="explain-metric"><span>${{t("motionLengthLabel")}}</span><strong>${{fmt(stats.length)}}</strong></div>
+            <div class="explain-metric"><span>${{t("avgSpeedLabel")}}</span><strong>${{fmt(stats.avgSpeed)}}</strong></div>
+            <div class="explain-metric"><span>${{t("displacementLabel")}}</span><strong>${{fmt(stats.displacement)}}</strong></div>
+          </div>
+          <div class="explain-reason">${{esc(explanationReason(track, stats, groupStats))}}</div>
+        `;
+        if (state.task === "group") {{
+          groupInsightPanel.innerHTML = `
+            <div class="explain-metrics">
+              <div class="explain-metric"><span>${{t("currentNeighborsLabel")}}</span><strong>${{groupStats.neighbors.length}}</strong></div>
+              <div class="explain-metric"><span>${{t("centroidRadiusLabel")}}</span><strong>${{fmt(groupStats.radius)}}</strong></div>
+            </div>
+            <div class="explain-reason">${{groupStats.neighbors.map(item => `${{esc(item.track.track_id)}} · ${{fmt(item.distance)}}`).join("<br>") || (state.language === "zh" ? "当前帧没有可计算邻近对象。" : "No nearby objects are available at the current frame.")}}</div>
+          `;
+        }} else {{
+          groupInsightPanel.textContent = state.language === "zh" ? "Individual 任务主要解释单轨迹运动和多模态偏移；切换到 Group 后会显示群体中心、半径和邻近对象。" : "Individual focuses on single-track motion and multimodal offsets. Switch to Group for centroid, radius, and neighbors.";
+        }}
+      }}
+
+      function renderTrackRankList(ranked) {{
+        trackRankList.innerHTML = ranked.slice(0, 8).map((track, index) => {{
+          const label = trackLabel(track);
+          return `
+            <button type="button" class="track-rank-item${{track.sample_id === state.selectedSampleId ? " active" : ""}}" data-sample="${{esc(track.sample_id)}}">
+              <span><strong>#${{index + 1}} ${{esc(track.sequence)}} / ${{esc(track.track_id)}}</strong><br><span class="subtle">${{esc(label.anomaly_type || "normal")}}</span></span>
+              <span class="score">${{fmt(trackScore(track))}}</span>
+            </button>
+          `;
+        }}).join("");
+        Array.from(trackRankList.querySelectorAll("[data-sample]")).forEach(button => {{
+          button.addEventListener("click", () => {{
+            state.selectedSampleId = button.dataset.sample || "";
+            drawPlayback();
+          }});
+        }});
       }}
 
       function setTaskOptions() {{
@@ -1070,6 +1492,42 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         targetCtx.restore();
       }}
 
+      function drawGroupRelations(targetCtx, data, ranked) {{
+        if (state.task !== "group") {{
+          return;
+        }}
+        const frame = Number(state.frame);
+        const visible = ranked.slice(0, 35).map(track => ({{ track, point: pointAtFrame(track, frame) }})).filter(item => item.point);
+        if (visible.length < 2) {{
+          return;
+        }}
+        const centroid = {{
+          x: visible.reduce((sum, item) => sum + Number(item.point.x), 0) / visible.length,
+          y: visible.reduce((sum, item) => sum + Number(item.point.y), 0) / visible.length
+        }};
+        const radius = visible.reduce((sum, item) => sum + Math.hypot(Number(item.point.x) - centroid.x, Number(item.point.y) - centroid.y), 0) / visible.length;
+        targetCtx.save();
+        targetCtx.strokeStyle = "rgba(20, 184, 166, 0.32)";
+        targetCtx.lineWidth = 1.2;
+        targetCtx.setLineDash([5, 7]);
+        targetCtx.beginPath();
+        targetCtx.arc(centroid.x, centroid.y, Math.max(8, radius), 0, Math.PI * 2);
+        targetCtx.stroke();
+        targetCtx.setLineDash([]);
+        for (const item of visible) {{
+          targetCtx.strokeStyle = item.track.sample_id === state.selectedSampleId ? "rgba(20, 184, 166, 0.72)" : "rgba(20, 184, 166, 0.18)";
+          targetCtx.beginPath();
+          targetCtx.moveTo(centroid.x, centroid.y);
+          targetCtx.lineTo(item.point.x, item.point.y);
+          targetCtx.stroke();
+        }}
+        targetCtx.fillStyle = "#14b8a6";
+        targetCtx.beginPath();
+        targetCtx.arc(centroid.x, centroid.y, 4.8, 0, Math.PI * 2);
+        targetCtx.fill();
+        targetCtx.restore();
+      }}
+
       function drawTracks(targetCtx, ranked, maxScore) {{
         for (const track of ranked) {{
           const points = activePoints(track, state.frame);
@@ -1078,17 +1536,18 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           }}
           const score = trackScore(track);
           const isAnomaly = trackLabelValue(track) === 1;
+          const isSelected = track.sample_id === state.selectedSampleId;
           const ratio = clamp(score / maxScore, 0, 1);
-          targetCtx.strokeStyle = isAnomaly ? "rgba(239, 68, 68, 0.95)" : `rgba(37, 99, 235, ${{0.25 + 0.45 * ratio}})`;
-          targetCtx.lineWidth = isAnomaly ? 2.6 : 0.9 + 2.0 * ratio;
+          targetCtx.strokeStyle = isSelected ? "rgba(20, 184, 166, 0.98)" : isAnomaly ? "rgba(239, 68, 68, 0.95)" : `rgba(37, 99, 235, ${{0.25 + 0.45 * ratio}})`;
+          targetCtx.lineWidth = isSelected ? 3.4 : isAnomaly ? 2.6 : 0.9 + 2.0 * ratio;
           targetCtx.beginPath();
           points.forEach((point, index) => index ? targetCtx.lineTo(point.x, point.y) : targetCtx.moveTo(point.x, point.y));
           targetCtx.stroke();
           const last = points[points.length - 1];
           if (last) {{
-            targetCtx.fillStyle = isAnomaly ? "#ef4444" : "#f59e0b";
+            targetCtx.fillStyle = isSelected ? "#14b8a6" : isAnomaly ? "#ef4444" : "#f59e0b";
             targetCtx.beginPath();
-            targetCtx.arc(last.x, last.y, isAnomaly ? 4.8 : 2.7, 0, Math.PI * 2);
+            targetCtx.arc(last.x, last.y, isSelected ? 6.2 : isAnomaly ? 4.8 : 2.7, 0, Math.PI * 2);
             targetCtx.fill();
           }}
         }}
@@ -1108,6 +1567,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           drawHeatmap(targetCtx, targetCanvas, data, ranked, maxScore);
         }}
         if (layer === "tracks" || layer === "both") {{
+          drawGroupRelations(targetCtx, data, ranked);
           drawTracks(targetCtx, ranked, maxScore);
         }}
       }}
@@ -1139,12 +1599,14 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         ensureBackground(data, state.frame);
         const scores = data.tracks.map(track => trackScore(track));
         const maxScore = Math.max(...scores, 1e-6);
-        const ranked = [...data.tracks].sort((a, b) => trackScore(b) - trackScore(a)).slice(0, 80);
+        const ranked = rankedTracks(data);
+        ensureSelectedTrack(data, ranked);
         if (state.viewMode === "comparison") {{
           drawComparisonView(data, ranked, maxScore);
         }} else {{
           drawSingleView(data, ranked, maxScore);
         }}
+        renderTrackInsights(ranked);
         const viewLabel = state.viewMode === "comparison" ? t("view_comparison") : `${{t("view_single")}} - ${{t(`layer_${{state.layer}}`)}}`;
         playbackReadout.textContent = `${{t("playbackPrefix")}} / ${{data.sequence}} / ${{state.method}} / ${{t("frame")}} ${{state.frame}} / ${{viewLabel}} / ${{ranked.length}} ${{t("visibleTracks")}}`;
       }}
@@ -1176,6 +1638,33 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }}, 90);
       }}
 
+      function pickTrackFromCanvas(event, targetCanvas) {{
+        const data = currentPlayback();
+        if (!data || !targetCanvas) {{
+          return;
+        }}
+        const rect = targetCanvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) * (targetCanvas.width / Math.max(1, rect.width));
+        const y = (event.clientY - rect.top) * (targetCanvas.height / Math.max(1, rect.height));
+        let best = null;
+        let bestDistance = Infinity;
+        for (const track of data.tracks || []) {{
+          const point = pointAtFrame(track, state.frame);
+          if (!point) {{
+            continue;
+          }}
+          const distance = Math.hypot(Number(point.x) - x, Number(point.y) - y);
+          if (distance < bestDistance) {{
+            bestDistance = distance;
+            best = track;
+          }}
+        }}
+        if (best && bestDistance <= 28) {{
+          state.selectedSampleId = best.sample_id;
+          drawPlayback();
+        }}
+      }}
+
       function renderMethodView() {{
         setTaskOptions();
         setMethodOptions();
@@ -1187,6 +1676,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         renderLeaderboard();
         renderTypeTable();
         renderCases();
+        renderMethodStatus();
+        renderProtocolOverview();
+        renderHelp();
         drawPlayback();
       }}
 
@@ -1201,11 +1693,13 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         state.image = null;
         state.imageKey = null;
         state.frame = -1;
+        state.selectedSampleId = "";
         stopPlayback();
         renderMethodView();
       }});
       methodSelector.addEventListener("change", () => {{
         state.method = methodSelector.value;
+        state.selectedSampleId = "";
         renderMethodView();
       }});
       caseTabs.forEach(button => button.addEventListener("click", () => {{
@@ -1221,6 +1715,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         state.image = null;
         state.imageKey = null;
         state.frame = -1;
+        state.selectedSampleId = "";
         resetFrameForSequence();
         renderSequenceStats();
         drawPlayback();
@@ -1249,6 +1744,22 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       }}));
       playToggle.addEventListener("click", () => {{
         state.playing ? stopPlayback() : startPlayback();
+      }});
+      [canvases.heatmap, canvases.tracks, canvases.both, canvases.single].forEach(targetCanvas => {{
+        if (targetCanvas) {{
+          targetCanvas.addEventListener("click", event => pickTrackFromCanvas(event, targetCanvas));
+        }}
+      }});
+      helpButton.addEventListener("click", () => {{
+        renderHelp();
+        if (typeof helpDialog.showModal === "function") {{
+          helpDialog.showModal();
+        }} else {{
+          helpDialog.setAttribute("open", "open");
+        }}
+      }});
+      helpClose.addEventListener("click", () => {{
+        helpDialog.close();
       }});
       applyLanguage(state.language);
       setAnalysisPanel("leaderboard");

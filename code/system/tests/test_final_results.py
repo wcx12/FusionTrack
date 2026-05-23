@@ -344,11 +344,28 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "当前序列帧范围" in html
     assert "可视化轨迹数" in html
     assert "sequenceStats" in html
+    assert "helpButton" in html
+    assert "helpDialog" in html
+    assert "异常协议" in html
+    assert "synthetic anomaly injection" in html
+    assert "individualProtocol" in html
+    assert "groupProtocol" in html
+    assert "trackRankList" in html
+    assert "explanationPanel" in html
+    assert "groupInsightPanel" in html
+    assert "methodStatusTable" in html
+    assert "算法接入" in html
     assert "sequencesForTask" in html
     assert "compareSequencesForTask" in html
     assert "trackScores" in html
     assert "trackScoresForTask" in html
     assert "trackLabelValue" in html
+    assert "drawGroupRelations" in html
+    assert "pickTrackFromCanvas" in html
+    assert "renderProtocolOverview" in html
+    assert "renderMethodStatus" in html
+    assert "renderTrackInsights" in html
+    assert "anomalyDescriptions" in html
     assert 'state.task !== "individual"' not in html
     assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in html
     assert "control-surface" in html
