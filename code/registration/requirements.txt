@@ -2,3 +2,7 @@ numpy
 scipy
 h5py
 torch
+open3d
+pycpd
+# Optional / external for richer baselines:
+# pip install teaserpp-python (if available), super4pcs, pygoicp

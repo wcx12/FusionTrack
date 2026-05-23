@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,7 @@ from fusiontrack.fusion import fuse_observations_csv
 from fusiontrack.group_baseline import score_group_windows_jsonl
 from fusiontrack.score_fusion import fuse_score_records
 from fusiontrack.simple_detectors import score_fused_trajectories_simple
+from fusiontrack.registration_adapter import build_registration_experiment_bundle
 from fusiontrack.visualization import build_visual_report
 
 
@@ -67,6 +70,41 @@ def ensure_output_dirs(paths: FusionTrackPaths) -> None:
 
 def _safe_filename(value: str) -> str:
     return value.replace("/", "_").replace("\\", "_").replace(" ", "_")
+
+
+def _build_manifest(
+    mode: str,
+    paths: FusionTrackPaths,
+    split: str,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "run_id": uuid.uuid4().hex[:16],
+        "mode": mode,
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "split": split,
+        "data_root": str(paths.data_root),
+        "work_root": str(paths.work_root),
+        "trajectory_dir": str(paths.trajectory_dir),
+        "fusion_dir": str(paths.fusion_dir),
+        "feature_dir": str(paths.feature_dir),
+        "model_dir": str(paths.model_dir),
+        "score_dir": str(paths.score_dir),
+        "group_dir": str(paths.group_dir),
+        "final_dir": str(paths.final_dir),
+        "heatmap_dir": str(paths.heatmap_dir),
+        "report_dir": str(paths.report_dir),
+        "config": dict(config or {}),
+    }
+
+
+def _write_manifest(paths: FusionTrackPaths, mode: str, split: str, payload: dict[str, Any]) -> str:
+    manifest = _build_manifest(mode=mode, paths=paths, split=split)
+    manifest.update(payload)
+    manifest_path = paths.work_root / f"pipeline_manifest_{mode}_{split}.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    return str(manifest_path)
 
 
 def extract_vt_tiny_mot(paths: FusionTrackPaths, split: str, force: bool = False) -> Path:
@@ -173,10 +211,55 @@ def run_smoke_pipeline(
         "final_scores": final_summary,
         "report": report_summary,
     }
+    manifest_payload = {
+        "manifest": {
+            "smoke_inputs": {
+                "skip_extraction": skip_extraction,
+                "force_extraction": force,
+                "top_sequences": top_sequences,
+            },
+            "artifacts": {
+                "summary_path": str(paths.work_root / f"pipeline_summary_{split}.json"),
+                "manifest_mode": "smoke",
+            },
+        }
+    }
     summary_path = paths.work_root / f"pipeline_summary_{split}.json"
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     summary["summary_path"] = str(summary_path)
+    summary["manifest_path"] = _write_manifest(
+        paths=paths,
+        mode="smoke",
+        split=split,
+        payload={"run_inputs": manifest_payload["manifest"], "summary_path": str(summary_path)},
+    )
+    return summary
+
+
+def run_registration_experiment(
+    paths: FusionTrackPaths,
+    benchmark_summary: str | Path,
+    split: str = "test",
+    result_method: str | None = None,
+    top_sequences: int = 5,
+) -> dict[str, Any]:
+    ensure_output_dirs(paths)
+    bundle = build_registration_experiment_bundle(benchmark_summary, paths.work_root)
+    summary = build_experiment_report(
+        paths=paths,
+        result_manifest=Path(bundle["manifest_path"]),
+        split=split,
+        result_method=result_method,
+        fused_jsonl=Path(bundle["fused_jsonl"]),
+        top_sequences=top_sequences,
+    )
+    summary["registration_bundle"] = {
+        "manifest_path": bundle["manifest_path"],
+        "num_methods": bundle["num_methods"],
+        "num_scores": bundle["num_scores"],
+        "score_files": bundle["score_files"],
+    }
     return summary
 
 
@@ -221,6 +304,23 @@ def build_experiment_report(
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     summary["summary_path"] = str(summary_path)
+    summary["manifest_path"] = _write_manifest(
+        paths=paths,
+        mode="experiment_report",
+        split=split,
+        payload={
+            "result_manifest": str(result_manifest),
+            "selected_method": result.method_name,
+            "result_manifest_context": {
+                "method": result.method_name,
+                "task": result.task,
+                "split": result.split,
+                "seed": result.seed,
+            },
+            "top_sequences": top_sequences,
+            "summary_path": str(summary_path),
+        },
+    )
     return summary
 
 
@@ -267,4 +367,20 @@ def build_final_results_report(
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     summary["summary_path"] = str(summary_path)
+    summary["manifest_path"] = _write_manifest(
+        paths=paths,
+        mode="final_results_dashboard",
+        split="all",
+        payload={
+            "final_results_root": str(final_results_root),
+            "individual_label_file": str(individual_label_file),
+            "group_label_file": str(group_label_file),
+            "score_search_roots": [str(path) for path in score_search_roots],
+            "top_sequences": top_sequences,
+            "top_k": top_k,
+            "case_limit": case_limit,
+            "summary_path": str(summary_path),
+            "dashboard_summary": dashboard_summary,
+        },
+    )
     return summary

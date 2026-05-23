@@ -140,13 +140,17 @@ def _resolve_manifest_path(raw_path: str | Path | None, base_dir: Path) -> Path:
     path = Path(normalized)
     if path.is_absolute():
         return path
-    base_candidate = base_dir / path
-    if base_candidate.exists():
-        return base_candidate
+    candidates = [base_dir, base_dir.parent]
+    for candidate_dir in candidates:
+        if not candidate_dir:
+            continue
+        candidate = candidate_dir / path
+        if candidate.exists():
+            return candidate
     cwd_candidate = Path.cwd() / path
     if cwd_candidate.exists():
         return cwd_candidate
-    return base_candidate
+    return base_dir / path
 
 
 def _load_json(path: Path) -> dict[str, Any]:

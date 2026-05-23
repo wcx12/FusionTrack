@@ -30,7 +30,7 @@ datasets/modelnet40_ply_hdf5_2048/
 ```bash
 python mps_gaf_run.py \
   --mode inspect \
-  --dataset_path /path/to/modelnet40_ply_hdf5_2048 \
+  --dataset_path datasets/modelnet40_ply_hdf5_2048 \
   --noise_type crop \
   --num_sources_per_ref 10 \
   --groups_per_batch 1
@@ -43,7 +43,7 @@ python mps_gaf_run.py \
 ```bash
 python mps_gaf_run.py \
   --mode train \
-  --dataset_path /path/to/modelnet40_ply_hdf5_2048 \
+  --dataset_path datasets/modelnet40_ply_hdf5_2048 \
   --output_dir runs/mps_gaf_learned_svd \
   --noise_type crop \
   --num_sources_per_ref 2 \
@@ -76,7 +76,7 @@ python mps_gaf_run.py \
 ```bash
 python mps_gaf_run.py \
   --mode train \
-  --dataset_path /path/to/modelnet40_ply_hdf5_2048 \
+  --dataset_path datasets/modelnet40_ply_hdf5_2048 \
   --output_dir runs/mps_gaf_smoke \
   --noise_type crop \
   --num_sources_per_ref 10 \
@@ -92,7 +92,7 @@ python mps_gaf_run.py \
 ```bash
 python mps_gaf_run.py \
   --mode eval \
-  --dataset_path /path/to/modelnet40_ply_hdf5_2048 \
+  --dataset_path datasets/modelnet40_ply_hdf5_2048 \
   --checkpoint runs/mps_gaf_learned_svd/mps_gaf_best.pt \
   --output_dir runs/mps_gaf_learned_svd_eval \
   --noise_type crop \
@@ -107,7 +107,7 @@ python mps_gaf_run.py \
 ```bash
 python mps_gaf_run.py \
   --mode eval \
-  --dataset_path /path/to/modelnet40_ply_hdf5_2048 \
+  --dataset_path datasets/modelnet40_ply_hdf5_2048 \
   --checkpoint runs/mps_gaf_learned_svd/mps_gaf_best.pt \
   --output_dir runs/mps_gaf_learned_svd_plane20 \
   --noise_type crop \

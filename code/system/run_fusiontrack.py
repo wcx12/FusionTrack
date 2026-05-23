@@ -13,7 +13,12 @@ if str(MTF_BA_ROOT) not in sys.path:
     sys.path.insert(0, str(MTF_BA_ROOT))
 
 from fusiontrack.config import FusionTrackPaths
-from fusiontrack.pipeline import build_experiment_report, build_final_results_report, run_smoke_pipeline
+from fusiontrack.pipeline import (
+    build_experiment_report,
+    build_final_results_report,
+    run_registration_experiment,
+    run_smoke_pipeline,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -28,6 +33,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="cpu", help="Reserved for full training mode.")
     parser.add_argument("--result-manifest", type=Path, help="Benchmark result manifest to render.")
     parser.add_argument("--result-method", help="Method name inside the result manifest.")
+    parser.add_argument(
+        "--registration-benchmark-summary",
+        type=Path,
+        help="Path to non-learning registration baseline summary (run_registration_benchmark.py output).",
+    )
+    parser.add_argument(
+        "--registration-result-method",
+        default=None,
+        help="Method to visualize from registration benchmark summary.",
+    )
     parser.add_argument("--fused-jsonl", type=Path, help="Fused trajectory JSONL used by the result manifest.")
     parser.add_argument("--final-results-root", type=Path, help="Directory with final_*_summary files.")
     parser.add_argument("--individual-label-file", type=Path, help="Individual labels JSONL for final dashboard.")
@@ -69,6 +84,14 @@ def main() -> None:
             split=args.split,
             result_method=args.result_method,
             fused_jsonl=args.fused_jsonl,
+            top_sequences=args.top_sequences,
+        )
+    elif args.registration_benchmark_summary:
+        summary = run_registration_experiment(
+            paths=paths,
+            benchmark_summary=args.registration_benchmark_summary,
+            split=args.split,
+            result_method=args.registration_result_method,
             top_sequences=args.top_sequences,
         )
     elif args.mode == "full":
