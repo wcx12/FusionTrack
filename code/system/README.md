@@ -126,6 +126,18 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 
 如果 `DJI_****` 序列仍然提示无背景，才需要检查数据集路径、资源部署和 `rgb.file` 是否能解析到真实图片。
 
+## 事件解释链路
+
+最终 dashboard 会读取 score row 中的事件证据字段：
+
+- `event_score`：当前轨迹或对象的事件级最高风险分数。
+- `event_segments`：算法侧已经合并好的事件段，包含 `frame_start`、`frame_end`、`score` 和主导原因。
+- `frame_event_scores`：逐帧事件证据序列，包含帧号、逐帧分数、主导原因和分量分数。
+
+如果方法已经输出 `event_segments`，页面会直接使用该字段绘制预测事件段。如果方法只输出 `frame_event_scores`，页面会按逐帧分数自动合并连续正分帧，生成可视化事件段。这样可以让热力时间窗口、事件时间线和右侧解释面板围绕同一份逐帧证据工作。
+
+当前群体图打分方法已经输出 `frame_event_scores` 和 `event_segments`；后续 individual route/speed/shape 分支也应采用相同字段接入。
+
 ## 实验分析区
 
 页面下半部分包含：

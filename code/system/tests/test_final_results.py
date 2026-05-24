@@ -109,7 +109,18 @@ def _build_small_final_result_tree(tmp_path: Path) -> tuple[Path, Path, Path, Pa
     _write_jsonl(
         score_root / "group" / "scores" / "group_prediction_linear.jsonl",
         [
-            {"sample_id": "G1:2", "sequence": "G1", "track_id": "2", "score": 0.75},
+            {
+                "sample_id": "G1:2",
+                "sequence": "G1",
+                "track_id": "2",
+                "score": 0.75,
+                "event_score": 0.8,
+                "event_segments": [{"frame_start": 4, "frame_end": 8, "score": 0.8, "dominant_reason": "leave"}],
+                "frame_event_scores": [
+                    {"frame": 1, "score": 0.0, "dominant_reason": "object_group"},
+                    {"frame": 8, "score": 0.8, "dominant_reason": "leave"},
+                ],
+            },
             {"sample_id": "G1:1", "sequence": "G1", "track_id": "1", "score": 0.25},
         ],
     )
@@ -375,6 +386,12 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
         "visualized_tracks": 2,
     }
     assert group_tracks["G1:2"]["task_scores"]["group"]["group_prediction_linear"] == 0.75
+    group_components = group_tracks["G1:2"]["task_score_components"]["group"]["group_prediction_linear"]
+    assert group_components["event_segments"] == [
+        {"frame_start": 4, "frame_end": 8, "score": 0.8, "dominant_reason": "leave"}
+    ]
+    assert group_components["frame_event_scores"][1]["frame"] == 8
+    assert group_components["frame_event_scores"][1]["dominant_reason"] == "leave"
     assert group_tracks["G1:1"]["task_labels"]["group"]["label"] == 1
     assert "FusionTrack 最终结果看板" in html
     assert "总标签数" in html
@@ -450,6 +467,7 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "drawHeatmap" in html
     assert "heatOpacity" in html
     assert "heatWindow" in html
+    assert "eventSegmentsFromFrameScores" in html
     assert "Heat + Tracks" in html
     assert "renderMethodView" in html
     assert "playbackData" in html

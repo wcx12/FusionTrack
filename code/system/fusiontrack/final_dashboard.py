@@ -178,6 +178,7 @@ def _build_playback_payloads(
                         "source": str(method_rows.get("source", "")),
                         "event_score": method_rows.get("event_score", 0.0),
                         "event_segments": method_rows.get("event_segments", []),
+                        "frame_event_scores": method_rows.get("frame_event_scores", []),
                         "component_scores": method_rows.get("component_scores", {}),
                         "metadata": method_rows.get("metadata", {}),
                         "rotation_error_deg": method_rows.get("rotation_error_deg"),
@@ -2210,8 +2211,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           const gtStart = Number(label.frame_start || totalStart);
           const gtEnd = Number(label.frame_end || totalEnd);
           const eventFrames = Array.isArray(row.event_segments) ? row.event_segments : [];
-          if (used > 0 && eventFrames.length) {{
-            eventFrames.forEach(item => {{
+          const derivedEventFrames = eventFrames.length ? eventFrames : eventSegmentsFromFrameScores(row.frame_event_scores);
+          if (used > 0 && derivedEventFrames.length) {{
+            derivedEventFrames.forEach(item => {{
               const start = Number(item.frame_start || gtStart);
               const end = Number(item.frame_end || gtEnd);
               if (end > start) {{
@@ -2261,6 +2263,44 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           </div>
           ${{state.task === "group" ? `<h4>${{t("groupEventTitle")}}</h4>${{renderGroupEventCards(data)}}` : ""}}
         `;
+      }}
+
+      function eventSegmentsFromFrameScores(frameScores) {{
+        if (!Array.isArray(frameScores)) {{
+          return [];
+        }}
+        const segments = [];
+        let current = null;
+        frameScores
+          .map(item => ({{
+            frame: Number(item.frame ?? item.frame_id),
+            score: Number(item.score || 0)
+          }}))
+          .filter(item => Number.isFinite(item.frame))
+          .sort((a, b) => a.frame - b.frame)
+          .forEach(item => {{
+            if (item.score <= 0) {{
+              if (current) {{
+                segments.push(current);
+                current = null;
+              }}
+              return;
+            }}
+            if (!current) {{
+              current = {{ frame_start: item.frame, frame_end: item.frame, label: "event" }};
+              return;
+            }}
+            if (item.frame <= current.frame_end + 1) {{
+              current.frame_end = item.frame;
+            }} else {{
+              segments.push(current);
+              current = {{ frame_start: item.frame, frame_end: item.frame, label: "event" }};
+            }}
+          }});
+        if (current) {{
+          segments.push(current);
+        }}
+        return segments;
       }}
 
       function renderProtocolOverview() {{

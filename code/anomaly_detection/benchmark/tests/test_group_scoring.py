@@ -72,6 +72,9 @@ def test_score_group_windows_outputs_object_rows_with_complete_schema() -> None:
         "frame_end",
         "source",
         "score",
+        "event_score",
+        "event_segments",
+        "frame_event_scores",
         "component_scores",
         "metadata",
     }
@@ -82,6 +85,11 @@ def test_score_group_windows_outputs_object_rows_with_complete_schema() -> None:
     assert EXPECTED_COMPONENTS <= set(row["component_scores"])
     assert row["metadata"]["num_frames"] == 3
     assert "dominant_reason" in row["metadata"]
+    assert row["event_score"] == max(item["score"] for item in row["frame_event_scores"])
+    assert all(
+        {"frame", "score", "dominant_reason", "component_scores"} <= set(item)
+        for item in row["frame_event_scores"]
+    )
 
 
 def test_score_group_windows_ranks_leaving_or_against_motion_object_higher() -> None:
@@ -93,6 +101,10 @@ def test_score_group_windows_ranks_leaving_or_against_motion_object_higher() -> 
     anomalous = next(row for row in rows if row["track_id"] == "c")
     assert anomalous["component_scores"]["leave"] > 0.0
     assert anomalous["component_scores"]["motion"] > 0.0
+    assert anomalous["event_segments"]
+    assert anomalous["event_segments"][0]["frame_start"] <= 3
+    assert anomalous["event_segments"][0]["frame_end"] >= 3
+    assert anomalous["event_segments"][0]["dominant_reason"] in EXPECTED_COMPONENTS
 
 
 def test_score_group_windows_ignores_objects_without_centers() -> None:

@@ -221,6 +221,8 @@ def _aggregate_track_scores(track_id: str, frame_scores: list[dict], window: dic
         COMPONENT_NAMES,
         key=lambda name: component_scores[name],
     )
+    frame_event_scores = _frame_event_scores(frame_scores)
+    event_segments = _event_segments_from_frame_scores(frame_event_scores)
     state = best_frame["state"]
     return {
         "sample_id": state.get("sample_id") or f"{state.get('sequence')}:{track_id}",
@@ -231,6 +233,9 @@ def _aggregate_track_scores(track_id: str, frame_scores: list[dict], window: dic
         "frame_end": frame_end,
         "source": "fusiontrack_group_graph",
         "score": max(score["score"] for score in frame_scores),
+        "event_score": max((score["score"] for score in frame_event_scores), default=0.0),
+        "event_segments": event_segments,
+        "frame_event_scores": frame_event_scores,
         "component_scores": component_scores,
         "metadata": {
             "dominant_reason": dominant_reason,
@@ -250,3 +255,60 @@ def _frame_bounds(frame_scores: list[dict], window: dict) -> tuple[int, int]:
         int(window.get("frame_start", default_start)),
         int(window.get("frame_end", default_end)),
     )
+
+
+def _frame_event_scores(frame_scores: list[dict]) -> list[dict]:
+    events = []
+    for item in sorted(frame_scores, key=lambda score: int(score["frame_id"])):
+        components = item["component_scores"]
+        dominant_reason = max(COMPONENT_NAMES, key=lambda name: components[name])
+        events.append(
+            {
+                "frame": int(item["frame_id"]),
+                "score": float(item["score"]),
+                "dominant_reason": dominant_reason,
+                "component_scores": {
+                    name: float(components[name])
+                    for name in COMPONENT_NAMES
+                },
+            }
+        )
+    return events
+
+
+def _event_segments_from_frame_scores(frame_event_scores: list[dict]) -> list[dict]:
+    segments = []
+    current: dict | None = None
+    for item in frame_event_scores:
+        score = float(item.get("score", 0.0) or 0.0)
+        if score <= 0.0:
+            if current is not None:
+                segments.append(current)
+                current = None
+            continue
+        frame = int(item["frame"])
+        reason = str(item.get("dominant_reason", "group_event"))
+        if current is None:
+            current = {
+                "frame_start": frame,
+                "frame_end": frame,
+                "score": score,
+                "dominant_reason": reason,
+            }
+            continue
+        if frame <= int(current["frame_end"]) + 1:
+            current["frame_end"] = frame
+            current["score"] = max(float(current["score"]), score)
+            if score >= float(current["score"]):
+                current["dominant_reason"] = reason
+        else:
+            segments.append(current)
+            current = {
+                "frame_start": frame,
+                "frame_end": frame,
+                "score": score,
+                "dominant_reason": reason,
+            }
+    if current is not None:
+        segments.append(current)
+    return segments

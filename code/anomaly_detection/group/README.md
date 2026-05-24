@@ -1,12 +1,12 @@
 # 群体异常检测
 
-这个目录是 FusionTrack 群体异常检测的稳定对外入口。实际算法实现与 benchmark 包共享，保证实验脚本、测试代码和最终可视化系统使用同一套代码路径。
+这个目录是 FusionTrack 群体异常检测的稳定对外入口。实际算法实现与 benchmark 包共享，保证实验脚本、测试代码和最终可视化系统使用同一套逻辑。
 
 ## 入口文件
 
 - `scoring.py`：对每个群体窗口输出 object-level 群体异常分数。
 - `graph.py`：群体图构建、相对运动特征和连通分量计算。
-- `tracking.py`：逐帧群体发现，以及跨帧 split/merge 事件追踪。
+- `tracking.py`：逐帧群体发现，以及跨帧 split/merge 事件跟踪。
 - `temporal.py`：群体 temporal KNN 与 hybrid FusionTrack 群体打分。
 - `run_group_method.py`：面向 JSONL 群体窗口文件的命令行打分入口。
 
@@ -21,6 +21,18 @@ code/anomaly_detection/benchmark/fusiontrack/
 ```text
 code/anomaly_detection/benchmark/baselines/
 ```
+
+## 输出字段
+
+`score_group_windows()` 每个 object-level score row 现在包含：
+
+- `score`：当前对象在窗口内的最终群体异常分数。
+- `component_scores`：`leave`、`motion`、`neighbor`、`count`、`dispersion`、`split_merge`、`object_group`、`group_event` 等分量。
+- `event_score`：逐帧事件证据中的最大分数。
+- `frame_event_scores`：逐帧事件证据序列，每个元素包含 `frame`、`score`、`dominant_reason` 和逐帧分量。
+- `event_segments`：由逐帧分数合并得到的事件段，用于最终 dashboard 的事件时间线。
+
+这些字段会继续进入系统展示层，支撑“群体结构变化在哪些帧发生、由哪个分量主导”的解释链路。
 
 ## 命令行用法
 
