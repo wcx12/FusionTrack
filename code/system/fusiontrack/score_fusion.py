@@ -48,6 +48,60 @@ def _prefix_components(prefix: str, components: dict[str, Any]) -> dict[str, flo
     return prefixed
 
 
+def _coerce_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _event_score(record: dict[str, Any] | None) -> float:
+    if record is None:
+        return 0.0
+    return _coerce_float(record.get("event_score", 0.0), 0.0)
+
+
+def _source_event_segments(source: str, record: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if record is None:
+        return []
+    segments = record.get("event_segments", [])
+    if not isinstance(segments, list):
+        return []
+    normalized = []
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        item = dict(segment)
+        item["source"] = source
+        normalized.append(item)
+    return normalized
+
+
+def _source_frame_event_scores(source: str, record: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if record is None:
+        return []
+    rows = record.get("frame_event_scores", [])
+    if not isinstance(rows, list):
+        return []
+    normalized = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        frame = row.get("frame", row.get("frame_id"))
+        if frame is None:
+            continue
+        try:
+            frame_id = int(frame)
+        except (TypeError, ValueError):
+            continue
+        item = dict(row)
+        item["frame"] = frame_id
+        item["score"] = _coerce_float(row.get("score", 0.0), 0.0)
+        item["source"] = source
+        normalized.append(item)
+    return sorted(normalized, key=lambda item: (int(item["frame"]), item["source"]))
+
+
 def fuse_score_records(
     individual_jsonl: str | Path,
     group_jsonl: str | Path,
@@ -96,6 +150,27 @@ def fuse_score_records(
         if group is not None:
             component_scores.update(_prefix_components("group", group.get("component_scores", {})))
 
+        s_ind = individual_norm.get(sample_id, 0.0) if individual is not None else 0.0
+        s_grp = group_norm.get(sample_id, 0.0) if group is not None else 0.0
+        s_event = max(_event_score(individual), _event_score(group))
+        component_scores.update(
+            {
+                "S_ind": float(s_ind),
+                "S_grp": float(s_grp),
+                "S_event": float(s_event),
+                "S_fused": float(score),
+            }
+        )
+        event_segments = (
+            _source_event_segments("individual", individual)
+            + _source_event_segments("group", group)
+        )
+        frame_event_scores = (
+            _source_frame_event_scores("individual", individual)
+            + _source_frame_event_scores("group", group)
+        )
+        frame_event_scores.sort(key=lambda item: (int(item["frame"]), item["source"]))
+
         fused_records.append(
             {
                 "sample_id": sample_id,
@@ -105,6 +180,9 @@ def fuse_score_records(
                 "category_name": base.get("category_name"),
                 "source": "fusion",
                 "score": float(score),
+                "event_score": float(s_event),
+                "event_segments": event_segments,
+                "frame_event_scores": frame_event_scores,
                 "component_scores": component_scores,
                 "metadata": {
                     "alpha": alpha,

@@ -138,6 +138,15 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 
 当前群体图打分方法已经输出 `frame_event_scores` 和 `event_segments`；后续 individual route/speed/shape 分支也应采用相同字段接入。
 
+融合分数 row 也会保留这些事件字段，并在 `component_scores` 中补充：
+
+- `S_ind`：归一化后的 individual 分支分数。
+- `S_grp`：归一化后的 group 分支分数。
+- `S_event`：来自 individual/group 事件证据的最高事件分数。
+- `S_fused`：最终融合分数。
+
+这样最终网页的分数分解条、事件时间线和导出的 score JSONL 使用的是同一条解释链。
+
 ## 实验分析区
 
 页面下半部分包含：

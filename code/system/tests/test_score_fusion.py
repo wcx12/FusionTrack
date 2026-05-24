@@ -19,13 +19,33 @@ def test_score_fusion_combines_and_falls_back(tmp_path: Path) -> None:
         individual_jsonl,
         [
             {"sample_id": "S1:1", "sequence": "S1", "track_id": "1", "source": "individual_simple", "score": 1.0, "component_scores": {"speed": 1.0}},
-            {"sample_id": "S1:2", "sequence": "S1", "track_id": "2", "source": "individual_simple", "score": 4.0, "component_scores": {"speed": 4.0}},
+            {
+                "sample_id": "S1:2",
+                "sequence": "S1",
+                "track_id": "2",
+                "source": "individual_simple",
+                "score": 4.0,
+                "event_score": 0.4,
+                "event_segments": [{"frame_start": 2, "frame_end": 2, "score": 0.4, "dominant_reason": "speed"}],
+                "frame_event_scores": [{"frame": 2, "score": 0.4, "dominant_reason": "speed"}],
+                "component_scores": {"speed": 4.0},
+            },
         ],
     )
     write_jsonl(
         group_jsonl,
         [
-            {"sample_id": "S1:2", "sequence": "S1", "track_id": "2", "source": "group", "score": 2.0, "component_scores": {"leave": 2.0}},
+            {
+                "sample_id": "S1:2",
+                "sequence": "S1",
+                "track_id": "2",
+                "source": "group",
+                "score": 2.0,
+                "event_score": 0.9,
+                "event_segments": [{"frame_start": 3, "frame_end": 5, "score": 0.9, "dominant_reason": "leave"}],
+                "frame_event_scores": [{"frame": 3, "score": 0.9, "dominant_reason": "leave"}],
+                "component_scores": {"leave": 2.0},
+            },
             {"sample_id": "S1:3", "sequence": "S1", "track_id": "3", "source": "group", "score": 5.0, "component_scores": {"leave": 5.0}},
         ],
     )
@@ -40,4 +60,9 @@ def test_score_fusion_combines_and_falls_back(tmp_path: Path) -> None:
     assert by_id["S1:2"]["metadata"]["used_sources"] == ["individual", "group"]
     assert "individual_speed" in by_id["S1:2"]["component_scores"]
     assert "group_leave" in by_id["S1:2"]["component_scores"]
+    assert {"S_ind", "S_grp", "S_event", "S_fused"} <= set(by_id["S1:2"]["component_scores"])
+    assert by_id["S1:2"]["event_score"] == 0.9
+    assert [segment["source"] for segment in by_id["S1:2"]["event_segments"]] == ["individual", "group"]
+    assert [item["frame"] for item in by_id["S1:2"]["frame_event_scores"]] == [2, 3]
+    assert by_id["S1:2"]["frame_event_scores"][1]["source"] == "group"
     assert output_csv.exists()
