@@ -88,9 +88,28 @@ def parse_args() -> argparse.Namespace:
         help="Optional sequence name filter. Repeat to keep multiple sequences.",
     )
     parser.add_argument(
+        "--sequence-name-source",
+        choices=("directory", "seqinfo", "relative"),
+        default="directory",
+        help=(
+            "How to derive sequence IDs. directory avoids seqinfo.ini name collisions; "
+            "seqinfo preserves source metadata; relative keeps split/path context."
+        ),
+    )
+    parser.add_argument(
         "--include-ignored",
         action="store_true",
         help="Keep rows whose MOT confidence/valid flag is <= 0.",
+    )
+    parser.add_argument(
+        "--require-paired-modalities",
+        action="store_true",
+        help="For RGB/thermal conversion, keep only rows present in both modalities.",
+    )
+    parser.add_argument(
+        "--allow-empty",
+        action="store_true",
+        help="Allow writing an empty observations CSV. Intended only for debugging filters.",
     )
     parser.add_argument(
         "--output-csv",
@@ -123,6 +142,9 @@ def main() -> None:
         use_default_category_filter=not args.include_all_categories,
         include_ignored=args.include_ignored,
         sequences=args.sequence,
+        sequence_name_source=args.sequence_name_source,
+        require_paired_modalities=args.require_paired_modalities,
+        allow_empty=args.allow_empty,
     )
     if args.summary_json is not None:
         write_summary_json(args.summary_json, summary)

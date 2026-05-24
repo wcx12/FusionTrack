@@ -65,6 +65,8 @@ def test_prepare_tracking_dataset_protocol_validation_from_observations(tmp_path
             "2",
             "--stride",
             "1",
+            "--min-visible-frames",
+            "1",
             "--seed",
             "42",
         ],
@@ -84,6 +86,9 @@ def test_prepare_tracking_dataset_protocol_validation_from_observations(tmp_path
     assert manifest["num_fused_eval_clean"] > 0
     assert manifest["num_group_train"] > 0
     assert manifest["num_group_eval_clean"] > 0
+    assert manifest["group_sample_mode"] == "window"
+    assert manifest["group_min_visible_frames"] == 1
+    assert manifest["source_group_export_summary"]["num_windows"] > 0
     assert individual_matrix["require_score_key_match"] is True
     assert group_matrix["key_fields"] == ["sample_id", "window_id"]
     assert (output_root / "individual_labels_val.jsonl").exists()

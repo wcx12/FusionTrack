@@ -77,8 +77,30 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--val-ratio", type=float, default=0.2)
     parser.add_argument("--individual-anomaly-fraction", type=float, default=0.1)
     parser.add_argument("--group-anomaly-fraction", type=float, default=0.1)
+    parser.add_argument(
+        "--group-sample-mode",
+        choices=("sequence", "window"),
+        default="window",
+        help="Group sample construction mode passed to export_vt_tiny_mot_group_windows.py.",
+    )
     parser.add_argument("--window-size", type=int, default=16)
     parser.add_argument("--stride", type=int, default=8)
+    parser.add_argument(
+        "--min-visible-frames",
+        type=int,
+        default=2,
+        help="Minimum visible frames per object in each group sample.",
+    )
+    parser.add_argument(
+        "--require-both-modalities",
+        action="store_true",
+        help="Keep only group objects visible in both RGB and thermal samples.",
+    )
+    parser.add_argument(
+        "--allow-empty-groups",
+        action="store_true",
+        help="Allow zero group windows/objects. Intended only for smoke debugging.",
+    )
     parser.add_argument("--smoke-max-train", type=int, default=0)
     parser.add_argument("--smoke-max-eval", type=int, default=0)
     return parser.parse_args(argv)
@@ -116,6 +138,7 @@ def _prepare_validation(
         observations_csv=source_csv,
         split=source_split,
         work_root=work_root,
+        args=args,
         window_size=int(args.window_size),
         stride=int(args.stride),
     )
@@ -153,6 +176,7 @@ def _prepare_validation(
             "source_split": source_split,
             "val_ratio": float(args.val_ratio),
             "val_sequences": sorted(val_sequences),
+            "source_group_export_summary": _load_json(exports["group_summary_json"]),
         },
     )
 
@@ -174,6 +198,7 @@ def _prepare_holdout(
         observations_csv=train_csv,
         split=str(args.train_split),
         work_root=work_root / "train_source",
+        args=args,
         window_size=int(args.window_size),
         stride=int(args.stride),
     )
@@ -181,6 +206,7 @@ def _prepare_holdout(
         observations_csv=eval_csv,
         split=str(args.eval_split),
         work_root=work_root / "eval_source",
+        args=args,
         window_size=int(args.window_size),
         stride=int(args.stride),
     )
@@ -200,6 +226,8 @@ def _prepare_holdout(
         extra_manifest={
             "train_split": str(args.train_split),
             "eval_split": str(args.eval_split),
+            "train_group_export_summary": _load_json(train_exports["group_summary_json"]),
+            "eval_group_export_summary": _load_json(eval_exports["group_summary_json"]),
         },
     )
 
@@ -208,6 +236,7 @@ def _export_from_observations(
     observations_csv: Path,
     split: str,
     work_root: Path,
+    args: argparse.Namespace,
     window_size: int,
     stride: int,
 ) -> dict[str, Path]:
@@ -231,15 +260,32 @@ def _export_from_observations(
         "--output-dir",
         str(group_dir),
         "--sample-mode",
-        "window",
+        str(args.group_sample_mode),
         "--window-size",
         str(window_size),
         "--stride",
         str(stride),
+        "--min-visible-frames",
+        str(args.min_visible_frames),
+        *(["--require-both-modalities"] if args.require_both_modalities else []),
     )
+    group_summary_json = group_dir / f"group_windows_summary_{split}.json"
+    group_summary = _load_json(group_summary_json)
+    if (
+        not args.allow_empty_groups
+        and (
+            int(group_summary.get("num_windows", 0)) <= 0
+            or int(group_summary.get("total_objects", 0)) <= 0
+        )
+    ):
+        raise ValueError(
+            "Group export produced no usable windows/objects. Adjust --window-size, "
+            "--stride, --min-visible-frames, or --group-sample-mode before running experiments."
+        )
     return {
         "individual_jsonl": individual_dir / f"individual_trajectories_{split}.jsonl",
         "group_windows_jsonl": group_dir / f"group_windows_{split}.jsonl",
+        "group_summary_json": group_summary_json,
     }
 
 
@@ -261,6 +307,16 @@ def _write_protocol_files(
     if args.smoke_max_eval > 0:
         eval_trajectories = eval_trajectories[: args.smoke_max_eval]
         eval_windows = eval_windows[: args.smoke_max_eval]
+    if not train_trajectories or not eval_trajectories:
+        raise ValueError(
+            "Protocol preparation produced empty individual train/eval trajectories. "
+            "Check source observations and split settings before running experiments."
+        )
+    if not args.allow_empty_groups and (not train_windows or not eval_windows):
+        raise ValueError(
+            "Protocol preparation produced empty group train/eval windows. "
+            "Adjust --window-size, --stride, --min-visible-frames, or split settings."
+        )
 
     fused_train = build_fused_trajectories(train_trajectories)
     fused_eval_clean = build_fused_trajectories(eval_trajectories)
@@ -336,8 +392,11 @@ def _write_protocol_files(
         "seed": int(args.seed),
         "individual_anomaly_fraction": float(args.individual_anomaly_fraction),
         "group_anomaly_fraction": float(args.group_anomaly_fraction),
+        "group_sample_mode": str(args.group_sample_mode),
         "group_window_size": int(args.window_size),
         "group_stride": int(args.stride),
+        "group_min_visible_frames": int(args.min_visible_frames),
+        "group_require_both_modalities": bool(args.require_both_modalities),
         "num_fused_train": len(fused_train),
         "num_fused_eval_clean": len(fused_eval_clean),
         "num_group_train": len(train_windows),
@@ -399,6 +458,11 @@ def _matrix_config(
 def _require_file(path: Path) -> None:
     if not path.exists():
         raise FileNotFoundError(f"Required observations CSV not found: {path}")
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 if __name__ == "__main__":

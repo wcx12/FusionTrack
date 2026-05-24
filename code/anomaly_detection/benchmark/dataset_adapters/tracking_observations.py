@@ -101,6 +101,9 @@ def convert_mot_roots_to_observations(
     use_default_category_filter: bool = True,
     include_ignored: bool = False,
     sequences: Sequence[str] | None = None,
+    sequence_name_source: str = "directory",
+    require_paired_modalities: bool = False,
+    allow_empty: bool = False,
 ) -> dict[str, Any]:
     """Convert one or two MOT-style roots into FusionTrack observations CSV.
 
@@ -125,6 +128,7 @@ def convert_mot_roots_to_observations(
             use_default_category_filter=use_default_category_filter,
             include_ignored=include_ignored,
             sequences=sequence_filter,
+            sequence_name_source=sequence_name_source,
         )
     if thermal_root is not None:
         points_by_modality["thermal"] = load_mot_root(
@@ -138,9 +142,18 @@ def convert_mot_roots_to_observations(
             use_default_category_filter=use_default_category_filter,
             include_ignored=include_ignored,
             sequences=sequence_filter,
+            sequence_name_source=sequence_name_source,
         )
 
-    rows = build_observation_rows(points_by_modality)
+    rows = build_observation_rows(
+        points_by_modality,
+        required_modalities=MODALITIES if require_paired_modalities else None,
+    )
+    if not rows and not allow_empty:
+        raise ValueError(
+            "Conversion produced zero observation rows. Check category filters, split filters, "
+            "sequence filters, and RGB/thermal pairing settings."
+        )
     write_observations_csv(output_csv, rows)
     return conversion_summary(output_csv, rows, points_by_modality, dataset, profile, split)
 
@@ -156,9 +169,14 @@ def load_mot_root(
     use_default_category_filter: bool = True,
     include_ignored: bool = False,
     sequences: set[str] | None = None,
+    sequence_name_source: str = "directory",
 ) -> list[MotObservation]:
     root_path = Path(root)
-    mot_sequences = discover_mot_sequences(root_path, split=split)
+    mot_sequences = discover_mot_sequences(
+        root_path,
+        split=split,
+        sequence_name_source=sequence_name_source,
+    )
     if sequences:
         mot_sequences = [sequence for sequence in mot_sequences if sequence.sequence in sequences]
     observations: list[MotObservation] = []
@@ -181,10 +199,16 @@ def load_mot_root(
     return sorted(observations, key=lambda item: (item.sequence, _track_sort_key(item.track_id), item.frame_id))
 
 
-def discover_mot_sequences(root: str | Path, split: str | None = None) -> list[MotSequence]:
+def discover_mot_sequences(
+    root: str | Path,
+    split: str | None = None,
+    sequence_name_source: str = "directory",
+) -> list[MotSequence]:
     root_path = Path(root)
     if not root_path.exists():
         raise FileNotFoundError(f"MOT root does not exist: {root_path}")
+    if sequence_name_source not in {"directory", "seqinfo", "relative"}:
+        raise ValueError("sequence_name_source must be one of: directory, seqinfo, relative.")
 
     candidates: list[Path] = []
     direct = root_path / "gt" / "gt.txt"
@@ -202,7 +226,12 @@ def discover_mot_sequences(root: str | Path, split: str | None = None) -> list[M
         if split and split not in sequence_dir.parts:
             continue
         seqinfo = read_seqinfo(sequence_dir / "seqinfo.ini")
-        sequence_name = str(seqinfo.get("name") or sequence_dir.name)
+        sequence_name = _sequence_name(
+            root_path=root_path,
+            sequence_dir=sequence_dir,
+            seqinfo=seqinfo,
+            source=sequence_name_source,
+        )
         sequences.append(
             MotSequence(
                 sequence=sequence_name,
@@ -217,6 +246,22 @@ def discover_mot_sequences(root: str | Path, split: str | None = None) -> list[M
         split_note = f" for split {split!r}" if split else ""
         raise FileNotFoundError(f"No MOT gt/gt.txt files found under {root_path}{split_note}.")
     return sequences
+
+
+def _sequence_name(
+    root_path: Path,
+    sequence_dir: Path,
+    seqinfo: dict[str, str],
+    source: str,
+) -> str:
+    if source == "seqinfo":
+        return str(seqinfo.get("name") or sequence_dir.name)
+    if source == "relative":
+        try:
+            return sequence_dir.relative_to(root_path).as_posix()
+        except ValueError:
+            return sequence_dir.name
+    return sequence_dir.name
 
 
 def read_seqinfo(path: str | Path) -> dict[str, str]:
@@ -285,6 +330,7 @@ def read_mot_sequence(
 
 def build_observation_rows(
     points_by_modality: dict[str, list[MotObservation]],
+    required_modalities: Sequence[str] | None = None,
 ) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str, int], dict[str, MotObservation]] = {}
     for modality, observations in points_by_modality.items():
@@ -292,9 +338,18 @@ def build_observation_rows(
             raise ValueError(f"Unsupported modality: {modality}")
         for observation in observations:
             key = (observation.sequence, observation.track_id, observation.frame_id)
-            grouped.setdefault(key, {})[modality] = observation
+            bucket = grouped.setdefault(key, {})
+            if modality in bucket:
+                raise ValueError(
+                    "Duplicate observation key after sequence normalization: "
+                    f"modality={modality!r}, sequence={observation.sequence!r}, "
+                    f"track_id={observation.track_id!r}, frame_id={observation.frame_id!r}. "
+                    "Use --sequence-name-source directory or relative if seqinfo.ini names collide."
+                )
+            bucket[modality] = observation
 
     rows: list[dict[str, Any]] = []
+    required = tuple(required_modalities or ())
     for key in sorted(grouped, key=lambda item: (item[0], _track_sort_key(item[1]), item[2])):
         modalities = grouped[key]
         representative = modalities.get("rgb") or modalities.get("thermal")
@@ -304,6 +359,8 @@ def build_observation_rows(
         for modality, observation in modalities.items():
             _fill_modality(row, modality, observation)
         _fill_modal_relation(row)
+        if required and not all(_row_has_modality(row, modality) for modality in required):
+            continue
         rows.append(row)
 
     _add_temporal_features(rows)
@@ -337,6 +394,15 @@ def conversion_summary(
 ) -> dict[str, Any]:
     sequence_names = sorted({row["sequence"] for row in rows})
     track_keys = {(row["sequence"], row["track_id"]) for row in rows}
+    modality_coverage = _modality_coverage(rows)
+    warnings: list[str] = []
+    if len(points_by_modality) > 1 and rows:
+        unpaired = modality_coverage["rgb_only_rows"] + modality_coverage["thermal_only_rows"]
+        if unpaired:
+            warnings.append(
+                "RGB/thermal roots did not fully pair on (sequence, track_id, frame_id); "
+                "inspect paired_rows/rgb_only_rows/thermal_only_rows before running main experiments."
+            )
     return {
         "dataset": dataset,
         "profile": profile,
@@ -346,6 +412,8 @@ def conversion_summary(
         "num_sequences": len(sequence_names),
         "sequences": sequence_names,
         "num_tracks": len(track_keys),
+        "categories": _category_counts(rows),
+        "modality_coverage": modality_coverage,
         "modalities": {
             modality: {
                 "num_observations": len(observations),
@@ -354,6 +422,41 @@ def conversion_summary(
             }
             for modality, observations in sorted(points_by_modality.items())
         },
+        "warnings": warnings,
+    }
+
+
+def _category_counts(rows: Sequence[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        key = str(row.get("category_id") or "None")
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _modality_coverage(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    paired = 0
+    rgb_only = 0
+    thermal_only = 0
+    neither = 0
+    for row in rows:
+        has_rgb = _row_has_modality(row, "rgb")
+        has_thermal = _row_has_modality(row, "thermal")
+        if has_rgb and has_thermal:
+            paired += 1
+        elif has_rgb:
+            rgb_only += 1
+        elif has_thermal:
+            thermal_only += 1
+        else:
+            neither += 1
+    total = len(rows)
+    return {
+        "paired_rows": paired,
+        "rgb_only_rows": rgb_only,
+        "thermal_only_rows": thermal_only,
+        "neither_rows": neither,
+        "paired_ratio": paired / total if total else 0.0,
     }
 
 
@@ -402,6 +505,10 @@ def _fill_modal_relation(row: dict[str, Any]) -> None:
     row["modal_offset_dy_thermal_minus_rgb"] = dy
     row["modal_offset_distance"] = math.hypot(dx, dy)
     row["modal_bbox_iou"] = bbox_iou(_bbox(row, "rgb"), _bbox(row, "thermal"))
+
+
+def _row_has_modality(row: dict[str, Any], modality: str) -> bool:
+    return row.get(f"{modality}_cx") is not None and row.get(f"{modality}_cy") is not None
 
 
 def _add_temporal_features(rows: list[dict[str, Any]]) -> None:

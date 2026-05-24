@@ -31,6 +31,30 @@ def _write_sequence(root: Path, sequence: str, rows: list[str], fps: int = 25) -
     (gt_dir / "gt.txt").write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
+def _write_sequence_with_seqinfo_name(
+    root: Path,
+    sequence: str,
+    seqinfo_name: str,
+    rows: list[str],
+) -> None:
+    sequence_dir = root / sequence
+    gt_dir = sequence_dir / "gt"
+    gt_dir.mkdir(parents=True)
+    (sequence_dir / "seqinfo.ini").write_text(
+        "\n".join(
+            [
+                "[Sequence]",
+                f"name={seqinfo_name}",
+                "imDir=img1",
+                "imExt=.jpg",
+                "fps=25",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (gt_dir / "gt.txt").write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+
 def _read_rows(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8", newline="") as f:
         return list(csv.DictReader(f))
@@ -61,6 +85,8 @@ def test_mot_family_root_exports_rgb_observations_with_motion(tmp_path: Path) ->
     rows = _read_rows(output_csv)
     assert summary["num_rows"] == 2
     assert summary["modalities"]["rgb"]["num_observations"] == 2
+    assert summary["categories"] == {"1": 2}
+    assert summary["modality_coverage"]["rgb_only_rows"] == 2
     assert rows[0]["sequence"] == "MOT17-02-FRCNN"
     assert rows[0]["track_id"] == "1"
     assert rows[0]["rgb_file"] == "MOT17-02-FRCNN/img1/000001.jpg"
@@ -89,12 +115,79 @@ def test_m3ot_paired_roots_merge_rgb_and_thermal_modal_offsets(tmp_path: Path) -
     rows = _read_rows(output_csv)
     assert summary["modalities"]["rgb"]["num_observations"] == 1
     assert summary["modalities"]["thermal"]["num_observations"] == 1
+    assert summary["modality_coverage"]["paired_rows"] == 1
+    assert summary["modality_coverage"]["paired_ratio"] == 1.0
     assert rows[0]["rgb_cx"] == "20.0"
     assert rows[0]["thermal_cx"] == "26.0"
     assert rows[0]["modal_offset_dx_thermal_minus_rgb"] == "6.0"
     assert rows[0]["modal_offset_dy_thermal_minus_rgb"] == "4.0"
     assert rows[0]["modal_offset_distance"] == "7.211102550927978"
     assert float(rows[0]["modal_bbox_iou"]) > 0.38
+
+
+def test_default_sequence_names_use_directories_to_avoid_seqinfo_collisions(tmp_path: Path) -> None:
+    root = tmp_path / "MOT17" / "train"
+    _write_sequence_with_seqinfo_name(root, "SEQ-A", "duplicate", ["1,1,10,20,20,20,1,1,1.0"])
+    _write_sequence_with_seqinfo_name(root, "SEQ-B", "duplicate", ["1,1,30,40,20,20,1,1,1.0"])
+    output_csv = tmp_path / "observations_train.csv"
+
+    summary = convert_mot_roots_to_observations(
+        output_csv=output_csv,
+        dataset="MOT17",
+        rgb_root=root,
+        profile="motchallenge",
+    )
+
+    assert summary["num_rows"] == 2
+    assert summary["sequences"] == ["SEQ-A", "SEQ-B"]
+
+
+def test_seqinfo_sequence_name_collisions_fail_instead_of_overwriting(tmp_path: Path) -> None:
+    root = tmp_path / "MOT17" / "train"
+    _write_sequence_with_seqinfo_name(root, "SEQ-A", "duplicate", ["1,1,10,20,20,20,1,1,1.0"])
+    _write_sequence_with_seqinfo_name(root, "SEQ-B", "duplicate", ["1,1,30,40,20,20,1,1,1.0"])
+
+    try:
+        convert_mot_roots_to_observations(
+            output_csv=tmp_path / "observations_train.csv",
+            dataset="MOT17",
+            rgb_root=root,
+            profile="motchallenge",
+            sequence_name_source="seqinfo",
+        )
+    except ValueError as exc:
+        assert "Duplicate observation key" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected seqinfo name collision to fail")
+
+
+def test_m3ot_unpaired_rows_are_visible_and_can_be_required(tmp_path: Path) -> None:
+    rgb_root = tmp_path / "M3OT" / "RGB" / "train"
+    thermal_root = tmp_path / "M3OT" / "IR" / "train"
+    _write_sequence(rgb_root, "M3OT-0001", ["1,7,10,20,20,20,1,1,1.0", "2,7,11,20,20,20,1,1,1.0"])
+    _write_sequence(thermal_root, "M3OT-0001", ["1,7,16,24,20,20,1,1,1.0"])
+
+    loose_summary = convert_mot_roots_to_observations(
+        output_csv=tmp_path / "loose.csv",
+        dataset="M3OT",
+        rgb_root=rgb_root,
+        thermal_root=thermal_root,
+        profile="m3ot",
+    )
+    strict_summary = convert_mot_roots_to_observations(
+        output_csv=tmp_path / "strict.csv",
+        dataset="M3OT",
+        rgb_root=rgb_root,
+        thermal_root=thermal_root,
+        profile="m3ot",
+        require_paired_modalities=True,
+    )
+
+    assert loose_summary["modality_coverage"]["paired_rows"] == 1
+    assert loose_summary["modality_coverage"]["rgb_only_rows"] == 1
+    assert loose_summary["warnings"]
+    assert strict_summary["num_rows"] == 1
+    assert strict_summary["modality_coverage"]["paired_ratio"] == 1.0
 
 
 def test_tracking_converter_cli_writes_summary_json(tmp_path: Path) -> None:
