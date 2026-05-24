@@ -138,3 +138,11 @@
 - `code/system/run_fusiontrack.py` 新增 `--export-package` 参数，可在生成系统网页后同步产出交付包。
 - 导出包内使用 `${work_root}`、`${data_root}` 等占位符替代本机绝对路径，便于答辩展示、归档和跨机器交付。
 - 该更新推进了 E/F 层中的“导出能力（json/csv/png/html）”与“交付链路固化”，但完整目标仍需继续补齐自动化发布、真实标签 adapter、在线/批处理运行套件等项。
+
+## 2026-05-25 更新：评估输入 schema 治理
+
+- 新增 `code/anomaly_detection/benchmark/evaluation/schema.py`，统一校验 label/score 行结构。
+- `evaluate_score_file()` 现在会在 alignment 和指标计算前执行 fail-fast 校验。
+- label 行必须包含任务 key 与二值 `label`；score 行必须包含任务 key 与有限数值 `score`。
+- 支持 `sample_id` 与 `sample_id + window_id` 等任务级 key 字段，并沿用 `require_unique_keys` 策略检查重复 key。
+- 该更新推进了 A/D 层中的 `labels/scores schema`、`strict key 管理` 和 `缺失字段一致性约束`，但完整系统仍需继续补齐 run manifest、真实标签 adapter、事件段解释链路和一键运行套件。

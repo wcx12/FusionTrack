@@ -1222,3 +1222,17 @@ server_artifacts/final_results_20260522/holdout_multiseed_20260522/fusiontrack_h
 如果某个实验 run 的名字不是 registry 里的 canonical name，可以在 registry 条目中加入
 `aliases`，或者在 matrix 实验项里显式设置 `method_registry_name`。manifest 会保留原始
 run name，同时写入 registry 的 canonical `method_profile.name`。
+
+## 2026-05-25 更新：labels/scores schema 校验
+
+本轮新增 `evaluation/schema.py`，把评估输入的结构约束从指标计算逻辑里独立出来，作为 benchmark 的统一治理入口。
+
+当前校验规则如下：
+
+1. label 行必须包含任务 key 字段，默认 individual 使用 `sample_id`，group 使用 `sample_id + window_id`。
+2. label 行必须包含二值 `label`，只允许 `0/1`。
+3. score 行必须包含任务 key 字段和有限数值 `score`，`NaN`、空值、缺失字段会直接失败。
+4. 如果同时存在 `frame_start` 和 `frame_end`，必须满足 `frame_end >= frame_start`。
+5. 当 CLI 或 reporting 入口启用 `--require-unique-keys` 时，重复 label key 或 score key 会直接失败。
+
+该校验已经接入 `evaluation.reporting.evaluate_score_file()`，因此 `run_evaluation.py`、批量矩阵评估和后续 dashboard 结果聚合都会在指标计算前先检查输入数据。这样可以避免错误 score 被 `_finite_scores()` 或对齐逻辑静默吞掉，保证实验表格中的 AUROC/AUPRC/F1/P@K/R@K 都来自结构合法的数据文件。

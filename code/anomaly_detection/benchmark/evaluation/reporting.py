@@ -7,6 +7,7 @@ from typing import Any, Iterable, Sequence
 
 from evaluation.io import load_label_rows, load_score_rows
 from evaluation.metrics import alignment_report, align_scores_with_labels, evaluate_binary_scores
+from evaluation.schema import validate_label_rows, validate_score_rows
 
 
 def evaluate_score_file(
@@ -18,8 +19,16 @@ def evaluate_score_file(
     require_unique_keys: bool = False,
     require_score_key_match: bool = False,
 ) -> dict[str, Any]:
-    label_rows = load_label_rows(label_path)
-    score_rows = load_score_rows(score_path)
+    label_rows = validate_label_rows(
+        load_label_rows(label_path),
+        key_fields=key_fields,
+        require_unique_keys=require_unique_keys,
+    )
+    score_rows = validate_score_rows(
+        load_score_rows(score_path),
+        key_fields=key_fields,
+        require_unique_keys=require_unique_keys,
+    )
     report = alignment_report(score_rows, label_rows, key_fields=key_fields)
     if require_score_key_match:
         _raise_on_score_key_mismatch(report)

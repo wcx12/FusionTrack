@@ -121,6 +121,44 @@ def test_run_evaluation_cli_can_enforce_strict_alignment(tmp_path: Path) -> None
     assert not output_json.exists()
 
 
+def test_run_evaluation_cli_fails_fast_on_invalid_score_schema(tmp_path: Path) -> None:
+    label_path = tmp_path / "labels.jsonl"
+    score_path = tmp_path / "scores.jsonl"
+    output_json = tmp_path / "metrics.json"
+    repo_root = Path(__file__).resolve().parents[4]
+    script = Path("code/anomaly_detection/benchmark/runners/run_evaluation.py")
+
+    write_jsonl(label_path, [{"sample_id": "a", "label": 1}])
+    write_jsonl(score_path, [{"sample_id": "a", "score": "nan"}])
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--label-file",
+            str(label_path),
+            "--score-file",
+            str(score_path),
+            "--output-json",
+            str(output_json),
+            "--method",
+            "toy_method",
+            "--split",
+            "val",
+            "--seed",
+            "7",
+        ],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "finite numeric score" in result.stderr
+    assert not output_json.exists()
+
+
 def test_run_evaluation_cli_help_works_as_direct_script() -> None:
     repo_root = Path(__file__).resolve().parents[4]
     script = Path("code/anomaly_detection/benchmark/runners/run_evaluation.py")
