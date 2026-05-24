@@ -173,3 +173,26 @@ python -c "import collections, collections.abc; collections.Callable = collectio
 - Registration 当前主要是配准诊断模块，不是异常检测 AUROC 任务。
 - Registration 的部分点云预览仍可能是轻量展示数据，后续应接入真实模型输出的 source/reference/aligned 点云。
 - 当前网页是静态页面，没有后端在线推理接口；重新跑实验后需要重新生成并部署页面。
+
+## 导出交付包
+
+最终 dashboard 生成后可以额外导出一个便携 zip 包，用于答辩、归档或在其它机器上离线查看核心结果：
+
+```bash
+python code/system/run_fusiontrack.py \
+  --final-results-root <final_results_root> \
+  --individual-label-file <individual_labels.jsonl> \
+  --group-label-file <group_labels.jsonl> \
+  --fused-jsonl <fused_trajectories.jsonl> \
+  --export-package runs/fusiontrack_v1/exports/fusiontrack_dashboard_export.zip
+```
+
+导出包由 `fusiontrack.export_package.build_analysis_export_package` 生成，包含：
+
+- `report/index.html`：最终可视化网页。
+- `report/assets/`：网页需要的 JSON、背景帧、曲线或图片资源。
+- `summary/pipeline_summary.json`：脱敏后的 pipeline summary。
+- `summary/pipeline_manifest.json`：脱敏后的运行 manifest。
+- `export_manifest.json`：导出包清单、文件大小、包格式和相对化来源路径。
+
+导出包内部不会写入本机绝对路径；`work_root`、`data_root` 等路径会被替换为 `${work_root}`、`${data_root}` 这类可迁移占位符。

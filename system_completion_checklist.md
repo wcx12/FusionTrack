@@ -131,3 +131,10 @@
 - 第2周：C、E 解释链路（行为异常）  
 - 第3周：部署与导出链路  
 - 第4周：验收与文档统一
+
+## 2026-05-25 更新：导出链路
+
+- 新增 `code/system/fusiontrack/export_package.py`，支持把最终 dashboard、`assets/`、pipeline summary、pipeline manifest 打包为便携 zip。
+- `code/system/run_fusiontrack.py` 新增 `--export-package` 参数，可在生成系统网页后同步产出交付包。
+- 导出包内使用 `${work_root}`、`${data_root}` 等占位符替代本机绝对路径，便于答辩展示、归档和跨机器交付。
+- 该更新推进了 E/F 层中的“导出能力（json/csv/png/html）”与“交付链路固化”，但完整目标仍需继续补齐自动化发布、真实标签 adapter、在线/批处理运行套件等项。

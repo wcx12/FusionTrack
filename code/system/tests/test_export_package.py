@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+import json
+import zipfile
+from pathlib import Path
+
+from fusiontrack.export_package import build_analysis_export_package
+
+
+def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_path: Path) -> None:
+    work_root = tmp_path / "runs"
+    report_dir = work_root / "final_dashboard"
+    assets_dir = report_dir / "assets"
+    assets_dir.mkdir(parents=True)
+    (report_dir / "index.html").write_text("<html>FusionTrack</html>", encoding="utf-8")
+    (assets_dir / "final_dashboard_data.json").write_text('{"tasks":{}}', encoding="utf-8")
+    (assets_dir / "curve.png").write_bytes(b"png")
+    summary_path = work_root / "pipeline_summary_final_dashboard.json"
+    manifest_path = work_root / "pipeline_manifest_final_dashboard_all.json"
+    summary = {
+        "mode": "final_results_dashboard",
+        "work_root": str(work_root),
+        "data_root": str(tmp_path / "data" / "VT-Tiny-MOT"),
+        "summary_path": str(summary_path),
+        "manifest_path": str(manifest_path),
+        "dashboard": {
+            "report_html": str(report_dir / "index.html"),
+            "assets_dir": str(assets_dir),
+            "num_tasks": 2,
+        },
+    }
+    summary_path.write_text(json.dumps(summary), encoding="utf-8")
+    manifest_path.write_text(json.dumps({"mode": "final_results_dashboard"}), encoding="utf-8")
+
+    package_path = tmp_path / "exports" / "fusiontrack_export.zip"
+
+    result = build_analysis_export_package(summary, package_path)
+
+    assert result["package_path"] == str(package_path)
+    assert result["num_files"] >= 5
+    assert package_path.exists()
+    with zipfile.ZipFile(package_path) as archive:
+        names = set(archive.namelist())
+        assert "report/index.html" in names
+        assert "report/assets/final_dashboard_data.json" in names
+        assert "report/assets/curve.png" in names
+        assert "summary/pipeline_summary.json" in names
+        assert "summary/pipeline_manifest.json" in names
+        assert "export_manifest.json" in names
+        assert not any(name.startswith("artifacts/work_root/pipeline_summary") for name in names)
+        manifest = json.loads(archive.read("export_manifest.json").decode("utf-8"))
+        manifest_text = json.dumps(manifest, ensure_ascii=False)
+        assert str(tmp_path) not in manifest_text
+        assert "${work_root}/final_dashboard/index.html" in manifest_text
+        assert manifest["package_format"] == "fusiontrack_analysis_export_v1"

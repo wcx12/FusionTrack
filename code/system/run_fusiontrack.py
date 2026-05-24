@@ -13,6 +13,7 @@ if str(MTF_BA_ROOT) not in sys.path:
     sys.path.insert(0, str(MTF_BA_ROOT))
 
 from fusiontrack.config import FusionTrackPaths
+from fusiontrack.export_package import build_analysis_export_package
 from fusiontrack.pipeline import (
     build_experiment_report,
     build_final_results_report,
@@ -67,6 +68,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--top-k", type=int, default=100, help="Top-K used for case and anomaly-type analysis.")
     parser.add_argument("--case-limit", type=int, default=12, help="Maximum TP/FP/FN cases per method.")
+    parser.add_argument(
+        "--export-package",
+        type=Path,
+        help="Optional zip path for a portable dashboard/report export package.",
+    )
     return parser.parse_args()
 
 
@@ -144,6 +150,8 @@ def main() -> None:
             force=args.force,
             skip_extraction=args.skip_extraction,
         )
+    if args.export_package:
+        summary["export_package"] = build_analysis_export_package(summary, args.export_package)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
