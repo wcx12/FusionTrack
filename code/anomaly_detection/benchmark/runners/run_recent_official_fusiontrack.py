@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import datetime, timezone
+import hashlib
 import importlib.util
 import json
 import math
+import platform
 import random
+import subprocess
 import sys
 import time
 import types
@@ -160,7 +164,46 @@ def main(argv: Sequence[str] | None = None) -> int:
     score_csv = args.output_dir / f"official_{args.method}_{args.task}_scores.csv"
     _write_score_csv(score_csv, score_rows)
 
-    manifest = {
+    manifest = _build_run_manifest(
+        args=args,
+        device=device,
+        win_size=win_size,
+        score_input_jsonl=score_input_jsonl,
+        score_jsonl=score_jsonl,
+        score_csv=score_csv,
+        history=history,
+        convergence=convergence,
+        model_manifest=model_manifest,
+        num_train=len(train_samples),
+        num_val=len(val_samples),
+        num_score=len(score_samples),
+    )
+    manifest_path = args.output_dir / "run_manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+def _build_run_manifest(
+    args: argparse.Namespace,
+    device: torch.device,
+    win_size: int,
+    score_input_jsonl: Path,
+    score_jsonl: Path,
+    score_csv: Path,
+    history: list[dict[str, float | int]],
+    convergence: dict[str, Any],
+    model_manifest: dict[str, Any],
+    num_train: int,
+    num_val: int,
+    num_score: int,
+) -> dict[str, Any]:
+    return {
+        "manifest_schema_version": 2,
+        "generated_at_utc": _utc_now(),
         "method": args.method,
         "task": args.task,
         "official_root": str(args.official_root),
@@ -177,9 +220,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         "d_model": int(args.d_model),
         "n_heads": int(args.n_heads),
         "e_layers": int(args.e_layers),
-        "num_train": len(train_samples),
-        "num_val": len(val_samples),
-        "num_score": len(score_samples),
+        "num_train": int(num_train),
+        "num_val": int(num_val),
+        "num_score": int(num_score),
+        "protocol": {
+            "method": str(args.method),
+            "task": str(args.task),
+            "seed": int(args.seed),
+            "win_size": int(win_size),
+            "score_input_is_validation": Path(score_input_jsonl) == Path(args.val_jsonl),
+        },
+        "hyperparameters": {
+            "epochs": int(args.epochs),
+            "batch_size": int(args.batch_size),
+            "lr": float(args.lr),
+            "win_size": int(win_size),
+            "d_model": int(args.d_model),
+            "n_heads": int(args.n_heads),
+            "e_layers": int(args.e_layers),
+            "dropout": float(args.dropout),
+            "top_fraction": float(args.top_fraction),
+            "max_train_samples": int(args.max_train_samples),
+            "seed": int(args.seed),
+        },
+        "artifacts": {
+            "score_jsonl": _artifact_manifest(score_jsonl),
+            "score_csv": _artifact_manifest(score_csv),
+            "loss_history": _artifact_manifest(Path(str(convergence["loss_history"]))),
+            "convergence_summary": _artifact_manifest(
+                Path(str(convergence["convergence_summary"]))
+            ),
+        },
+        "git": _git_metadata(),
+        "environment": _environment_metadata(),
         "history": history,
         "convergence": convergence,
         "model_manifest": model_manifest,
@@ -189,13 +262,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             "modules from --official-root."
         ),
     }
-    manifest_path = args.output_dir / "run_manifest.json"
-    manifest_path.write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-    print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
-    return 0
 
 
 def _run_catch(
@@ -1147,6 +1213,60 @@ def _write_score_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writeheader()
         for row in rows:
             writer.writerow({field: row.get(field, "") for field in fieldnames})
+
+
+def _artifact_manifest(path: Path) -> dict[str, str]:
+    return {
+        "path": str(path),
+        "sha256": _file_sha256(path),
+    }
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
+        "+00:00",
+        "Z",
+    )
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _git_metadata() -> dict[str, Any]:
+    status = _run_git(["status", "--short"])
+    return {
+        "commit": _run_git(["rev-parse", "HEAD"]),
+        "branch": _run_git(["rev-parse", "--abbrev-ref", "HEAD"]),
+        "dirty": bool(status),
+    }
+
+
+def _run_git(args: Sequence[str]) -> str:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=Path(__file__).resolve().parents[4],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def _environment_metadata() -> dict[str, str]:
+    return {
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+    }
 
 
 def _float(value: Any) -> float:

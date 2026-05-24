@@ -1260,3 +1260,14 @@ run name，同时写入 registry 的 canonical `method_profile.name`。
 4. 兼容旧字段的 `all_runs_csv`、`aggregate_csv`、`best_by_metric_json`，保证已有脚本仍可读取。
 
 这样 validation 矩阵和最终 holdout 多种子聚合都具备基础可追溯字段。后续官方 baseline runner 接入时也应复用同类字段，避免只保留分散日志而无法追溯最终论文表格。
+
+## 2026-05-25 更新：official baseline run manifest
+
+`runners/run_recent_official_fusiontrack.py` 生成的 `run_manifest.json` 已升级到 `manifest_schema_version = 2`。该文件面向 CATCH、SensitiveHUE、CutAddPaste、TimeMixer 等官方源码适配运行，新增内容包括：
+
+1. 运行时间、git commit/branch/dirty 状态和 Python 平台信息。
+2. `score_jsonl`、`score_csv`、`loss_history.json`、`convergence_summary.json` 的路径与 SHA-256。
+3. `protocol` 字段，明确 method、task、seed、win_size，以及当前评分输入是否直接来自 clean validation。
+4. `hyperparameters` 字段，记录 epoch、batch size、lr、模型结构参数、top fraction 和最大训练样本数。
+
+该更新用于保证论文表格里的官方 baseline 行不仅有最终 score，还能追溯到官方源码路径、适配输入、训练/验证设置、收敛证据和输出文件哈希。

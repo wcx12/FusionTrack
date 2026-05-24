@@ -159,3 +159,9 @@
 - `run_fusiontrack_holdout_multiseed.py` 输出的 `manifest.json` 也升级为 `manifest_schema_version = 2`。
 - 新增协议参数快照、`all_runs.csv` / `aggregate.csv` / `best_by_metric.json` 的 SHA-256、git 元数据和 Python 环境信息。
 - 该更新进一步补齐最终 holdout 结果的可追溯链路；下一步应把官方 baseline runner、最终 dashboard 导出包和事件解释输出纳入同一套追溯规范。
+
+## 2026-05-25 更新：official baseline runner manifest
+
+- `run_recent_official_fusiontrack.py` 输出的 `run_manifest.json` 升级为 `manifest_schema_version = 2`。
+- 新增官方 runner 的协议参数、超参数、git 元数据、环境信息，以及 score/convergence 文件 SHA-256。
+- 该更新补齐了官方 baseline 适配运行的基础可追溯字段；后续仍需把真实官方仓库 commit/license、运行环境包版本和最终 dashboard 展示链路继续固化。

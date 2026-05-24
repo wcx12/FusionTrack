@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 from pathlib import Path
 import sys
@@ -236,3 +237,21 @@ def test_recent_runner_scores_optional_score_jsonl_instead_of_clean_validation(
     assert manifest["score_input_jsonl"] == str(score_path)
     assert manifest["num_val"] == 1
     assert manifest["num_score"] == 1
+    assert manifest["manifest_schema_version"] == 2
+    assert manifest["generated_at_utc"].endswith("Z")
+    assert set(manifest["git"]) >= {"commit", "branch", "dirty"}
+    assert set(manifest["environment"]) >= {"python_version", "platform"}
+    assert manifest["protocol"] == {
+        "method": "timemixer",
+        "task": "individual",
+        "seed": 42,
+        "win_size": 8,
+        "score_input_is_validation": False,
+    }
+    score_jsonl = output_dir / "official_timemixer_individual_scores.jsonl"
+    score_csv = output_dir / "official_timemixer_individual_scores.csv"
+    assert manifest["artifacts"]["score_jsonl"]["path"] == str(score_jsonl)
+    assert manifest["artifacts"]["score_jsonl"]["sha256"] == hashlib.sha256(
+        score_jsonl.read_bytes()
+    ).hexdigest()
+    assert manifest["artifacts"]["score_csv"]["path"] == str(score_csv)
