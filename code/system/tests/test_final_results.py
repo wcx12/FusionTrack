@@ -362,6 +362,9 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert playback_data["S1"]["modality_audit"]["thermal_point_count"] == 1
     assert playback_data["S1"]["modality_audit"]["missing_thermal_points"] == 3
     assert playback_data["S1"]["modality_audit"]["background_status"] == "missing"
+    assert playback_data["S1"]["media"]["kind"] == "track_only_missing_background"
+    assert playback_data["S1"]["media"]["has_original_background"] is False
+    assert playback_data["S1"]["media"]["explanation_key"] == "sequenceNoVideoBackground"
     assert playback_data["S1"]["modality_audit"]["modal_offset_mean"] == 2.5
     group_tracks = {track["sample_id"]: track for track in playback_data["G1"]["tracks"]}
     assert playback_data["G1"]["stats_by_task"]["group"] == {
@@ -590,7 +593,12 @@ def test_final_dashboard_includes_registration_playback_without_labels(tmp_path:
     assert "registrationNoVideoBackground" in html
     assert "syncPlaybackModeForData" in html
     assert "canvasPlaceholderText" in html
+    assert "playbackMediaKind" in html
+    assert "mediaKindRegistration" in html
     assert "registrationPlaybackView" in html
     assert "registrationCanvas" in html
     assert "drawRegistrationPlayback" in html
     assert "setPlaybackSurfaceForTask" in html
+    assert playback_data["R1"]["media"]["kind"] == "registration_point_cloud"
+    assert playback_data["R1"]["media"]["has_original_background"] is False
+    assert playback_data["R1"]["media"]["explanation_key"] == "registrationNoVideoBackground"

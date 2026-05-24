@@ -258,6 +258,11 @@ def _build_playback_payloads(
                 "visualized_tracks": len(tracks),
             }
         )
+        media = _sequence_media_payload(
+            stats_by_task=stats_by_task,
+            background_asset=background_asset,
+            background_frames=background_frames,
+        )
         payloads[sequence] = {
             "sequence": sequence,
             "background": f"assets/{background_asset.name}" if background_asset else None,
@@ -270,6 +275,7 @@ def _build_playback_payloads(
             "stats": default_stats,
             "stats_by_task": stats_by_task,
             "modality_audit": modality_audit,
+            "media": media,
             "tracks": tracks,
         }
     return payloads
@@ -340,6 +346,40 @@ def _sequence_modality_audit(
         "modal_offset_mean": round(modal_offset_sum / modal_pair_count, 6) if modal_pair_count else 0.0,
         "modal_offset_max": round(modal_offset_max, 6),
         "status": status,
+    }
+
+
+def _sequence_media_payload(
+    stats_by_task: dict[str, dict[str, Any]],
+    background_asset: Path | None,
+    background_frames: list[dict[str, Any]],
+) -> dict[str, Any]:
+    has_original_background = bool(background_asset or background_frames)
+    registration_count = int(float((stats_by_task.get("registration") or {}).get("sequence_sample_count", 0) or 0))
+    non_registration_count = sum(
+        int(float((stats or {}).get("sequence_sample_count", 0) or 0))
+        for task_name, stats in stats_by_task.items()
+        if task_name != "registration"
+    )
+    if has_original_background:
+        kind = "original_video_background"
+        label_key = "mediaKindVideo"
+        explanation_key = "backgroundLoading"
+    elif registration_count > 0 and non_registration_count == 0:
+        kind = "registration_point_cloud"
+        label_key = "mediaKindRegistration"
+        explanation_key = "registrationNoVideoBackground"
+    else:
+        kind = "track_only_missing_background"
+        label_key = "mediaKindTrackOnly"
+        explanation_key = "sequenceNoVideoBackground"
+    return {
+        "kind": kind,
+        "label_key": label_key,
+        "explanation_key": explanation_key,
+        "has_original_background": has_original_background,
+        "background_frame_count": len(background_frames),
+        "registration_sample_count": registration_count,
     }
 
 
@@ -1190,6 +1230,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           registrationNoVideoBackgroundShort: "Registration point-cloud task: no original video background",
           sequenceNoVideoBackground: "No original RGB background frame was found for this sequence. The page can still show tracks, heatmaps, and structured evidence.",
           sequenceNoVideoBackgroundShort: "No original background frame for this sequence",
+          mediaKindVideo: "Original video background",
+          mediaKindRegistration: "Point-cloud registration playback",
+          mediaKindTrackOnly: "Track-only playback",
           comparisonRequiresBackground: "Four-panel comparison requires original video background frames.",
           playbackPrefix: "Playback",
           visibleTracks: "visible tracks",
@@ -1331,6 +1374,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         registrationNoPointCloud: "\u5f53\u524d\u6837\u672c\u6682\u65e0\u70b9\u4e91\u5750\u6807\uff0c\u6b63\u5728\u5c55\u793a\u8f7b\u91cf\u8bca\u65ad\u5360\u4f4d\u56fe\u3002",
         sequenceNoVideoBackground: "\u5f53\u524d\u5e8f\u5217\u6ca1\u6709\u627e\u5230\u53ef\u7528\u7684\u539f\u59cb RGB \u80cc\u666f\u5e27\uff0c\u53ea\u80fd\u5c55\u793a\u8f68\u8ff9\u3001\u70ed\u529b\u548c\u7ed3\u6784\u5316\u8bc1\u636e\u3002",
         sequenceNoVideoBackgroundShort: "\u5f53\u524d\u5e8f\u5217\u65e0\u539f\u59cb\u80cc\u666f\u5e27",
+        mediaKindVideo: "\u539f\u59cb\u89c6\u9891\u80cc\u666f\u56de\u653e",
+        mediaKindRegistration: "\u70b9\u4e91\u914d\u51c6\u56de\u653e",
+        mediaKindTrackOnly: "\u65e0\u80cc\u666f\u8f68\u8ff9\u56de\u653e",
         comparisonRequiresBackground: "\u56db\u753b\u9762\u5bf9\u6bd4\u9700\u8981\u539f\u59cb\u89c6\u9891\u80cc\u666f\u5e27\u3002",
         playbackPrefix: "可视化",
         visibleTracks: "条轨迹",
@@ -2812,12 +2858,43 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         return Boolean(data && (data.background || (data.background_frames || []).length));
       }}
 
+      function playbackMediaKind(data) {{
+        const media = (data && data.media) || {{}};
+        if (media.kind) {{
+          return media.kind;
+        }}
+        if (hasVideoBackground(data)) {{
+          return "original_video_background";
+        }}
+        return isRegistrationTask() ? "registration_point_cloud" : "track_only_missing_background";
+      }}
+
+      function playbackMediaLabel(data) {{
+        const media = (data && data.media) || {{}};
+        const fallbackKeys = {{
+          original_video_background: "mediaKindVideo",
+          registration_point_cloud: "mediaKindRegistration",
+          track_only_missing_background: "mediaKindTrackOnly"
+        }};
+        return t(media.label_key || fallbackKeys[playbackMediaKind(data)] || "mediaKindTrackOnly");
+      }}
+
+      function playbackMediaNoticeKey(data) {{
+        const media = (data && data.media) || {{}};
+        if (media.explanation_key) {{
+          return media.explanation_key;
+        }}
+        return playbackMediaKind(data) === "registration_point_cloud"
+          ? "registrationNoVideoBackground"
+          : "sequenceNoVideoBackground";
+      }}
+
       function playbackUsesOriginalVideo(data) {{
-        return hasVideoBackground(data) && !isRegistrationTask();
+        return playbackMediaKind(data) === "original_video_background" && hasVideoBackground(data) && !isRegistrationTask();
       }}
 
       function canvasPlaceholderText(data) {{
-        if (isRegistrationTask()) {{
+        if (playbackMediaKind(data) === "registration_point_cloud") {{
           return t("registrationNoVideoBackgroundShort");
         }}
         return hasVideoBackground(data) ? t("backgroundLoading") : t("sequenceNoVideoBackgroundShort");
@@ -2832,9 +2909,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           backgroundNotice.textContent = "";
           return;
         }}
-        backgroundNotice.textContent = isRegistrationTask()
-          ? t("registrationNoVideoBackground")
-          : t("sequenceNoVideoBackground");
+        backgroundNotice.textContent = t(playbackMediaNoticeKey(data));
         backgroundNotice.hidden = false;
       }}
 
@@ -3280,7 +3355,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         const viewLabel = isRegistrationTask()
           ? t("view_registration")
           : state.viewMode === "comparison" ? t("view_comparison") : `${{t("view_single")}} - ${{t(`layer_${{state.layer}}`)}}`;
-        playbackReadout.textContent = `${{t("playbackPrefix")}} / ${{data.sequence}} / ${{state.method}} / ${{t("frame")}} ${{state.frame}} / ${{t("play")}} ${{speedText}} / ${{viewLabel}} / ${{ranked.length}} ${{t("visibleTracks")}}`;
+        playbackReadout.textContent = `${{t("playbackPrefix")}} / ${{data.sequence}} / ${{state.method}} / ${{t("frame")}} ${{state.frame}} / ${{t("play")}} ${{speedText}} / ${{viewLabel}} / ${{playbackMediaLabel(data)}} / ${{ranked.length}} ${{t("visibleTracks")}}`;
       }}
 
       function stopPlayback() {{
