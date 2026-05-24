@@ -122,6 +122,12 @@ def _build_playback_payloads(
             data_root,
             assets_dir,
         )
+        modality_audit = _sequence_modality_audit(
+            sequence=sequence,
+            trajectories=trajectories,
+            background_asset=background_asset,
+            background_frames=background_frames,
+        )
         tracks = []
         frame_ids: list[int] = []
         priority_samples = priority_samples_by_sequence.get(sequence, set())
@@ -263,9 +269,78 @@ def _build_playback_payloads(
             "frame_range": [frame_start, frame_end],
             "stats": default_stats,
             "stats_by_task": stats_by_task,
+            "modality_audit": modality_audit,
             "tracks": tracks,
         }
     return payloads
+
+
+def _coverage(count: int, total: int) -> float:
+    if total <= 0:
+        return 0.0
+    return round(count / total, 6)
+
+
+def _sequence_modality_audit(
+    sequence: str,
+    trajectories: list[dict[str, Any]],
+    background_asset: Path | None,
+    background_frames: list[dict[str, Any]],
+) -> dict[str, Any]:
+    point_count = 0
+    fused_points = 0
+    rgb_points = 0
+    thermal_points = 0
+    modal_pair_count = 0
+    modal_offset_sum = 0.0
+    modal_offset_max = 0.0
+    for trajectory in trajectories:
+        for point in trajectory.get("points", []):
+            point_count += 1
+            fused = point.get("fused") or {}
+            if fused.get("center_xy"):
+                fused_points += 1
+            rgb = point.get("rgb") or {}
+            thermal = point.get("thermal") or {}
+            if rgb.get("file"):
+                rgb_points += 1
+            if thermal.get("file"):
+                thermal_points += 1
+            modal = point.get("modal") or {}
+            if modal.get("offset_distance") is not None:
+                offset = float(modal.get("offset_distance") or 0.0)
+                modal_pair_count += 1
+                modal_offset_sum += offset
+                modal_offset_max = max(modal_offset_max, offset)
+    missing_rgb = max(point_count - rgb_points, 0)
+    missing_thermal = max(point_count - thermal_points, 0)
+    if point_count == 0:
+        status = "no_tracks"
+    elif not background_asset:
+        status = "missing_background"
+    elif missing_rgb or missing_thermal:
+        status = "partial_modality"
+    else:
+        status = "ok"
+    return {
+        "sequence": sequence,
+        "trajectory_count": len(trajectories),
+        "point_count": point_count,
+        "fused_point_count": fused_points,
+        "rgb_point_count": rgb_points,
+        "thermal_point_count": thermal_points,
+        "missing_rgb_points": missing_rgb,
+        "missing_thermal_points": missing_thermal,
+        "fused_coverage": _coverage(fused_points, point_count),
+        "rgb_coverage": _coverage(rgb_points, point_count),
+        "thermal_coverage": _coverage(thermal_points, point_count),
+        "background_frame_count": len(background_frames),
+        "background_status": "available" if background_asset else "missing",
+        "modal_pair_count": modal_pair_count,
+        "modal_offset_mean": round(modal_offset_sum / modal_pair_count, 6) if modal_pair_count else 0.0,
+        "modal_offset_max": round(modal_offset_max, 6),
+        "status": status,
+    }
 
 
 def _selected_sequences_for_task(task: Any, top_sequences: int) -> list[str]:
@@ -629,6 +704,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .data-flow-card {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 10px; }}
     .data-flow-card span {{ display: block; color: #64748b; font-size: 12px; }}
     .data-flow-card strong {{ display: block; margin-top: 3px; font-size: 18px; font-variant-numeric: tabular-nums; }}
+    .status-pill {{ display: inline-flex; align-items: center; min-height: 24px; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 800; background: #e2e8f0; color: #334155; }}
+    .status-pill.ok {{ background: #dcfce7; color: #166534; }}
+    .status-pill.partial {{ background: #fef3c7; color: #92400e; }}
+    .status-pill.missing {{ background: #fee2e2; color: #991b1b; }}
     .mini-chart {{ width: 100%; height: 96px; margin-top: 10px; border: 1px solid #dbe4ee; border-radius: 7px; background: white; }}
     .event-card-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin-top: 10px; }}
     .event-card {{ border: 1px solid #dbe4ee; border-radius: 7px; background: white; padding: 9px; font-size: 12px; }}
@@ -1288,8 +1367,21 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         dataFlowFrames: "帧跨度",
         dataFlowBackgrounds: "背景帧资源",
         dataFlowTaskAudit: "任务审计",
+        dataFlowSequenceAudit: "序列数据审计",
+        dataFlowPoints: "轨迹点",
         dataFlowScoreCoverage: "分数覆盖",
         dataFlowLabelCoverage: "标签覆盖",
+        dataFlowPointCoverage: "融合点覆盖",
+        dataFlowRgbCoverage: "RGB 覆盖",
+        dataFlowThermalCoverage: "热成像覆盖",
+        dataFlowMissingModalities: "缺失模态点",
+        dataFlowBackgroundStatus: "背景状态",
+        dataFlowAvgOffset: "平均模态偏移",
+        dataFlowMaxOffset: "最大模态偏移",
+        dataFlowOk: "完整",
+        dataFlowPartial: "部分缺失",
+        dataFlowMissing: "缺失",
+        dataFlowNoTracks: "无轨迹",
         dataFlowNoBackground: "无背景帧",
         groupEventTitle: "群体事件聚合",
         groupEventTracks: "涉及轨迹",
@@ -1323,8 +1415,21 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         dataFlowFrames: "Frame span",
         dataFlowBackgrounds: "Background assets",
         dataFlowTaskAudit: "Task audit",
+        dataFlowSequenceAudit: "Sequence data audit",
+        dataFlowPoints: "Trajectory points",
         dataFlowScoreCoverage: "Score coverage",
         dataFlowLabelCoverage: "Label coverage",
+        dataFlowPointCoverage: "Fused point coverage",
+        dataFlowRgbCoverage: "RGB coverage",
+        dataFlowThermalCoverage: "Thermal coverage",
+        dataFlowMissingModalities: "Missing modality points",
+        dataFlowBackgroundStatus: "Background status",
+        dataFlowAvgOffset: "Avg modal offset",
+        dataFlowMaxOffset: "Max modal offset",
+        dataFlowOk: "Complete",
+        dataFlowPartial: "Partial",
+        dataFlowMissing: "Missing",
+        dataFlowNoTracks: "No tracks",
         dataFlowNoBackground: "No background frames",
         groupEventTitle: "Group event aggregation",
         groupEventTracks: "Tracks",
@@ -1407,6 +1512,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
 
       function taskData() {{ return dashboard.tasks[state.task]; }}
       function fmt(value) {{ return Number(value || 0).toFixed(3); }}
+      function pct(value) {{ return `${{Math.round(Number(value || 0) * 100)}}%`; }}
       function finiteNumber(value, fallback = 0) {{
         const number = Number(value);
         return Number.isFinite(number) ? number : fallback;
@@ -2369,6 +2475,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         const sequenceNames = sequences();
         const allTracks = sequenceNames.flatMap(name => playbackData[name]?.tracks || []);
         const backgroundCount = sequenceNames.reduce((sum, name) => sum + ((playbackData[name]?.background_frames || []).length), 0);
+        const audits = sequenceNames.map(name => playbackData[name]?.modality_audit || {{}});
+        const pointCount = audits.reduce((sum, audit) => sum + Number(audit.point_count || 0), 0);
+        const fusedPointCount = audits.reduce((sum, audit) => sum + Number(audit.fused_point_count || 0), 0);
+        const rgbPointCount = audits.reduce((sum, audit) => sum + Number(audit.rgb_point_count || 0), 0);
+        const thermalPointCount = audits.reduce((sum, audit) => sum + Number(audit.thermal_point_count || 0), 0);
+        const missingModalities = audits.reduce((sum, audit) => sum + Number(audit.missing_rgb_points || 0) + Number(audit.missing_thermal_points || 0), 0);
         const frameStarts = sequenceNames.map(name => Number(playbackData[name]?.frame_range?.[0] || 0));
         const frameEnds = sequenceNames.map(name => Number(playbackData[name]?.frame_range?.[1] || 0));
         const frameText = sequenceNames.length ? `${{Math.min(...frameStarts)}}-${{Math.max(...frameEnds)}}` : "-";
@@ -2377,7 +2489,42 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           [t("dataFlowTracks"), allTracks.length],
           [t("dataFlowFrames"), frameText],
           [t("dataFlowBackgrounds"), backgroundCount || t("dataFlowNoBackground")],
+          [t("dataFlowPointCoverage"), pct(pointCount ? fusedPointCount / pointCount : 0)],
+          [t("dataFlowRgbCoverage"), pct(pointCount ? rgbPointCount / pointCount : 0)],
+          [t("dataFlowThermalCoverage"), pct(pointCount ? thermalPointCount / pointCount : 0)],
+          [t("dataFlowMissingModalities"), missingModalities],
         ];
+        const statusMeta = (status) => {{
+          if (status === "ok") {{
+            return {{ label: t("dataFlowOk"), cls: "ok" }};
+          }}
+          if (status === "no_tracks") {{
+            return {{ label: t("dataFlowNoTracks"), cls: "missing" }};
+          }}
+          if (status === "missing_background") {{
+            return {{ label: t("dataFlowMissing"), cls: "missing" }};
+          }}
+          return {{ label: t("dataFlowPartial"), cls: "partial" }};
+        }};
+        const sequenceRows = sequenceNames.map(name => {{
+          const data = playbackData[name] || {{}};
+          const audit = data.modality_audit || {{}};
+          const status = statusMeta(audit.status || "missing_background");
+          const missing = Number(audit.missing_rgb_points || 0) + Number(audit.missing_thermal_points || 0);
+          return `
+            <tr>
+              <td><strong>${{esc(name)}}</strong></td>
+              <td class="metric">${{audit.trajectory_count ?? (data.tracks || []).length}}</td>
+              <td class="metric">${{audit.point_count ?? 0}}</td>
+              <td class="metric">${{pct(audit.rgb_coverage || 0)}}</td>
+              <td class="metric">${{pct(audit.thermal_coverage || 0)}}</td>
+              <td class="metric">${{missing}}</td>
+              <td class="metric">${{audit.background_frame_count || 0}}</td>
+              <td class="metric">${{fmt(audit.modal_offset_mean || 0)}}</td>
+              <td><span class="status-pill ${{status.cls}}">${{status.label}}</span></td>
+            </tr>
+          `;
+        }}).join("");
         const taskRows = Object.entries(dashboard.tasks || {{}}).map(([taskName, task]) => {{
           const scored = allTracks.filter(track => Object.keys(trackScoresForTask(track, taskName) || {{}}).length > 0).length;
           const labeled = allTracks.filter(track => Number(trackLabelForTask(track, taskName).num_windows || 0) > 0 || Number(trackLabelForTask(track, taskName).label || 0) === 1).length;
@@ -2395,6 +2542,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }}).join("");
         dataFlowPanel.innerHTML = `
           ${{cards.map(([label, value]) => `<div class="data-flow-card"><span>${{label}}</span><strong>${{value}}</strong></div>`).join("")}}
+          <div class="table-scroll" style="grid-column: 1 / -1;">
+            <table class="leaderboard">
+              <thead><tr><th>${{t("dataFlowSequenceAudit")}}</th><th class="metric">${{t("dataFlowTracks")}}</th><th class="metric">${{t("dataFlowPoints")}}</th><th class="metric">${{t("dataFlowRgbCoverage")}}</th><th class="metric">${{t("dataFlowThermalCoverage")}}</th><th class="metric">${{t("dataFlowMissingModalities")}}</th><th class="metric">${{t("dataFlowBackgrounds")}}</th><th class="metric">${{t("dataFlowAvgOffset")}}</th><th>${{t("dataFlowBackgroundStatus")}}</th></tr></thead>
+              <tbody>${{sequenceRows}}</tbody>
+            </table>
+          </div>
           <div class="table-scroll" style="grid-column: 1 / -1;">
             <table class="leaderboard">
               <thead><tr><th>${{t("dataFlowTaskAudit")}}</th><th class="metric">${{t("cardLabels")}}</th><th class="metric">${{t("cardPositives")}}</th><th class="metric">${{t("cardMethods")}}</th><th class="metric">${{t("dataFlowScoreCoverage")}}</th><th class="metric">${{t("dataFlowLabelCoverage")}}</th></tr></thead>

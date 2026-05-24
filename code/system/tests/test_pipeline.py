@@ -105,6 +105,7 @@ def test_build_final_results_report_from_summary_files(tmp_path: Path) -> None:
         top_sequences=1,
         top_k=2,
         case_limit=3,
+        sync_remote_report=False,
     )
 
     assert summary["mode"] == "final_results_dashboard"

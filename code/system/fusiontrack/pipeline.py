@@ -355,6 +355,7 @@ def build_final_results_report(
     top_sequences: int = 5,
     top_k: int = 100,
     case_limit: int = 12,
+    sync_remote_report: bool = True,
 ) -> dict[str, Any]:
     ensure_output_dirs(paths)
     manifest_registration = Path(registration_manifest) if registration_manifest is not None else None
@@ -381,10 +382,11 @@ def build_final_results_report(
         data_root=paths.data_root,
         top_sequences=top_sequences,
     )
-    _sync_remote_report(
-        source_dir=output_dir,
-        target_dir=Path("server_artifacts") / "remote_result" / "report",
-    )
+    if sync_remote_report:
+        _sync_remote_report(
+            source_dir=output_dir,
+            target_dir=Path("server_artifacts") / "remote_result" / "report",
+        )
     summary = {
         "mode": "final_results_dashboard",
         "data_root": str(paths.data_root),
@@ -416,6 +418,7 @@ def build_final_results_report(
             "top_sequences": top_sequences,
             "top_k": top_k,
             "case_limit": case_limit,
+            "sync_remote_report": sync_remote_report,
             "summary_path": str(summary_path),
             "dashboard_summary": dashboard_summary,
         },

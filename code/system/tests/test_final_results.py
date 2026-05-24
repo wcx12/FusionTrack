@@ -268,7 +268,13 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
                 "track_id": "1",
                 "category_name": "plane",
                 "points": [
-                    {"frame_id": 10, "fused": {"center_xy": [10, 20], "confidence": 0.9}},
+                    {
+                        "frame_id": 10,
+                        "fused": {"center_xy": [10, 20], "confidence": 0.9},
+                        "rgb": {"file": "S1/00/00010.jpg"},
+                        "thermal": {"file": "S1/01/00010.jpg"},
+                        "modal": {"offset_distance": 2.5},
+                    },
                     {"frame_id": 20, "fused": {"center_xy": [20, 30], "confidence": 0.8}},
                 ],
             },
@@ -329,6 +335,12 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
         "visualized_tracks": 2,
     }
     assert playback_data["S1"]["stats_by_task"]["group"]["sequence_sample_count"] == 0
+    assert playback_data["S1"]["modality_audit"]["point_count"] == 4
+    assert playback_data["S1"]["modality_audit"]["rgb_point_count"] == 1
+    assert playback_data["S1"]["modality_audit"]["thermal_point_count"] == 1
+    assert playback_data["S1"]["modality_audit"]["missing_thermal_points"] == 3
+    assert playback_data["S1"]["modality_audit"]["background_status"] == "missing"
+    assert playback_data["S1"]["modality_audit"]["modal_offset_mean"] == 2.5
     group_tracks = {track["sample_id"]: track for track in playback_data["G1"]["tracks"]}
     assert playback_data["G1"]["stats_by_task"]["group"] == {
         "sequence_sample_count": 2,
@@ -369,6 +381,9 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "renderMethodStatus" in html
     assert "renderTrackInsights" in html
     assert "renderDataFlowAudit" in html
+    assert "modality_audit" in html
+    assert "序列数据审计" in html
+    assert "dataFlowRgbCoverage" in html
     assert "submoduleCurve" in html
     assert "aggregateGroupEvents" in html
     assert "dataFlowPanel" in html
