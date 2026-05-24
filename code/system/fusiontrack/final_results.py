@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
+from fusiontrack.method_registry import method_profile
+
 
 METRIC_KEYS = ("auroc", "auprc", "f1", "precision_at_k", "recall_at_k")
 
@@ -138,14 +140,18 @@ def _load_task_dashboard(
     summary_rows = _load_csv(final_results_root / f"final_{task}_all_methods_summary.csv")
     categorized = {
         row["method"]: row
-        for row in _load_csv(final_results_root / f"final_{task}_all_methods_categorized.csv")
+        for row in _load_csv_optional(final_results_root / f"final_{task}_all_methods_categorized.csv")
     }
     methods: dict[str, MethodProfile] = {}
     for row in summary_rows:
         method_name = str(row["method"])
         score_path = resolve_score_path(row.get("source", ""), score_search_roots, task=task, method=method_name)
         score_rows = [_coerce_score_row(item) for item in _load_jsonl(score_path)]
-        category = categorized.get(method_name, {})
+        category = _category_with_registry(
+            method_name=method_name,
+            task=task,
+            category=categorized.get(method_name, {}),
+        )
         metrics = {
             key: _coerce_float(row.get(key, category.get(key, 0.0)))
             for key in METRIC_KEYS
@@ -249,12 +255,7 @@ def _load_registration_task_dashboard(
                 "chamfer_distance_mean": _coerce_float(metrics_payload.get("chamfer_distance_mean", 0.0)),
                 "runtime_sec_mean": _coerce_float(metrics_payload.get("runtime_sec_mean", 0.0)),
             },
-            category={
-                "owner": "registration_baseline",
-                "role": "registration",
-                "method_family": "registration_baseline",
-                "learning_type": "non_learning",
-            },
+            category=_category_with_registry(method_name, task_name, {}),
             score_path=score_file,
             score_rows=score_rows,
         )
@@ -514,6 +515,29 @@ def _is_positive(row: dict[str, Any]) -> bool:
 def _load_csv(path: Path) -> list[dict[str, Any]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         return [dict(row) for row in csv.DictReader(handle)]
+
+
+def _load_csv_optional(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    return _load_csv(path)
+
+
+def _category_with_registry(
+    method_name: str,
+    task: str,
+    category: dict[str, Any],
+) -> dict[str, Any]:
+    registry_profile = method_profile(method_name, task)
+    merged = {
+        key: value
+        for key, value in registry_profile.items()
+        if key not in {"name", "task"} and value not in (None, "")
+    }
+    for key, value in category.items():
+        if value not in (None, ""):
+            merged[key] = value
+    return merged
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:

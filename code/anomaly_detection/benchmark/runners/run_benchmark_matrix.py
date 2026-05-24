@@ -18,6 +18,7 @@ from baselines.individual_classical import run_classical_baseline as run_individ
 from baselines.physics_informed import run_physics_informed_baseline
 from baselines.trajectory_language_model import run_ngram_language_model
 from evaluation.io import load_jsonl, write_jsonl
+from evaluation.method_registry import load_method_registry
 from evaluation.reporting import evaluate_score_file, summarize_metric_files
 from fusiontrack.context_aware_individual import run_context_aware_fusiontrack_baseline
 from fusiontrack.group_scoring import score_group_windows
@@ -83,6 +84,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     experiments = config.get("experiments", [])
     if not isinstance(experiments, list):
         raise ValueError("Config field 'experiments' must be a list")
+    registry_path = config.get("method_registry")
+    method_registry = load_method_registry(
+        _resolve_path(registry_path, config_path.parent) if registry_path else None
+    )
 
     manifest_runs: list[dict[str, Any]] = []
     metric_files: list[Path] = []
@@ -143,6 +148,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "key_fields": list(key_fields),
                 "require_unique_keys": require_unique_keys,
                 "require_score_key_match": require_score_key_match,
+                "method_profile": method_registry.profile_for(
+                    str(experiment.get("method_registry_name", name)),
+                    task=_registry_task(task),
+                ),
             }
         )
 
@@ -155,6 +164,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "split": split,
         "seed": seed,
         "key_fields": list(key_fields),
+        "method_registry": method_registry.manifest_metadata(),
         "require_unique_keys": default_require_unique_keys,
         "require_score_key_match": default_require_score_key_match,
         "runs": manifest_runs,
@@ -321,6 +331,21 @@ def _string_sequence(value: Any) -> tuple[str, ...]:
     if isinstance(value, Sequence):
         return tuple(str(part) for part in value if str(part))
     return (str(value),)
+
+
+def _registry_task(task: str) -> str:
+    if task.startswith("individual_") or task in {
+        "fusiontrack_individual",
+        "fusiontrack_individual_ensemble",
+    }:
+        return "individual"
+    if task.startswith("group_") or task in {
+        "fusiontrack_group",
+        "fusiontrack_group_temporal_knn",
+        "fusiontrack_group_hybrid",
+    }:
+        return "group"
+    return task
 
 
 def _safe_name(value: Any) -> str:

@@ -255,6 +255,19 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
         "individual_trajectory_lm_ngram",
         "individual_physics",
     ]
+    assert manifest["method_registry"]["schema_version"] == 1
+    assert manifest["runs"][0]["method_profile"] == {
+        "name": "group_prediction_linear",
+        "task": "group",
+        "owner": "classic_baseline",
+        "role": "main_baseline",
+        "method_family": "linear_prediction_residual",
+        "learning_type": "non_learning_rule_or_residual",
+        "source_type": "local_classic_algorithm",
+        "status": "integrated",
+    }
+    assert manifest["runs"][6]["method_profile"]["method_family"] == "fusiontrack_rank_ensemble"
+    assert manifest["runs"][6]["method_profile"]["owner"] == "our_method"
     assert (output_dir / "scores" / "group_prediction.jsonl").exists()
     assert (output_dir / "scores" / "fusiontrack_group_temporal_knn.jsonl").exists()
     assert (output_dir / "scores" / "fusiontrack_group_hybrid.jsonl").exists()

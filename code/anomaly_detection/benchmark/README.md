@@ -1203,3 +1203,22 @@ server_artifacts/final_results_20260522/holdout_multiseed_20260522/fusiontrack_h
 ```
 
 如果后续继续实验，应先检查这些文件，再决定是否需要重新生成协议或重新跑 benchmark。
+
+## 方法注册表与运行 manifest
+
+从当前版本开始，方法画像统一放在 `configs/method_registry.json`。这个文件是系统里
+`owner`、`role`、`method_family`、`learning_type`、`source_type` 和 `status`
+这些字段的统一来源，覆盖 individual、group 和 registration 三类任务。
+
+这样做的目的有三个：
+
+1. benchmark runner 生成 `manifest.json` 时，每个 run 都会写入 `method_profile`，
+   后续汇总、论文表格和页面展示不需要再猜测方法归属。
+2. 最终可视化看板在缺少 `final_*_all_methods_categorized.csv` 时，会自动回退到同一个
+   registry，避免算法接入页面出现空的 owner/family/learning 字段。
+3. 后续新增方法时，应优先在 `configs/method_registry.json` 注册方法画像，再把方法
+   加入 matrix 配置或 runner。不要只在前端或结果 CSV 里临时写分类字段。
+
+如果某个实验 run 的名字不是 registry 里的 canonical name，可以在 registry 条目中加入
+`aliases`，或者在 matrix 实验项里显式设置 `method_registry_name`。manifest 会保留原始
+run name，同时写入 registry 的 canonical `method_profile.name`。

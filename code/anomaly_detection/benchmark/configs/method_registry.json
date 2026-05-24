@@ -1,0 +1,420 @@
+{
+  "schema_version": 1,
+  "description": "Central method registry for FusionTrack anomaly detection, registration, dashboard labeling, and run manifests.",
+  "methods": [
+    {
+      "task": "individual",
+      "name": "fusiontrack_individual_nn",
+      "owner": "our_method",
+      "role": "component",
+      "method_family": "fusiontrack_nearest_neighbor",
+      "learning_type": "non_learning_feature_distance",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "individual",
+      "name": "fusiontrack_individual_context",
+      "owner": "our_method",
+      "role": "component",
+      "method_family": "fusiontrack_context_feature",
+      "learning_type": "non_learning_feature_distance",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "individual",
+      "name": "fusiontrack_individual_ensemble",
+      "owner": "our_method",
+      "role": "proposed_method",
+      "method_family": "fusiontrack_rank_ensemble",
+      "learning_type": "non_learning_rank_fusion",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "individual",
+      "name": "fusiontrack_individual_ensemble_calibrated",
+      "owner": "our_method",
+      "role": "proposed_method",
+      "method_family": "fusiontrack_rank_ensemble",
+      "learning_type": "non_learning_rank_fusion",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "individual",
+      "name": "fusiontrack_individual_ensemble_tuned_auprc",
+      "owner": "our_method",
+      "role": "proposed_method",
+      "method_family": "fusiontrack_rank_ensemble",
+      "learning_type": "non_learning_rank_fusion",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "individual",
+      "name": "fusiontrack_individual_ensemble_tuned_topk",
+      "owner": "our_method",
+      "role": "proposed_method",
+      "method_family": "fusiontrack_rank_ensemble",
+      "learning_type": "non_learning_rank_fusion",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "individual",
+      "name": "individual_iforest",
+      "owner": "classic_baseline",
+      "role": "main_baseline",
+      "method_family": "isolation_forest",
+      "learning_type": "classical_ml",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "individual",
+      "name": "individual_lof",
+      "owner": "classic_baseline",
+      "role": "main_baseline",
+      "method_family": "lof",
+      "learning_type": "classical_ml",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "individual",
+      "name": "individual_ocsvm",
+      "owner": "classic_baseline",
+      "role": "main_baseline",
+      "method_family": "one_class_svm",
+      "learning_type": "classical_ml",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "individual",
+      "name": "individual_complementary_cetrajad_proxy",
+      "owner": "proxy_ablation",
+      "role": "appendix_proxy",
+      "method_family": "complementary_trajectory_proxy",
+      "learning_type": "proxy_non_learning",
+      "source_type": "local_proxy",
+      "status": "integrated",
+      "aliases": ["individual_complementary"]
+    },
+    {
+      "task": "individual",
+      "name": "individual_physics_kinematic_proxy",
+      "owner": "proxy_ablation",
+      "role": "appendix_proxy",
+      "method_family": "physics_kinematic_proxy",
+      "learning_type": "proxy_non_learning",
+      "source_type": "local_proxy",
+      "status": "integrated",
+      "aliases": ["individual_physics"]
+    },
+    {
+      "task": "individual",
+      "name": "individual_trajectory_lm_ngram_proxy",
+      "owner": "proxy_ablation",
+      "role": "appendix_proxy",
+      "method_family": "trajectory_language_model_proxy",
+      "learning_type": "proxy_non_learning",
+      "source_type": "local_proxy",
+      "status": "integrated",
+      "aliases": ["individual_trajectory_lm_ngram"]
+    },
+    {
+      "task": "group",
+      "name": "group_prediction_linear",
+      "owner": "classic_baseline",
+      "role": "main_baseline",
+      "method_family": "linear_prediction_residual",
+      "learning_type": "non_learning_rule_or_residual",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated",
+      "aliases": ["group_prediction"]
+    },
+    {
+      "task": "group",
+      "name": "group_iforest",
+      "owner": "classic_baseline",
+      "role": "main_baseline",
+      "method_family": "isolation_forest",
+      "learning_type": "classical_ml",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "group",
+      "name": "group_lof",
+      "owner": "classic_baseline",
+      "role": "main_baseline",
+      "method_family": "lof",
+      "learning_type": "classical_ml",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "group",
+      "name": "group_ocsvm",
+      "owner": "classic_baseline",
+      "role": "main_baseline",
+      "method_family": "one_class_svm",
+      "learning_type": "classical_ml",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "group",
+      "name": "group_temporal_graph_ae_proxy",
+      "owner": "proxy_ablation",
+      "role": "appendix_proxy",
+      "method_family": "temporal_graph_autoencoder_proxy",
+      "learning_type": "proxy_learning",
+      "source_type": "local_proxy",
+      "status": "integrated"
+    },
+    {
+      "task": "group",
+      "name": "fusiontrack_group_temporal_knn",
+      "owner": "our_method",
+      "role": "component",
+      "method_family": "fusiontrack_group_temporal_knn",
+      "learning_type": "non_learning_feature_distance",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "group",
+      "name": "fusiontrack_group_graph",
+      "owner": "our_method",
+      "role": "component",
+      "method_family": "fusiontrack_group_graph",
+      "learning_type": "non_learning_graph_rule",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "group",
+      "name": "fusiontrack_group_hybrid",
+      "owner": "our_method",
+      "role": "proposed_method",
+      "method_family": "fusiontrack_group_hybrid",
+      "learning_type": "non_learning_rank_fusion",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "group",
+      "name": "fusiontrack_group_hybrid_gated",
+      "owner": "our_method",
+      "role": "ablation",
+      "method_family": "fusiontrack_group_hybrid",
+      "learning_type": "non_learning_rank_fusion",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "group",
+      "name": "fusiontrack_group_hybrid_tuned_auroc_topk",
+      "owner": "our_method",
+      "role": "proposed_method",
+      "method_family": "fusiontrack_group_hybrid",
+      "learning_type": "non_learning_rank_fusion",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "group",
+      "name": "fusiontrack_group_hybrid_tuned_auprc_f1",
+      "owner": "our_method",
+      "role": "proposed_method",
+      "method_family": "fusiontrack_group_hybrid",
+      "learning_type": "non_learning_rank_fusion",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "group",
+      "name": "fusiontrack_group_hybrid_tuned_fine_auprc",
+      "owner": "our_method",
+      "role": "proposed_method",
+      "method_family": "fusiontrack_group_hybrid",
+      "learning_type": "non_learning_rank_fusion",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "group",
+      "name": "fusiontrack_group_hybrid_tuned_fine_topk",
+      "owner": "our_method",
+      "role": "proposed_method",
+      "method_family": "fusiontrack_group_hybrid",
+      "learning_type": "non_learning_rank_fusion",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "group",
+      "name": "fusiontrack_group_hybrid_tuned_fine_f1",
+      "owner": "our_method",
+      "role": "proposed_method",
+      "method_family": "fusiontrack_group_hybrid",
+      "learning_type": "non_learning_rank_fusion",
+      "source_type": "fusiontrack",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "mps_gaf_learned_svd",
+      "owner": "our_method",
+      "role": "proposed_registration",
+      "method_family": "mps_gaf_registration",
+      "learning_type": "learning_deep_registration",
+      "source_type": "fusiontrack_registration",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "rpmnet",
+      "owner": "paper_baseline",
+      "role": "registration_baseline",
+      "method_family": "rpmnet",
+      "learning_type": "learning_deep_registration",
+      "source_type": "adapter",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "idam_gnn",
+      "owner": "paper_baseline",
+      "role": "registration_baseline",
+      "method_family": "idam",
+      "learning_type": "learning_deep_registration",
+      "source_type": "adapter",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "prnet_dgcnn",
+      "owner": "paper_baseline",
+      "role": "registration_baseline",
+      "method_family": "prnet",
+      "learning_type": "learning_deep_registration",
+      "source_type": "adapter",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "pointnetlk",
+      "owner": "paper_baseline",
+      "role": "registration_baseline",
+      "method_family": "pointnetlk",
+      "learning_type": "learning_deep_registration",
+      "source_type": "adapter",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "dcp_dgcnn",
+      "owner": "paper_baseline",
+      "role": "registration_baseline",
+      "method_family": "dcp",
+      "learning_type": "learning_deep_registration",
+      "source_type": "adapter",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "dcp_pointnet",
+      "owner": "paper_baseline",
+      "role": "registration_baseline",
+      "method_family": "dcp",
+      "learning_type": "learning_deep_registration",
+      "source_type": "adapter",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "icp_point_to_point",
+      "owner": "classic_baseline",
+      "role": "registration_baseline",
+      "method_family": "icp",
+      "learning_type": "non_learning_geometry",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "icp_trimmed",
+      "owner": "classic_baseline",
+      "role": "registration_baseline",
+      "method_family": "icp",
+      "learning_type": "non_learning_geometry",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "icp_point_to_plane",
+      "owner": "classic_baseline",
+      "role": "registration_baseline",
+      "method_family": "icp",
+      "learning_type": "non_learning_geometry",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "gicp",
+      "owner": "classic_baseline",
+      "role": "registration_baseline",
+      "method_family": "gicp",
+      "learning_type": "non_learning_geometry",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "cpd",
+      "owner": "classic_baseline",
+      "role": "registration_baseline",
+      "method_family": "cpd",
+      "learning_type": "non_learning_geometry",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "identity",
+      "owner": "classic_baseline",
+      "role": "registration_baseline",
+      "method_family": "identity",
+      "learning_type": "non_learning_geometry",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "ransac_icp",
+      "owner": "classic_baseline",
+      "role": "registration_baseline",
+      "method_family": "ransac_icp",
+      "learning_type": "non_learning_geometry",
+      "source_type": "local_classic_algorithm",
+      "status": "integrated"
+    },
+    {
+      "task": "registration",
+      "name": "super4pcs",
+      "owner": "classic_baseline",
+      "role": "registration_baseline",
+      "method_family": "super4pcs",
+      "learning_type": "non_learning_geometry",
+      "source_type": "external_classic_algorithm",
+      "status": "integrated"
+    }
+  ]
+}

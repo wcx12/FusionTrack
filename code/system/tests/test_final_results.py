@@ -220,6 +220,28 @@ def _build_small_final_result_tree(tmp_path: Path) -> tuple[Path, Path, Path, Pa
     return final_root, score_root, individual_labels, group_labels
 
 
+def test_final_results_falls_back_to_central_method_registry(tmp_path: Path) -> None:
+    final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
+    (final_root / "final_individual_all_methods_categorized.csv").unlink()
+    (final_root / "final_group_all_methods_categorized.csv").unlink()
+
+    dashboard = load_final_results_dashboard(
+        final_results_root=final_root,
+        individual_label_file=individual_labels,
+        group_label_file=group_labels,
+        score_search_roots=[score_root],
+    )
+
+    individual_method = dashboard.tasks["individual"].methods["fusiontrack_individual_nn"]
+    assert individual_method.category["owner"] == "our_method"
+    assert individual_method.category["role"] == "component"
+    assert individual_method.category["method_family"] == "fusiontrack_nearest_neighbor"
+
+    group_method = dashboard.tasks["group"].methods["group_prediction_linear"]
+    assert group_method.category["owner"] == "classic_baseline"
+    assert group_method.category["method_family"] == "linear_prediction_residual"
+
+
 def test_load_final_results_dashboard_builds_leaderboards_type_stats_and_cases(tmp_path: Path) -> None:
     final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
 
