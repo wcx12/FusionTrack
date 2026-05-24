@@ -153,3 +153,9 @@
 - 新增 `generated_at_utc`、`config_sha256`、`git`、`environment` 和 `inputs` 字段。
 - 每个 run 现在记录 `experiment_config`、`score_sha256` 与 `metrics_sha256`，便于追踪方法参数、分数文件和指标文件来源。
 - 该更新推进了 D/F 层中的 `seed/commit/config` 可追溯和交付归档能力；后续还需要把同类 manifest 约束扩展到 holdout multiseed、官方 baseline runner 和最终 dashboard 导出包。
+
+## 2026-05-25 更新：holdout multiseed 聚合 manifest
+
+- `run_fusiontrack_holdout_multiseed.py` 输出的 `manifest.json` 也升级为 `manifest_schema_version = 2`。
+- 新增协议参数快照、`all_runs.csv` / `aggregate.csv` / `best_by_metric.json` 的 SHA-256、git 元数据和 Python 环境信息。
+- 该更新进一步补齐最终 holdout 结果的可追溯链路；下一步应把官方 baseline runner、最终 dashboard 导出包和事件解释输出纳入同一套追溯规范。

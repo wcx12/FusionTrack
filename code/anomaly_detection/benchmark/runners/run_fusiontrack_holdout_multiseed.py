@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import datetime, timezone
+import hashlib
 import json
+import platform
 from pathlib import Path
 import statistics
 import subprocess
@@ -105,19 +108,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         encoding="utf-8",
     )
 
-    manifest = {
-        "data_root": str(args.data_root.resolve()),
-        "output_root": str(output_root),
-        "work_root": str(work_root),
-        "train_source_split": str(args.train_source_split),
-        "eval_source_split": str(args.eval_source_split),
-        "split_name": split_name,
-        "seeds": seeds,
-        "levels": levels,
-        "all_runs_csv": str(all_runs_csv),
-        "aggregate_csv": str(aggregate_csv),
-        "best_by_metric_json": str(best_json),
-    }
+    manifest = build_holdout_manifest(
+        args=args,
+        seeds=seeds,
+        levels=levels,
+        split_name=split_name,
+        output_root=output_root,
+        work_root=work_root,
+        all_runs_csv=all_runs_csv,
+        aggregate_csv=aggregate_csv,
+        best_json=best_json,
+    )
     manifest_path = output_root / "manifest.json"
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True),
@@ -125,6 +126,52 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
     return 0
+
+
+def build_holdout_manifest(
+    args: argparse.Namespace,
+    seeds: Sequence[int],
+    levels: Sequence[str],
+    split_name: str,
+    output_root: Path,
+    work_root: Path,
+    all_runs_csv: Path,
+    aggregate_csv: Path,
+    best_json: Path,
+) -> dict[str, Any]:
+    return {
+        "manifest_schema_version": 2,
+        "generated_at_utc": _utc_now(),
+        "data_root": str(Path(args.data_root).resolve()),
+        "output_root": str(output_root),
+        "work_root": str(work_root),
+        "train_source_split": str(args.train_source_split),
+        "eval_source_split": str(args.eval_source_split),
+        "split_name": split_name,
+        "seeds": [int(seed) for seed in seeds],
+        "levels": [str(level) for level in levels],
+        "all_runs_csv": str(all_runs_csv),
+        "aggregate_csv": str(aggregate_csv),
+        "best_by_metric_json": str(best_json),
+        "protocol": {
+            "train_source_split": str(args.train_source_split),
+            "eval_source_split": str(args.eval_source_split),
+            "split_name": split_name,
+            "individual_anomaly_fraction": float(args.individual_anomaly_fraction),
+            "group_anomaly_fraction": float(args.group_anomaly_fraction),
+            "window_size": int(args.window_size),
+            "stride": int(args.stride),
+            "smoke_max_train": int(args.smoke_max_train),
+            "smoke_max_eval": int(args.smoke_max_eval),
+        },
+        "artifacts": {
+            "all_runs_csv": _artifact_manifest(all_runs_csv),
+            "aggregate_csv": _artifact_manifest(aggregate_csv),
+            "best_by_metric_json": _artifact_manifest(best_json),
+        },
+        "git": _git_metadata(),
+        "environment": _environment_metadata(),
+    }
 
 
 def _prepare_seed_protocol(
@@ -327,6 +374,60 @@ def _float_or_none(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return number
+
+
+def _artifact_manifest(path: Path) -> dict[str, str]:
+    return {
+        "path": str(path),
+        "sha256": _file_sha256(path),
+    }
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
+        "+00:00",
+        "Z",
+    )
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _git_metadata() -> dict[str, Any]:
+    status = _run_git(["status", "--short"])
+    return {
+        "commit": _run_git(["rev-parse", "HEAD"]),
+        "branch": _run_git(["rev-parse", "--abbrev-ref", "HEAD"]),
+        "dirty": bool(status),
+    }
+
+
+def _run_git(args: Sequence[str]) -> str:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=Path(__file__).resolve().parents[4],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def _environment_metadata() -> dict[str, str]:
+    return {
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+    }
 
 
 if __name__ == "__main__":

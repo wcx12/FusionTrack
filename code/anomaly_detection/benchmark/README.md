@@ -1249,3 +1249,14 @@ run name，同时写入 registry 的 canonical `method_profile.name`。
 6. 每个 run 的 `experiment_config`、`score_sha256` 和 `metrics_sha256`。
 
 这一步把“跑出结果”推进为“结果可追溯”：后续无论是在本地、服务器还是导出包中查看结果，都能判断该结果对应的代码版本、配置哈希、输入约束和每个方法的实际运行参数。
+
+## 2026-05-25 更新：holdout multiseed manifest
+
+`runners/run_fusiontrack_holdout_multiseed.py` 现在也会输出 `manifest_schema_version = 2` 的 `manifest.json`。该文件用于记录多种子 holdout 聚合结果的整体来源，包含：
+
+1. 多种子列表、任务层级、train/eval split、异常注入比例、窗口大小和 stride。
+2. `all_runs.csv`、`aggregate.csv`、`best_by_metric.json` 三个核心聚合文件的路径与 SHA-256。
+3. 当前 git commit、branch、dirty 状态和 Python 运行环境。
+4. 兼容旧字段的 `all_runs_csv`、`aggregate_csv`、`best_by_metric_json`，保证已有脚本仍可读取。
+
+这样 validation 矩阵和最终 holdout 多种子聚合都具备基础可追溯字段。后续官方 baseline runner 接入时也应复用同类字段，避免只保留分散日志而无法追溯最终论文表格。
