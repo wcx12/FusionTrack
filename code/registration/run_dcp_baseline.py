@@ -72,6 +72,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wt_chamfer", type=float, default=0.1)
     parser.add_argument("--wt_aux", type=float, default=0.01)
     parser.add_argument("--pose_trans_weight", type=float, default=50.0)
+    parser.add_argument("--early_stop_patience", type=int, default=0)
+    parser.add_argument("--early_stop_min_delta", type=float, default=0.0)
+    parser.add_argument("--no_checkpoint_model_args", action="store_true")
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=0)
     return parser.parse_args()
@@ -419,6 +422,42 @@ def schema_method_key(args: argparse.Namespace) -> str:
     return args.model_family
 
 
+CHECKPOINT_MODEL_ARG_KEYS = (
+    "model_family",
+    "emb_nn",
+    "emb_dims",
+    "n_blocks",
+    "n_heads",
+    "ff_dims",
+    "dropout",
+    "n_iters",
+    "discount_factor",
+    "n_keypoints",
+    "n_subsampled_points",
+    "cat_sampler",
+    "temp_factor",
+    "feature_alignment_loss",
+    "cycle_consistency_loss",
+    "features",
+    "feat_dim",
+    "radius",
+    "num_neighbors",
+    "num_sk_iter",
+    "no_slack",
+)
+
+
+def apply_checkpoint_model_args(args: argparse.Namespace) -> argparse.Namespace:
+    if not args.checkpoint or args.no_checkpoint_model_args:
+        return args
+    checkpoint = torch.load(args.checkpoint, map_location="cpu")
+    stored_args = checkpoint.get("args", {})
+    for key in CHECKPOINT_MODEL_ARG_KEYS:
+        if key in stored_args:
+            setattr(args, key, stored_args[key])
+    return args
+
+
 def save_checkpoint(path: Path, model: torch.nn.Module, optimizer: torch.optim.Optimizer, epoch: int, args: argparse.Namespace) -> None:
     torch.save(
         {
@@ -442,6 +481,7 @@ def load_checkpoint(path: str, model: torch.nn.Module, optimizer: torch.optim.Op
 def train(args: argparse.Namespace) -> None:
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
+    args = apply_checkpoint_model_args(args)
     device = torch.device(args.device)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -452,6 +492,7 @@ def train(args: argparse.Namespace) -> None:
     start_epoch = load_checkpoint(args.checkpoint, model, optimizer, device) if args.checkpoint else 0
     best_metric = float("inf")
     best_metrics: Dict[str, float] | None = None
+    epochs_since_best = 0
 
     for epoch in range(start_epoch, args.epochs):
         if hasattr(train_dataset, "set_epoch"):
@@ -479,11 +520,14 @@ def train(args: argparse.Namespace) -> None:
         checkpoint_prefix = args.model_family
         latest_path = output_dir / f"{checkpoint_prefix}_latest.pt"
         save_checkpoint(latest_path, model, optimizer, epoch + 1, args)
-        improved = current_metric < best_metric
+        improved = current_metric < best_metric - args.early_stop_min_delta
         if improved:
             best_metric = current_metric
             best_metrics = metrics.copy()
+            epochs_since_best = 0
             save_checkpoint(output_dir / f"{checkpoint_prefix}_best.pt", model, optimizer, epoch + 1, args)
+        else:
+            epochs_since_best += 1
         summary = {
             "epoch": epoch + 1,
             "train_loss": running_loss / steps,
@@ -492,15 +536,19 @@ def train(args: argparse.Namespace) -> None:
             "best_selection_metric": best_metric,
             "latest_checkpoint": str(latest_path),
             "best_checkpoint": str(output_dir / f"{checkpoint_prefix}_best.pt") if best_metrics is not None else None,
+            "epochs_since_best": epochs_since_best,
         }
         (output_dir / "last_train_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         print(json.dumps(summary, indent=2), flush=True)
+        if args.early_stop_patience > 0 and epochs_since_best >= args.early_stop_patience:
+            break
 
 
 @torch.no_grad()
 def eval_checkpoint(args: argparse.Namespace) -> None:
     if not args.checkpoint:
         raise ValueError("--checkpoint is required in eval mode")
+    args = apply_checkpoint_model_args(args)
     device = torch.device(args.device)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

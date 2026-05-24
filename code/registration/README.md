@@ -68,7 +68,7 @@ python code/registration/run_registration_benchmark.py \
   --max_eval_batches 20
 ```
 
-如果传入 `/root/...`、`/tmp/...`、`D:\...` 这类绝对路径，脚本会直接报错，避免把服务器或本机绝对路径写进实验记录。
+如果传入 Linux 根目录路径、临时目录路径或 Windows 盘符路径这类绝对路径，脚本会直接报错，避免把服务器或本机绝对路径写进实验记录。
 
 ## 非学习基线：鲁棒性阈值扫描
 
@@ -229,6 +229,21 @@ python code/registration/run_dcp_baseline.py \
 ```
 
 该 runner 会检查 `dataset_path`、`output_dir`、`checkpoint` 和外部仓库路径是否为相对路径；不同外部仓库加载时会清理 `model`/`util` 模块缓存，避免连续跑多个算法时互相串模块。
+
+checkpoint 中保存的模型结构参数会在续训或评估时自动回填，例如 `model_family`、`emb_nn`、`emb_dims`、`n_iters`、RPMNet 半径/邻居数等。这样可以避免评估命令忘记写训练时的结构参数导致模型加载错位。如果确实需要完全使用命令行参数覆盖 checkpoint 里的结构配置，可以加：
+
+```bash
+--no_checkpoint_model_args
+```
+
+长时间训练时可以启用早停：
+
+```bash
+--early_stop_patience 20 \
+--early_stop_min_delta 0.001
+```
+
+其中 `early_stop_patience` 表示连续多少个 epoch 没有超过 `early_stop_min_delta` 的改进后停止训练；默认值 `0` 表示不启用早停。
 
 ## 学习式 MPS-GAF：快速冒烟测试
 

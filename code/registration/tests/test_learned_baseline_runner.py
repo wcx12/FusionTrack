@@ -22,6 +22,7 @@ def _install_dependency_stubs() -> None:
     torch_f_stub = types.ModuleType("torch.nn.functional")
     torch_stub.cuda = types.SimpleNamespace(is_available=lambda: False)
     torch_stub.no_grad = lambda: (lambda func: func)
+    torch_stub.load = lambda *_args, **_kwargs: {}
     torch_stub.nn = torch_nn_stub
     torch_stub.optim = torch_optim_stub
     torch_stub.utils = torch_utils_stub
@@ -127,3 +128,56 @@ def test_external_model_module_loading_does_not_pollute_global_modules(tmp_path,
 
 def test_schema_method_key_uses_real_family_name_for_non_dcp() -> None:
     assert run_dcp_baseline.schema_method_key(Namespace(model_family="pointnetlk")) == "pointnetlk"
+
+
+def test_apply_checkpoint_model_args_uses_stored_architecture(monkeypatch) -> None:
+    args = make_args(
+        checkpoint="runs/model/best.pt",
+        no_checkpoint_model_args=False,
+        model_family="dcp",
+        emb_nn="pointnet",
+        emb_dims=512,
+        n_iters=3,
+    )
+    monkeypatch.setattr(
+        run_dcp_baseline.torch,
+        "load",
+        lambda *_args, **_kwargs: {
+            "args": {
+                "model_family": "idam",
+                "emb_nn": "GNN",
+                "emb_dims": 64,
+                "n_iters": 1,
+            }
+        },
+    )
+
+    updated = run_dcp_baseline.apply_checkpoint_model_args(args)
+
+    assert updated.model_family == "idam"
+    assert updated.emb_nn == "GNN"
+    assert updated.emb_dims == 64
+    assert updated.n_iters == 1
+
+
+def test_apply_checkpoint_model_args_can_be_disabled(monkeypatch) -> None:
+    args = make_args(
+        checkpoint="runs/model/best.pt",
+        no_checkpoint_model_args=True,
+        model_family="dcp",
+        emb_nn="pointnet",
+        emb_dims=512,
+        n_iters=3,
+    )
+    monkeypatch.setattr(
+        run_dcp_baseline.torch,
+        "load",
+        lambda *_args, **_kwargs: pytest.fail("checkpoint should not be loaded"),
+    )
+
+    updated = run_dcp_baseline.apply_checkpoint_model_args(args)
+
+    assert updated.model_family == "dcp"
+    assert updated.emb_nn == "pointnet"
+    assert updated.emb_dims == 512
+    assert updated.n_iters == 3
