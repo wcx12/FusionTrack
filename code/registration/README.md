@@ -118,6 +118,8 @@ python code/registration/run_non_learning_baseline_sweep.py \
 
 这些文件接入后，前端页面的任务下拉会出现 `Registration`。该任务没有人工异常 label，页面会按 score rows 选择序列，并把高误差/失败样本作为配准风险展示。当前 `registration_points` 是由 benchmark 误差确定性生成的轻量预览，用于系统展示闭环；后续学习式 MPS-GAF 输出真实点云后，应直接替换为真实 source/reference/aligned 点云。
 
+Registration 展示层和 Individual/Group 的视频展示层是分开的：Individual/Group 使用 VT-Tiny-MOT 的原始 RGB 背景帧做四画面对比，Registration 使用点云配准动态 canvas 展示 source、reference 和 aligned 三组点云。`batch_****` 这类配准样本没有原始视频背景，这是任务定义差异，不是网页资源缺失。
+
 ## 学习式 MPS-GAF：检查数据
 
 训练前建议先运行 inspect，确认每个 batch 都包含完整 source group，且同组 source 共享同一个 reference shape。

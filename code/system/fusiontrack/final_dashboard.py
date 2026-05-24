@@ -632,7 +632,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .layer-switch {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
     .layer-button {{ min-height: 44px; padding: 7px 12px; }}
     .layer-button.active {{ background: #111827; border-color: #111827; color: white; }}
-    .layer-switch[hidden], .comparison-grid[hidden], .single-view[hidden] {{ display: none; }}
+    .mode-switch[hidden], .heat-controls[hidden], .layer-switch[hidden], .comparison-grid[hidden], .single-view[hidden], .registration-playback[hidden] {{ display: none; }}
     .heat-controls {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }}
     .heat-controls label {{ min-width: 180px; max-width: 260px; }}
     .sequence-stats {{ display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 8px; }}
@@ -646,6 +646,15 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .comparison-grid {{ display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 12px; }}
     .video-panel {{ min-width: 0; margin: 0; border: 1px solid #1f2937; border-radius: 8px; padding: 9px; background: #0f172a; }}
     .video-panel figcaption {{ display: flex; align-items: center; min-height: 24px; margin: 0 0 7px; color: #f8fafc; font-size: 12px; font-weight: 800; }}
+    .registration-playback {{ display: grid; grid-template-columns: minmax(320px, 1.6fr) minmax(260px, 0.8fr); gap: 12px; }}
+    .registration-canvas-shell {{ background: #0f172a; border: 1px solid #1f2937; border-radius: 8px; padding: 10px; min-width: 0; }}
+    .registration-canvas-head {{ display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 8px; color: #f8fafc; }}
+    .registration-canvas-head strong {{ font-size: 13px; }}
+    .registration-canvas-head span {{ color: #cbd5e1; font-size: 12px; }}
+    .registration-side-panel {{ border: 1px solid #dbe4ee; border-radius: 8px; background: #f8fafc; padding: 12px; min-width: 0; }}
+    .registration-side-panel h3 {{ margin: 0 0 8px; font-size: 15px; }}
+    .registration-side-panel .explain-metrics {{ grid-template-columns: 1fr; }}
+    .registration-cloud-legend {{ display: flex; flex-wrap: wrap; gap: 9px; margin-top: 9px; color: #cbd5e1; font-size: 12px; }}
     canvas {{ display: block; width: 100%; height: auto; background: #e2e8f0; border-radius: 6px; }}
     section {{ margin-top: 16px; }}
     .analysis-tabs {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
@@ -740,6 +749,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       .heat-controls label {{ max-width: none; width: 100%; }}
       .sequence-stats {{ grid-template-columns: repeat(2, minmax(120px, 1fr)); }}
       .comparison-grid {{ grid-template-columns: 1fr; }}
+      .registration-playback {{ grid-template-columns: 1fr; }}
       .toolbar {{ display: grid; width: 100%; justify-content: stretch; }}
       .toolbar label {{ width: 100%; }}
       .section-heading {{ display: grid; }}
@@ -848,6 +858,24 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       </div>
       <div id="singleView" class="single-view" hidden>
         <div class="canvas-shell"><canvas id="singleCanvas" width="960" height="612"></canvas></div>
+      </div>
+      <div id="registrationPlaybackView" class="registration-playback" hidden>
+        <div class="registration-canvas-shell">
+          <div class="registration-canvas-head">
+            <strong data-i18n="registrationPlaybackTitle">Point-cloud registration view</strong>
+            <span data-i18n="registrationPlaybackNote">Source, reference, and aligned point clouds rotate in the diagnostic canvas.</span>
+          </div>
+          <canvas id="registrationCanvas" width="960" height="520"></canvas>
+          <div class="registration-cloud-legend">
+            <span><i class="legend-dot" style="background:#3b82f6"></i><span data-i18n="registrationSourceCloud">Source</span></span>
+            <span><i class="legend-dot" style="background:#22c55e"></i><span data-i18n="registrationReferenceCloud">Reference</span></span>
+            <span><i class="legend-dot" style="background:#ef4444"></i><span data-i18n="registrationAlignedCloud">Aligned</span></span>
+          </div>
+        </div>
+        <div class="registration-side-panel">
+          <h3 data-i18n="registrationEvidenceTitle">Registration evidence</h3>
+          <div id="registrationPlaybackSummary" class="subtle"></div>
+        </div>
       </div>
       <div class="insight-grid">
         <div class="insight-card">
@@ -969,16 +997,21 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         heatmap: document.getElementById("heatmapCanvas"),
         tracks: document.getElementById("tracksCanvas"),
         both: document.getElementById("bothCanvas"),
-        single: document.getElementById("singleCanvas")
+        single: document.getElementById("singleCanvas"),
+        registration: document.getElementById("registrationCanvas")
       }};
       const comparisonView = document.getElementById("comparisonView");
       const singleView = document.getElementById("singleView");
+      const registrationPlaybackView = document.getElementById("registrationPlaybackView");
+      const registrationPlaybackSummary = document.getElementById("registrationPlaybackSummary");
+      const modeSwitch = document.querySelector(".mode-switch");
       const singleLayerSwitch = document.getElementById("singleLayerSwitch");
       const playbackReadout = document.getElementById("playbackReadout");
       const sequenceSelector = document.getElementById("sequenceSelector");
       const playToggle = document.getElementById("playToggle");
       const frameSlider = document.getElementById("frameSlider");
       const frameBadge = document.getElementById("frameBadge");
+      const heatControlsPanel = document.querySelector(".heat-controls");
       const heatOpacity = document.getElementById("heatOpacity");
       const heatWindow = document.getElementById("heatWindow");
       const playSpeed = document.getElementById("playSpeed");
@@ -1286,6 +1319,16 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         backgroundLoading: "\u80cc\u666f\u5e27\u52a0\u8f7d\u4e2d...",
         registrationNoVideoBackground: "Registration \u662f\u70b9\u4e91\u914d\u51c6\u8bca\u65ad\u4efb\u52a1\uff0c\u6ca1\u6709 VT-Tiny-MOT \u539f\u59cb\u89c6\u9891\u80cc\u666f\uff1b\u8bf7\u5728\u4e0b\u65b9\u914d\u51c6\u8bc1\u636e\u67e5\u770b\u6e90\u70b9\u4e91\u3001\u53c2\u8003\u70b9\u4e91\u548c\u5bf9\u9f50\u7ed3\u679c\u3002",
         registrationNoVideoBackgroundShort: "\u914d\u51c6\u70b9\u4e91\u4efb\u52a1\uff0c\u65e0\u539f\u59cb\u89c6\u9891\u80cc\u666f",
+        registrationPlaybackTitle: "\u70b9\u4e91\u914d\u51c6\u52a8\u6001\u89c6\u56fe",
+        registrationPlaybackNote: "\u52a8\u6001\u5c55\u793a\u6e90\u70b9\u4e91\u3001\u53c2\u8003\u70b9\u4e91\u548c\u4f30\u8ba1\u5bf9\u9f50\u7ed3\u679c",
+        registrationEvidenceTitle: "\u914d\u51c6\u8bc1\u636e",
+        registrationSelectedPair: "\u5f53\u524d\u70b9\u4e91\u5bf9",
+        registrationMethod: "\u914d\u51c6\u65b9\u6cd5",
+        registrationPairStatus: "\u914d\u51c6\u72b6\u6001",
+        registrationSourceCloud: "\u6e90\u70b9\u4e91",
+        registrationReferenceCloud: "\u53c2\u8003\u70b9\u4e91",
+        registrationAlignedCloud: "\u5bf9\u9f50\u7ed3\u679c",
+        registrationNoPointCloud: "\u5f53\u524d\u6837\u672c\u6682\u65e0\u70b9\u4e91\u5750\u6807\uff0c\u6b63\u5728\u5c55\u793a\u8f7b\u91cf\u8bca\u65ad\u5360\u4f4d\u56fe\u3002",
         sequenceNoVideoBackground: "\u5f53\u524d\u5e8f\u5217\u6ca1\u6709\u627e\u5230\u53ef\u7528\u7684\u539f\u59cb RGB \u80cc\u666f\u5e27\uff0c\u53ea\u80fd\u5c55\u793a\u8f68\u8ff9\u3001\u70ed\u529b\u548c\u7ed3\u6784\u5316\u8bc1\u636e\u3002",
         sequenceNoVideoBackgroundShort: "\u5f53\u524d\u5e8f\u5217\u65e0\u539f\u59cb\u80cc\u666f\u5e27",
         comparisonRequiresBackground: "\u56db\u753b\u9762\u5bf9\u6bd4\u9700\u8981\u539f\u59cb\u89c6\u9891\u80cc\u666f\u5e27\u3002",
@@ -1333,6 +1376,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         taskIndividual: "Individual",
         taskGroup: "Group",
         taskRegistration: "Registration",
+        view_registration: "\u70b9\u4e91\u914d\u51c6\u89c6\u56fe",
         view_comparison: "四画面对比",
         view_single: "单画面模式",
         layer_tracks: "轨迹",
@@ -1427,6 +1471,17 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         registrationSuccess: "Success",
         registrationFailed: "Failed/skipped",
         registrationNoMetric: "No registration metrics are available. Generate manifest and score rows with registration_adapter first.",
+        registrationPlaybackTitle: "Point-cloud registration view",
+        registrationPlaybackNote: "Dynamic source, reference, and estimated aligned point clouds",
+        registrationEvidenceTitle: "Registration evidence",
+        registrationSelectedPair: "Selected point-cloud pair",
+        registrationMethod: "Registration method",
+        registrationPairStatus: "Pair status",
+        registrationSourceCloud: "Source cloud",
+        registrationReferenceCloud: "Reference cloud",
+        registrationAlignedCloud: "Aligned result",
+        registrationNoPointCloud: "No point-cloud coordinates are available for this sample; showing a lightweight diagnostic placeholder.",
+        view_registration: "Point-cloud registration view",
         dataFlowSequences: "Playable sequences",
         dataFlowTracks: "Visualized tracks",
         dataFlowFrames: "Frame span",
@@ -1743,6 +1798,60 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         return {{
           x: width / 2 + x * 62 + z * 22,
           y: height / 2 - y * 48 + z * 16,
+        }};
+      }}
+
+      function sampledPointCloud(points, limit = 320) {{
+        const clean = (points || []).filter(point => Array.isArray(point) && point.length >= 2);
+        if (clean.length <= limit) {{
+          return clean;
+        }}
+        const stride = Math.ceil(clean.length / limit);
+        return clean.filter((_, index) => index % stride === 0).slice(0, limit);
+      }}
+
+      function registrationPointGroups(track) {{
+        const row = selectedTrackScoreComponents(track);
+        const preview = row.registration_points || {{}};
+        const groups = [
+          {{ key: "source", label: t("registrationSourceCloud"), points: sampledPointCloud(preview.source || []), color: "#3b82f6" }},
+          {{ key: "reference", label: t("registrationReferenceCloud"), points: sampledPointCloud(preview.reference || []), color: "#22c55e" }},
+          {{ key: "aligned", label: t("registrationAlignedCloud"), points: sampledPointCloud(preview.aligned || []), color: "#ef4444" }},
+        ];
+        if (groups.some(group => group.points.length)) {{
+          return groups;
+        }}
+        const fallback = (track?.points || []).map((point, index) => [
+          (Number(point.x || 0) - 480) / 180,
+          (Number(point.y || 0) - 306) / 180,
+          (index - Math.max(1, (track?.points || []).length) / 2) * 0.12,
+        ]);
+        if (!fallback.length) {{
+          return [];
+        }}
+        const scoreOffset = Math.min(0.22, Math.max(0.04, trackScore(track) * 0.05));
+        return [
+          {{ key: "source", label: t("registrationSourceCloud"), points: fallback.map(point => [point[0] - 0.12, point[1], point[2]]), color: "#3b82f6" }},
+          {{ key: "reference", label: t("registrationReferenceCloud"), points: fallback.map(point => [point[0] + 0.12, point[1] + 0.08, point[2] + 0.04]), color: "#22c55e" }},
+          {{ key: "aligned", label: t("registrationAlignedCloud"), points: fallback.map(point => [point[0] + 0.12 + scoreOffset, point[1] + 0.08, point[2] + 0.04]), color: "#ef4444" }},
+        ];
+      }}
+
+      function projectRegistrationPoint(point, angle, width, height) {{
+        const x = Number(point?.[0] || 0);
+        const y = Number(point?.[1] || 0);
+        const z = Number(point?.[2] || 0);
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const rotatedX = x * cos + z * sin;
+        const rotatedZ = z * cos - x * sin;
+        const scale = Math.min(width, height) * 0.30;
+        const perspective = 1 / Math.max(0.62, 1 + rotatedZ * 0.18);
+        return {{
+          x: width / 2 + rotatedX * scale * perspective,
+          y: height / 2 - y * scale * perspective + rotatedZ * 18,
+          depth: rotatedZ,
+          radius: Math.max(2.2, 4.6 * perspective),
         }};
       }}
 
@@ -2812,7 +2921,140 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }});
       }}
 
+      function setRegistrationCanvasSize(targetCanvas) {{
+        if (!targetCanvas) {{
+          return;
+        }}
+        if (targetCanvas.width !== 960) {{
+          targetCanvas.width = 960;
+        }}
+        if (targetCanvas.height !== 520) {{
+          targetCanvas.height = 520;
+        }}
+      }}
+
+      function drawRegistrationAxes(targetCtx, targetCanvas) {{
+        const width = targetCanvas.width;
+        const height = targetCanvas.height;
+        targetCtx.save();
+        targetCtx.strokeStyle = "rgba(148, 163, 184, 0.22)";
+        targetCtx.lineWidth = 1;
+        for (let x = width * 0.18; x <= width * 0.82; x += width * 0.08) {{
+          targetCtx.beginPath();
+          targetCtx.moveTo(x, height * 0.18);
+          targetCtx.lineTo(x, height * 0.82);
+          targetCtx.stroke();
+        }}
+        for (let y = height * 0.2; y <= height * 0.82; y += height * 0.09) {{
+          targetCtx.beginPath();
+          targetCtx.moveTo(width * 0.14, y);
+          targetCtx.lineTo(width * 0.86, y);
+          targetCtx.stroke();
+        }}
+        targetCtx.strokeStyle = "rgba(226, 232, 240, 0.38)";
+        targetCtx.beginPath();
+        targetCtx.ellipse(width / 2, height / 2 + 42, width * 0.28, height * 0.16, 0, 0, Math.PI * 2);
+        targetCtx.stroke();
+        targetCtx.restore();
+      }}
+
+      function renderRegistrationPlaybackSummary(track) {{
+        if (!registrationPlaybackSummary) {{
+          return;
+        }}
+        if (!track) {{
+          registrationPlaybackSummary.textContent = t("noTrackSelected");
+          return;
+        }}
+        const row = selectedTrackScoreComponents(track);
+        const success = row.success === true || row.success === "true" || row.success === 1 || row.success === "1";
+        const skipped = row.skipped === true || row.skipped === "true" || row.skipped === 1 || row.skipped === "1";
+        const metrics = [
+          [t("registrationSelectedPair"), `${{esc(track.sequence)}} / ${{esc(track.track_id)}}`],
+          [t("registrationMethod"), esc(state.method)],
+          [t("registrationMetricRotation"), metricValue(row, "rotation_error_deg") === null ? "-" : `${{fmt(metricValue(row, "rotation_error_deg"))}} deg`],
+          [t("registrationMetricTranslation"), metricValue(row, "translation_error") === null ? "-" : fmt(metricValue(row, "translation_error"))],
+          [t("registrationMetricChamfer"), metricValue(row, "chamfer_distance") === null ? "-" : fmt(metricValue(row, "chamfer_distance"))],
+          [t("registrationMetricRuntime"), metricValue(row, "runtime_sec") === null ? "-" : `${{fmt(metricValue(row, "runtime_sec"))}} s`],
+          [t("registrationPairStatus"), success && !skipped ? t("registrationSuccess") : t("registrationFailed")],
+          [t("anomalyScore"), fmt(trackScore(track))],
+        ];
+        registrationPlaybackSummary.innerHTML = `
+          <div class="explain-metrics">
+            ${{metrics.map(([label, value]) => `<div class="explain-metric"><span>${{label}}</span><strong>${{value}}</strong></div>`).join("")}}
+          </div>
+          <div class="explain-reason">${{t("registrationNoVideoBackground")}}</div>
+        `;
+      }}
+
+      function drawRegistrationPlayback(data, ranked, maxScore) {{
+        const targetCanvas = canvases.registration;
+        if (!targetCanvas) {{
+          return;
+        }}
+        setRegistrationCanvasSize(targetCanvas);
+        const targetCtx = targetCanvas.getContext("2d");
+        const width = targetCanvas.width;
+        const height = targetCanvas.height;
+        targetCtx.fillStyle = "#0f172a";
+        targetCtx.fillRect(0, 0, width, height);
+        drawRegistrationAxes(targetCtx, targetCanvas);
+        const track = ensureSelectedTrack(data, ranked);
+        renderRegistrationPlaybackSummary(track);
+        const groups = registrationPointGroups(track);
+        if (!groups.length || !groups.some(group => group.points.length)) {{
+          drawCanvasPlaceholder(targetCtx, targetCanvas, t("registrationNoPointCloud"));
+          return;
+        }}
+        const angle = Number(state.frame || 0) * 0.045 + (state.playing ? 0.12 : 0);
+        const projected = [];
+        groups.forEach(group => {{
+          group.points.forEach(point => {{
+            projected.push({{ ...projectRegistrationPoint(point, angle, width, height), group }});
+          }});
+        }});
+        projected.sort((a, b) => a.depth - b.depth);
+        targetCtx.save();
+        for (const item of projected) {{
+          targetCtx.fillStyle = item.group.color;
+          targetCtx.globalAlpha = item.group.key === "aligned" ? 0.88 : 0.72;
+          targetCtx.beginPath();
+          targetCtx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+          targetCtx.fill();
+        }}
+        targetCtx.globalAlpha = 1;
+        targetCtx.fillStyle = "#e2e8f0";
+        targetCtx.font = "700 15px Arial, sans-serif";
+        targetCtx.fillText(`${{t("registrationPlaybackTitle")}} · ${{state.method}}`, 22, 30);
+        targetCtx.restore();
+      }}
+
       function setViewModeVisibility(data = currentPlayback()) {{
+        setPlaybackSurfaceForTask(data);
+      }}
+
+      function setPlaybackSurfaceForTask(data = currentPlayback()) {{
+        const registration = isRegistrationTask();
+        if (modeSwitch) {{
+          modeSwitch.hidden = registration;
+        }}
+        if (heatControlsPanel) {{
+          heatControlsPanel.hidden = registration;
+        }}
+        if (registrationPlaybackView) {{
+          registrationPlaybackView.hidden = !registration;
+        }}
+        if (registration) {{
+          comparisonView.hidden = true;
+          singleView.hidden = true;
+          singleLayerSwitch.hidden = true;
+          viewModeButtons.forEach(button => {{
+            button.disabled = true;
+            button.classList.remove("active");
+            button.title = t("registrationNoVideoBackgroundShort");
+          }});
+          return;
+        }}
         syncPlaybackModeForData(data);
         const comparison = state.viewMode === "comparison" && playbackUsesOriginalVideo(data);
         comparisonView.hidden = !comparison;
@@ -3015,21 +3257,29 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           return;
         }}
         resetFrameForSequence();
-        ensureBackground(data, state.frame);
-        setViewModeVisibility(data);
-        updateBackgroundNotice(data);
         const scores = data.tracks.map(track => trackScore(track));
         const maxScore = Math.max(...scores, 1e-6);
         const ranked = rankedTracks(data);
         ensureSelectedTrack(data, ranked);
         const speedText = `x${{state.playSpeed.toFixed(1)}}`;
-        if (state.viewMode === "comparison" && playbackUsesOriginalVideo(data)) {{
-          drawComparisonView(data, ranked, maxScore);
+        setPlaybackSurfaceForTask(data);
+        updateBackgroundNotice(data);
+        if (isRegistrationTask()) {{
+          state.image = null;
+          state.imageKey = null;
+          drawRegistrationPlayback(data, ranked, maxScore);
         }} else {{
+          ensureBackground(data, state.frame);
+        }}
+        if (!isRegistrationTask() && state.viewMode === "comparison" && playbackUsesOriginalVideo(data)) {{
+          drawComparisonView(data, ranked, maxScore);
+        }} else if (!isRegistrationTask()) {{
           drawSingleView(data, ranked, maxScore);
         }}
         renderTrackInsights(ranked);
-        const viewLabel = state.viewMode === "comparison" ? t("view_comparison") : `${{t("view_single")}} - ${{t(`layer_${{state.layer}}`)}}`;
+        const viewLabel = isRegistrationTask()
+          ? t("view_registration")
+          : state.viewMode === "comparison" ? t("view_comparison") : `${{t("view_single")}} - ${{t(`layer_${{state.layer}}`)}}`;
         playbackReadout.textContent = `${{t("playbackPrefix")}} / ${{data.sequence}} / ${{state.method}} / ${{t("frame")}} ${{state.frame}} / ${{t("play")}} ${{speedText}} / ${{viewLabel}} / ${{ranked.length}} ${{t("visibleTracks")}}`;
       }}
 
@@ -3125,6 +3375,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       taskSelector.addEventListener("change", () => {{
         state.task = taskSelector.value;
         state.method = methodsForTask(taskData())[0] || "";
+        state.viewMode = isRegistrationTask() ? "single" : "comparison";
         state.sequence = "";
         state.image = null;
         state.imageKey = null;

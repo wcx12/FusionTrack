@@ -568,3 +568,7 @@ def test_final_dashboard_includes_registration_playback_without_labels(tmp_path:
     assert "registrationNoVideoBackground" in html
     assert "syncPlaybackModeForData" in html
     assert "canvasPlaceholderText" in html
+    assert "registrationPlaybackView" in html
+    assert "registrationCanvas" in html
+    assert "drawRegistrationPlayback" in html
+    assert "setPlaybackSurfaceForTask" in html
