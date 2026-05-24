@@ -563,3 +563,8 @@ def test_final_dashboard_includes_registration_playback_without_labels(tmp_path:
     assert "配准任务展示非学习基线" in html
     assert "registration3DTitle" in html
     assert "renderRegistrationPointCloud" in html
+    assert "backgroundNotice" in html
+    assert "hasVideoBackground" in html
+    assert "registrationNoVideoBackground" in html
+    assert "syncPlaybackModeForData" in html
+    assert "canvasPlaceholderText" in html

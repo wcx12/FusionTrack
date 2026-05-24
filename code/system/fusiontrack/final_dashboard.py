@@ -628,6 +628,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .mode-switch {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
     .view-mode-button {{ min-height: 44px; padding: 7px 12px; }}
     .view-mode-button.active {{ background: #111827; border-color: #111827; color: white; }}
+    .view-mode-button:disabled {{ opacity: 0.45; cursor: not-allowed; background: #f8fafc; color: #64748b; }}
     .layer-switch {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
     .layer-button {{ min-height: 44px; padding: 7px 12px; }}
     .layer-button.active {{ background: #111827; border-color: #111827; color: white; }}
@@ -638,6 +639,8 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .sequence-stat {{ border: 1px solid #e1e7ef; border-radius: 7px; padding: 8px 10px; background: white; }}
     .sequence-stat span {{ display: block; color: #64748b; font-size: 12px; }}
     .sequence-stat strong {{ display: block; margin-top: 3px; font-size: 17px; }}
+    .background-notice {{ border: 1px solid #fed7aa; border-radius: 7px; background: #fff7ed; color: #9a3412; padding: 9px 11px; font-size: 13px; line-height: 1.5; }}
+    .background-notice[hidden] {{ display: none; }}
     #frameBadge {{ color: #475569; font-size: 13px; font-variant-numeric: tabular-nums; }}
     .canvas-shell {{ background: #111827; border-radius: 8px; padding: 10px; }}
     .comparison-grid {{ display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 12px; }}
@@ -823,6 +826,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           </label>
         </div>
         <div id="sequenceStats" class="sequence-stats"></div>
+        <div id="backgroundNotice" class="background-notice" role="status" hidden></div>
       </div>
       <div id="comparisonView" class="comparison-grid">
         <figure class="video-panel">
@@ -980,6 +984,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       const playSpeed = document.getElementById("playSpeed");
       const playSpeedReadout = document.getElementById("playSpeedReadout");
       const sequenceStats = document.getElementById("sequenceStats");
+      const backgroundNotice = document.getElementById("backgroundNotice");
       const viewModeButtons = Array.from(document.querySelectorAll(".view-mode-button"));
       const layerButtons = Array.from(document.querySelectorAll(".layer-button"));
       const translations = {{
@@ -1147,6 +1152,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           timeWindowLabel: "Time window",
           playSpeedLabel: "Play speed",
           noPlayback: "Playback is not available for the current task.",
+          backgroundLoading: "Loading original background frame...",
+          registrationNoVideoBackground: "Registration is a point-cloud alignment diagnostic task, so it has no VT-Tiny-MOT original video background. Inspect the registration evidence panel for source, reference, and aligned point clouds.",
+          registrationNoVideoBackgroundShort: "Registration point-cloud task: no original video background",
+          sequenceNoVideoBackground: "No original RGB background frame was found for this sequence. The page can still show tracks, heatmaps, and structured evidence.",
+          sequenceNoVideoBackgroundShort: "No original background frame for this sequence",
+          comparisonRequiresBackground: "Four-panel comparison requires original video background frames.",
           playbackPrefix: "Playback",
           visibleTracks: "visible tracks",
           methodHeader: "Method",
@@ -1272,6 +1283,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         timeWindowLabel: "时间窗口",
         playSpeedLabel: "播放速度",
         noPlayback: "当前任务没有可播放轨迹。",
+        backgroundLoading: "\u80cc\u666f\u5e27\u52a0\u8f7d\u4e2d...",
+        registrationNoVideoBackground: "Registration \u662f\u70b9\u4e91\u914d\u51c6\u8bca\u65ad\u4efb\u52a1\uff0c\u6ca1\u6709 VT-Tiny-MOT \u539f\u59cb\u89c6\u9891\u80cc\u666f\uff1b\u8bf7\u5728\u4e0b\u65b9\u914d\u51c6\u8bc1\u636e\u67e5\u770b\u6e90\u70b9\u4e91\u3001\u53c2\u8003\u70b9\u4e91\u548c\u5bf9\u9f50\u7ed3\u679c\u3002",
+        registrationNoVideoBackgroundShort: "\u914d\u51c6\u70b9\u4e91\u4efb\u52a1\uff0c\u65e0\u539f\u59cb\u89c6\u9891\u80cc\u666f",
+        sequenceNoVideoBackground: "\u5f53\u524d\u5e8f\u5217\u6ca1\u6709\u627e\u5230\u53ef\u7528\u7684\u539f\u59cb RGB \u80cc\u666f\u5e27\uff0c\u53ea\u80fd\u5c55\u793a\u8f68\u8ff9\u3001\u70ed\u529b\u548c\u7ed3\u6784\u5316\u8bc1\u636e\u3002",
+        sequenceNoVideoBackgroundShort: "\u5f53\u524d\u5e8f\u5217\u65e0\u539f\u59cb\u80cc\u666f\u5e27",
+        comparisonRequiresBackground: "\u56db\u753b\u9762\u5bf9\u6bd4\u9700\u8981\u539f\u59cb\u89c6\u9891\u80cc\u666f\u5e27\u3002",
         playbackPrefix: "可视化",
         visibleTracks: "条轨迹",
         methodHeader: "方法",
@@ -2682,6 +2699,49 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         return selected;
       }}
 
+      function hasVideoBackground(data) {{
+        return Boolean(data && (data.background || (data.background_frames || []).length));
+      }}
+
+      function playbackUsesOriginalVideo(data) {{
+        return hasVideoBackground(data) && !isRegistrationTask();
+      }}
+
+      function canvasPlaceholderText(data) {{
+        if (isRegistrationTask()) {{
+          return t("registrationNoVideoBackgroundShort");
+        }}
+        return hasVideoBackground(data) ? t("backgroundLoading") : t("sequenceNoVideoBackgroundShort");
+      }}
+
+      function updateBackgroundNotice(data) {{
+        if (!backgroundNotice) {{
+          return;
+        }}
+        if (!data || playbackUsesOriginalVideo(data)) {{
+          backgroundNotice.hidden = true;
+          backgroundNotice.textContent = "";
+          return;
+        }}
+        backgroundNotice.textContent = isRegistrationTask()
+          ? t("registrationNoVideoBackground")
+          : t("sequenceNoVideoBackground");
+        backgroundNotice.hidden = false;
+      }}
+
+      function syncPlaybackModeForData(data) {{
+        const canCompare = playbackUsesOriginalVideo(data);
+        if (!canCompare && state.viewMode === "comparison") {{
+          state.viewMode = "single";
+        }}
+        viewModeButtons.forEach(button => {{
+          const isComparison = button.dataset.viewMode === "comparison";
+          button.disabled = isComparison && !canCompare;
+          button.title = isComparison && !canCompare ? t("comparisonRequiresBackground") : "";
+          button.classList.toggle("active", button.dataset.viewMode === state.viewMode);
+        }});
+      }}
+
       function ensureBackground(data, frame) {{
         const background = backgroundForFrame(data, frame);
         if (!background || !background.src) {{
@@ -2752,21 +2812,21 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }});
       }}
 
-      function setViewModeVisibility() {{
-        const comparison = state.viewMode === "comparison";
+      function setViewModeVisibility(data = currentPlayback()) {{
+        syncPlaybackModeForData(data);
+        const comparison = state.viewMode === "comparison" && playbackUsesOriginalVideo(data);
         comparisonView.hidden = !comparison;
         singleView.hidden = comparison;
         singleLayerSwitch.hidden = comparison;
-        viewModeButtons.forEach(button => {{
-          button.classList.toggle("active", button.dataset.viewMode === state.viewMode);
-        }});
       }}
 
       function drawCanvasBase(targetCtx, targetCanvas, data, layer) {{
-        targetCtx.fillStyle = "#e2e8f0";
+        targetCtx.fillStyle = state.image ? "#e2e8f0" : "#0f172a";
         targetCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
         if (state.image) {{
           targetCtx.drawImage(state.image, 0, 0, targetCanvas.width, targetCanvas.height);
+        }} else {{
+          drawCanvasPlaceholder(targetCtx, targetCanvas, canvasPlaceholderText(data));
         }}
         if (layer === "heatmap" || layer === "both") {{
           targetCtx.save();
@@ -2774,6 +2834,46 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           targetCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
           targetCtx.restore();
         }}
+      }}
+
+      function drawCanvasPlaceholder(targetCtx, targetCanvas, text) {{
+        targetCtx.save();
+        targetCtx.strokeStyle = "rgba(148, 163, 184, 0.18)";
+        targetCtx.lineWidth = 1;
+        const step = Math.max(36, Math.round(targetCanvas.width / 18));
+        for (let x = -targetCanvas.height; x < targetCanvas.width; x += step) {{
+          targetCtx.beginPath();
+          targetCtx.moveTo(x, targetCanvas.height);
+          targetCtx.lineTo(x + targetCanvas.height, 0);
+          targetCtx.stroke();
+        }}
+        targetCtx.fillStyle = "#e2e8f0";
+        targetCtx.font = `${{Math.max(16, Math.round(targetCanvas.width / 42))}}px Arial, sans-serif`;
+        targetCtx.textAlign = "center";
+        targetCtx.textBaseline = "middle";
+        const maxWidth = targetCanvas.width * 0.82;
+        const words = String(text || "").split(/\\s+/);
+        const lines = [];
+        let current = "";
+        for (const word of words) {{
+          const next = current ? `${{current}} ${{word}}` : word;
+          if (targetCtx.measureText(next).width > maxWidth && current) {{
+            lines.push(current);
+            current = word;
+          }} else {{
+            current = next;
+          }}
+        }}
+        if (current) {{
+          lines.push(current);
+        }}
+        const compactLines = lines.length ? lines.slice(0, 3) : [String(text || "")];
+        const lineHeight = Math.max(22, Math.round(targetCanvas.width / 34));
+        const startY = targetCanvas.height / 2 - ((compactLines.length - 1) * lineHeight) / 2;
+        compactLines.forEach((line, index) => {{
+          targetCtx.fillText(line, targetCanvas.width / 2, startY + index * lineHeight, maxWidth);
+        }});
+        targetCtx.restore();
       }}
 
       function drawHeatmap(targetCtx, targetCanvas, data, ranked, maxScore) {{
@@ -2903,10 +3003,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       }}
 
       function drawPlayback() {{
-        setViewModeVisibility();
         const names = sequencesForTask();
         if (!names.length) {{
           playbackReadout.textContent = t("noPlayback");
+          updateBackgroundNotice(null);
           clearPlaybackCanvases();
           return;
         }}
@@ -2916,12 +3016,14 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }}
         resetFrameForSequence();
         ensureBackground(data, state.frame);
+        setViewModeVisibility(data);
+        updateBackgroundNotice(data);
         const scores = data.tracks.map(track => trackScore(track));
         const maxScore = Math.max(...scores, 1e-6);
         const ranked = rankedTracks(data);
         ensureSelectedTrack(data, ranked);
         const speedText = `x${{state.playSpeed.toFixed(1)}}`;
-        if (state.viewMode === "comparison") {{
+        if (state.viewMode === "comparison" && playbackUsesOriginalVideo(data)) {{
           drawComparisonView(data, ranked, maxScore);
         }} else {{
           drawSingleView(data, ranked, maxScore);
@@ -3076,8 +3178,15 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         drawPlayback();
       }});
       viewModeButtons.forEach(button => button.addEventListener("click", () => {{
+        if (button.disabled) {{
+          return;
+        }}
+        const data = currentPlayback();
+        if (button.dataset.viewMode === "comparison" && !playbackUsesOriginalVideo(data)) {{
+          return;
+        }}
         state.viewMode = button.dataset.viewMode || "comparison";
-        setViewModeVisibility();
+        setViewModeVisibility(data);
         drawPlayback();
       }}));
       layerButtons.forEach(button => button.addEventListener("click", () => {{
