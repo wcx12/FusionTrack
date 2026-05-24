@@ -19,9 +19,15 @@ Baseline methods:
 from __future__ import annotations
 
 import math
+import os
 import random
+import re
+import subprocess
+import sys
+import tempfile
 import time
 from dataclasses import dataclass
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Dict, List
 
 import numpy as np
@@ -151,6 +157,42 @@ def _load_pycpd() -> object:
     return RigidRegistration
 
 
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _is_policy_absolute_path(path_value: str) -> bool:
+    return (
+        Path(path_value).is_absolute()
+        or PurePosixPath(path_value).is_absolute()
+        or PureWindowsPath(path_value).is_absolute()
+    )
+
+
+def _relative_path_candidates(path_value: str) -> List[Path]:
+    path = Path(path_value)
+    if _is_policy_absolute_path(path_value):
+        raise RuntimeError(
+            f"External dependency path must be relative to the repository root: {path_value}"
+        )
+    return [Path.cwd() / path, _repo_root() / path]
+
+
+def _resolve_existing_relative_path(
+    path_value: str | None,
+    env_key: str,
+    default_relative_path: str,
+) -> Path:
+    configured = os.environ.get(env_key) or path_value or default_relative_path
+    for candidate in _relative_path_candidates(configured):
+        if candidate.exists():
+            return candidate
+    raise RuntimeError(
+        f"Could not find {env_key} target. Expected a relative path such as "
+        f"`{default_relative_path}` or set {env_key} to a repository-relative path."
+    )
+
+
 def _build_o3d_point_cloud(points: PointCloud, o3d: object) -> "open3d.geometry.PointCloud":
     """Build an Open3D point cloud from raw xyz coordinates."""
 
@@ -212,7 +254,137 @@ def _convert_open3d_to_row_transform(transform_4x4: np.ndarray) -> Transform3x4:
         raise ValueError("Expected a 4x4 transform")
     rot = transform_4x4[:3, :3].astype(np.float32)
     trans = transform_4x4[:3, 3].astype(np.float32)
-    return np.concatenate([rot.T, trans[:, None]], axis=1).astype(np.float32)
+    return np.concatenate([rot, trans[:, None]], axis=1).astype(np.float32)
+
+
+def _normalize_pair_for_external_solver(
+    src_xyz: PointCloud,
+    ref_xyz: PointCloud,
+) -> tuple[PointCloud, PointCloud, np.ndarray, np.ndarray, float]:
+    src = _as_float32(src_xyz)[:, :3]
+    ref = _as_float32(ref_xyz)[:, :3]
+    src_center = src.mean(axis=0).astype(np.float32)
+    ref_center = ref.mean(axis=0).astype(np.float32)
+    src_centered = src - src_center[None, :]
+    ref_centered = ref - ref_center[None, :]
+    scale = float(max(np.max(np.abs(src_centered)), np.max(np.abs(ref_centered)), 1e-6))
+    return (
+        (src_centered / scale).astype(np.float32),
+        (ref_centered / scale).astype(np.float32),
+        src_center,
+        ref_center,
+        scale,
+    )
+
+
+def _denormalize_external_transform(
+    rotation: np.ndarray,
+    translation_normalized: np.ndarray,
+    src_center: np.ndarray,
+    ref_center: np.ndarray,
+    scale: float,
+) -> Transform3x4:
+    rotation = np.asarray(rotation, dtype=np.float32).reshape(3, 3)
+    translation_normalized = np.asarray(translation_normalized, dtype=np.float32).reshape(3)
+    translation = ref_center + scale * translation_normalized - rotation @ src_center
+    return _as_rigid_transform(np.concatenate([rotation, translation[:, None]], axis=1))
+
+
+def _write_goicp_points(path: Path, points_xyz: PointCloud) -> None:
+    points = _as_float32(points_xyz)[:, :3]
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(f"{points.shape[0]}\n")
+        for x, y, z in points:
+            handle.write(f"{float(x):.8f} {float(y):.8f} {float(z):.8f}\n")
+
+
+def _write_obj_vertices(path: Path, points_xyz: PointCloud) -> None:
+    points = _as_float32(points_xyz)[:, :3]
+    with path.open("w", encoding="utf-8") as handle:
+        for x, y, z in points:
+            handle.write(f"v {float(x):.8f} {float(y):.8f} {float(z):.8f}\n")
+
+
+def _parse_first_4x4_matrix(text: str) -> np.ndarray:
+    rows: List[List[float]] = []
+    in_transform_block = False
+    for line in text.splitlines():
+        if "Transformation from" in line:
+            in_transform_block = True
+            rows = []
+            continue
+        if not in_transform_block:
+            continue
+        values = [float(item) for item in re.findall(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?", line)]
+        if len(values) == 4:
+            rows.append(values)
+            if len(rows) == 4:
+                return np.asarray(rows, dtype=np.float32)
+        elif rows:
+            rows = []
+    raise RuntimeError("Could not parse 4x4 transform matrix from solver output")
+
+
+def _parse_goicp_output(path: Path) -> tuple[np.ndarray, np.ndarray]:
+    values: List[List[float]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        numbers = [float(item) for item in re.findall(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?", line)]
+        if numbers:
+            values.append(numbers)
+    if len(values) < 7:
+        raise RuntimeError("Go-ICP output did not contain a full rotation and translation")
+    rotation = np.asarray(values[1:4], dtype=np.float32)
+    translation = np.asarray([values[4][0], values[5][0], values[6][0]], dtype=np.float32)
+    return rotation, translation
+
+
+def _tail_text(text: str, max_chars: int = 1200) -> str:
+    text = text.strip()
+    if len(text) <= max_chars:
+        return text
+    return text[-max_chars:]
+
+
+def _fpfh_correspondences(
+    src_xyz: PointCloud,
+    ref_xyz: PointCloud,
+    voxel_size: float,
+    normal_radius: float,
+    feature_radius: float,
+    normal_max_nn: int,
+    feature_max_nn: int,
+    max_correspondences: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    o3d = _load_open3d()
+    src_down, ref_down = _build_downsampled_o3d_pair(src_xyz, ref_xyz, o3d, voxel_size)
+    src_down.estimate_normals(
+        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=normal_radius, max_nn=normal_max_nn)
+    )
+    ref_down.estimate_normals(
+        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=normal_radius, max_nn=normal_max_nn)
+    )
+    src_feat = o3d.pipelines.registration.compute_fpfh_feature(
+        src_down,
+        o3d.geometry.KDTreeSearchParamHybrid(radius=feature_radius, max_nn=feature_max_nn),
+    )
+    ref_feat = o3d.pipelines.registration.compute_fpfh_feature(
+        ref_down,
+        o3d.geometry.KDTreeSearchParamHybrid(radius=feature_radius, max_nn=feature_max_nn),
+    )
+
+    src_desc = np.asarray(src_feat.data, dtype=np.float32).T
+    ref_desc = np.asarray(ref_feat.data, dtype=np.float32).T
+    src_points = np.asarray(src_down.points, dtype=np.float32)
+    ref_points = np.asarray(ref_down.points, dtype=np.float32)
+    if src_desc.shape[0] < 3 or ref_desc.shape[0] < 3:
+        raise RuntimeError("FPFH downsampling produced too few descriptors for TEASER++")
+
+    feature_tree = cKDTree(ref_desc)
+    distances, nn_idx = feature_tree.query(src_desc, k=1)
+    order = np.argsort(distances)
+    if max_correspondences > 0:
+        order = order[: max(3, min(int(max_correspondences), order.shape[0]))]
+    return src_points[order], ref_points[nn_idx[order]], np.asarray(distances[order], dtype=np.float32)
 
 
 def _rotation_matrix_from_so3(axis_angle: np.ndarray, max_angle: float) -> np.ndarray:
@@ -782,27 +954,232 @@ def cpd_rigid(
     )
 
 
-def teaserpp_baseline(*args: object, **kwargs: object) -> BaselineResult:
-    """Optional TEASER++ placeholder implementation."""
+def teaserpp_baseline(
+    src_xyz: PointCloud,
+    ref_xyz: PointCloud,
+    noise_bound: float = 0.05,
+    voxel_size: float = 0.05,
+    normal_radius: float = 0.1,
+    feature_radius: float = 0.25,
+    normal_max_nn: int = 30,
+    feature_max_nn: int = 100,
+    max_correspondences: int = 512,
+    rotation_max_iterations: int = 100,
+) -> BaselineResult:
+    """TEASER++ robust registration over FPFH nearest-neighbor correspondences."""
 
-    raise RuntimeError(
-        "TEASER++ dependency is not installed. Available Python wrappers may be added later."
+    default_python_path = "external_src/TEASER-plusplus/build/python"
+    env_python_path = os.environ.get("TEASERPP_PYTHONPATH")
+    if env_python_path:
+        for candidate in _relative_path_candidates(env_python_path):
+            if candidate.exists() and str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+                break
+    else:
+        for candidate in _relative_path_candidates(default_python_path):
+            if candidate.exists() and str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+                break
+
+    try:
+        try:
+            from teaserpp_python import _teaserpp as teaserpp_python  # type: ignore
+        except ImportError:
+            import teaserpp_python  # type: ignore
+    except Exception as exc:
+        raise RuntimeError(
+            "TEASER++ Python binding is not importable. Build it under "
+            "`external_src/TEASER-plusplus/build/python` or set TEASERPP_PYTHONPATH "
+            "to a repository-relative path."
+        ) from exc
+
+    start = time.perf_counter()
+    src_corr, ref_corr, desc_dist = _fpfh_correspondences(
+        src_xyz,
+        ref_xyz,
+        voxel_size=voxel_size,
+        normal_radius=normal_radius,
+        feature_radius=feature_radius,
+        normal_max_nn=normal_max_nn,
+        feature_max_nn=feature_max_nn,
+        max_correspondences=max_correspondences,
+    )
+    params = teaserpp_python.RobustRegistrationSolver.Params()
+    params.noise_bound = float(noise_bound)
+    params.cbar2 = 1.0
+    params.estimate_scaling = False
+    params.rotation_gnc_factor = 1.4
+    params.rotation_max_iterations = int(rotation_max_iterations)
+    params.rotation_cost_threshold = 1e-12
+    params.rotation_estimation_algorithm = teaserpp_python.RotationEstimationAlgorithm.GNC_TLS
+    solver = teaserpp_python.RobustRegistrationSolver(params)
+    solver.solve(src_corr.T.astype(np.float64), ref_corr.T.astype(np.float64))
+    solution = solver.getSolution()
+    rotation = np.asarray(solution.rotation, dtype=np.float32)
+    translation = np.asarray(solution.translation, dtype=np.float32).reshape(3)
+    transform = _as_rigid_transform(np.concatenate([rotation, translation[:, None]], axis=1))
+    return BaselineResult(
+        transform=transform,
+        runtime_sec=float(time.perf_counter() - start),
+        meta={
+            "method": "teaserpp",
+            "num_correspondences": int(src_corr.shape[0]),
+            "noise_bound": float(noise_bound),
+            "descriptor_distance_mean": float(np.mean(desc_dist)),
+        },
     )
 
 
-def super4pcs_baseline(*args: object, **kwargs: object) -> BaselineResult:
-    """Optional Super4PCS placeholder implementation."""
+def super4pcs_baseline(
+    src_xyz: PointCloud,
+    ref_xyz: PointCloud,
+    binary_path: str | None = None,
+    overlap: float = 0.4,
+    delta: float = 0.05,
+    n_points: int = 300,
+    max_time_seconds: int = 10,
+    timeout_seconds: int = 20,
+) -> BaselineResult:
+    """Super4PCS CLI wrapper using temporary OBJ vertex files."""
 
-    raise RuntimeError(
-        "Super4PCS dependency is not installed. Available Python wrappers may be added later."
+    binary = _resolve_existing_relative_path(
+        binary_path,
+        "SUPER4PCS_BINARY",
+        "external_src/Super4PCS/build/demos/Super4PCS/Super4PCS",
+    )
+    src_norm, ref_norm, src_center, ref_center, scale = _normalize_pair_for_external_solver(src_xyz, ref_xyz)
+    start = time.perf_counter()
+    with tempfile.TemporaryDirectory(prefix="super4pcs_") as tmp_name:
+        tmp_dir = Path(tmp_name)
+        ref_path = tmp_dir / "ref.obj"
+        src_path = tmp_dir / "src.obj"
+        _write_obj_vertices(ref_path, ref_norm)
+        _write_obj_vertices(src_path, src_norm)
+        command = [
+            str(binary),
+            "-i",
+            str(ref_path),
+            str(src_path),
+            "-o",
+            str(float(overlap)),
+            "-d",
+            str(float(delta)),
+            "-n",
+            str(int(n_points)),
+            "-t",
+            str(int(max_time_seconds)),
+        ]
+        completed = subprocess.run(
+            command,
+            cwd=tmp_dir,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=max(1, int(timeout_seconds)),
+        )
+    if completed.returncode != 0:
+        raise RuntimeError(f"Super4PCS failed: {_tail_text(completed.stderr or completed.stdout)}")
+    matrix = _parse_first_4x4_matrix(completed.stdout)
+    transform = _denormalize_external_transform(
+        matrix[:3, :3],
+        matrix[:3, 3],
+        src_center,
+        ref_center,
+        scale,
+    )
+    return BaselineResult(
+        transform=transform,
+        runtime_sec=float(time.perf_counter() - start),
+        meta={
+            "method": "super4pcs",
+            "overlap": float(overlap),
+            "delta": float(delta),
+            "n_points": int(n_points),
+            "stdout_tail": _tail_text(completed.stdout),
+        },
     )
 
 
-def go_icp_baseline(*args: object, **kwargs: object) -> BaselineResult:
-    """Optional Go-ICP placeholder implementation."""
+def go_icp_baseline(
+    src_xyz: PointCloud,
+    ref_xyz: PointCloud,
+    binary_path: str | None = None,
+    num_points: int = 300,
+    mse_threshold: float = 0.001,
+    trim_fraction: float = 0.3,
+    dist_trans_size: int = 150,
+    dist_trans_expand_factor: float = 2.0,
+    timeout_seconds: int = 30,
+) -> BaselineResult:
+    """Go-ICP CLI wrapper using normalized temporary point-set files."""
 
-    raise RuntimeError(
-        "Go-ICP dependency is not installed. Available Python wrappers may be added later."
+    binary = _resolve_existing_relative_path(
+        binary_path,
+        "GOICP_BINARY",
+        "external_src/Go-ICP/build/GoICP",
+    )
+    src_norm, ref_norm, src_center, ref_center, scale = _normalize_pair_for_external_solver(src_xyz, ref_xyz)
+    start = time.perf_counter()
+    with tempfile.TemporaryDirectory(prefix="goicp_") as tmp_name:
+        tmp_dir = Path(tmp_name)
+        model_path = tmp_dir / "model.txt"
+        data_path = tmp_dir / "data.txt"
+        config_path = tmp_dir / "config.txt"
+        output_path = tmp_dir / "output.txt"
+        _write_goicp_points(model_path, ref_norm)
+        _write_goicp_points(data_path, src_norm)
+        config_path.write_text(
+            "\n".join(
+                [
+                    "# Config file for GO-ICP",
+                    f"MSEThresh={float(mse_threshold)}",
+                    "rotMinX=-3.1416",
+                    "rotMinY=-3.1416",
+                    "rotMinZ=-3.1416",
+                    "rotWidth=6.2832",
+                    "transMinX=-0.5",
+                    "transMinY=-0.5",
+                    "transMinZ=-0.5",
+                    "transWidth=1.0",
+                    f"trimFraction={float(trim_fraction)}",
+                    f"distTransSize={int(dist_trans_size)}",
+                    f"distTransExpandFactor={float(dist_trans_expand_factor)}",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        command = [
+            str(binary),
+            str(model_path),
+            str(data_path),
+            str(int(num_points)),
+            str(config_path),
+            str(output_path),
+        ]
+        completed = subprocess.run(
+            command,
+            cwd=tmp_dir,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=max(1, int(timeout_seconds)),
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(f"Go-ICP failed: {_tail_text(completed.stderr or completed.stdout)}")
+        rotation, translation = _parse_goicp_output(output_path)
+    transform = _denormalize_external_transform(rotation, translation, src_center, ref_center, scale)
+    return BaselineResult(
+        transform=transform,
+        runtime_sec=float(time.perf_counter() - start),
+        meta={
+            "method": "goicp",
+            "num_points": int(num_points),
+            "mse_threshold": float(mse_threshold),
+            "trim_fraction": float(trim_fraction),
+            "dist_trans_size": int(dist_trans_size),
+            "stdout_tail": _tail_text(completed.stdout),
+        },
     )
 
 

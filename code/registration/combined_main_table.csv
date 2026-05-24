@@ -1,0 +1,20 @@
+rank,kind,method,num_pairs,rotation_error_deg_mean,translation_error_mean,chamfer_distance_mean,pose_metric,success_rate,skip_rate,runtime_sec_mean,source,notes
+1,learning,mps_gaf_learned_svd,40,11.010597229003906,0.1404983252286911,0.025260085240006447,18.03551349043846,,0.0,,runs/mps_gaf_learned_svd_source2_crop_eval20_eval/eval_summary.json,ours
+2,learning,rpmnet,40,18.043590545654297,0.1781933605670929,0.03180268406867981,26.95325857400894,,0.0,,runs/rpmnet_source2_crop_eval20_eval/eval_summary.json,RPMNet adapter
+3,non_learning,icp_point_to_point,40,24.867687749003835,0.24430364695726894,0.024374170595547185,37.08287009686728,0.475,0.0,0.010911718872375787,runs/nonlearn_available_fixed_source2_crop_eval20/comparison_schema_summary.json,
+4,learning,prnet_dgcnn,40,24.84794044494629,0.3023010790348053,0.02829708531498909,39.962994396686554,,0.0,,runs/prnet_dgcnn_source2_crop_eval20_eval/eval_summary.json,PRNet DGCNN adapter
+5,non_learning,icp_trimmed,40,27.303441775339035,0.2742382301017642,0.04628573597874493,41.01535328042724,0.3,0.0,0.010877298121340574,runs/nonlearn_available_fixed_source2_crop_eval20/comparison_schema_summary.json,
+6,learning,dcp_dgcnn,40,25.843505859375,0.3342142701148987,0.05814378336071968,42.554219365119934,,0.0,,runs/dcp_dgcnn_source2_crop_eval20_eval/eval_summary.json,DCP DGCNN adapter
+7,learning,pointnetlk,40,30.722782135009766,0.2796173095703125,0.04775606840848923,44.70364761352539,,0.0,,runs/pointnetlk_source2_crop_eval20_eval/eval_summary.json,"PointNetLK adapter; emb_dims=256,n_iters=3"
+8,non_learning,icp_point_to_plane,40,32.13980874177103,0.27736896626011004,0.050398076348938045,46.00825705477653,0.525,0.0,0.009877245198003948,runs/nonlearn_available_fixed_source2_crop_eval20/comparison_schema_summary.json,
+9,non_learning,gicp,40,31.308100830206797,0.3445782307011541,0.13085383268771694,48.5370123652645,0.35,0.0,0.005992263671942055,runs/nonlearn_available_fixed_source2_crop_eval20/comparison_schema_summary.json,
+10,learning,idam_gnn,40,33.07843780517578,0.34602004289627075,0.06726445257663727,50.37943994998932,,0.0,,runs/idam_gnn_source2_crop_eval20_eval/eval_summary.json,IDAM GNN adapter
+11,non_learning,cpd,40,39.22584920801433,0.24651426277123392,0.020305533905047923,51.55156234657603,0.25,0.0,0.5087550085037946,runs/nonlearn_available_fixed_source2_crop_eval20/comparison_schema_summary.json,
+12,learning,dcp_pointnet,40,32.65306091308594,0.39742493629455566,0.06460948288440704,52.52430772781372,,0.0,,runs/dcp_pointnet_source2_crop_eval20_eval/eval_summary.json,DCP PointNet adapter
+13,non_learning,identity,40,39.37747305165344,0.4625581901520491,0.24009467009454966,62.50538255925589,0.025,0.0,0.0,runs/nonlearn_available_fixed_source2_crop_eval20/comparison_schema_summary.json,
+14,non_learning,ransac_icp,40,49.230510686601484,0.3754051676252857,0.0357297366077546,68.00076906786578,0.225,0.0,0.2854407158913091,runs/nonlearn_available_fixed_source2_crop_eval20/comparison_schema_summary.json,
+15,non_learning,super4pcs,40,67.13454807297296,0.28480413648067043,0.02600434747291729,81.37475489700648,0.5,0.0,2.3539423430571333,runs/external_nonlearn_source2_crop_eval20/comparison_schema_summary.json,
+16,non_learning,fpfh_fgr,40,64.02066087576506,0.43996536303311584,0.052215279266238215,86.01892902742085,0.175,0.0,0.014314525783993304,runs/nonlearn_available_fixed_source2_crop_eval20/comparison_schema_summary.json,
+17,non_learning,fpfh_ransac,40,91.53022809490884,0.48575375927612185,0.059634353639557956,115.81791605871493,0.175,0.0,0.26667341256979854,runs/nonlearn_available_fixed_source2_crop_eval20/comparison_schema_summary.json,
+18,non_learning,goicp,40,94.76421986784945,0.4379730879822198,0.02331273035858484,116.66287426696044,0.2,0.575,3.188445376814343,runs/external_nonlearn_source2_crop_eval20/comparison_schema_summary.json,
+19,non_learning,teaserpp,40,93.29985814444572,0.5009255853947252,0.08411861687200144,118.34613741418198,0.175,0.0,0.07350631742738187,runs/external_nonlearn_source2_crop_eval20/comparison_schema_summary.json,

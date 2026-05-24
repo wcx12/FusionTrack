@@ -6,7 +6,7 @@ import argparse
 import json
 import math
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Dict, List
 
 import numpy as np
@@ -112,6 +112,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cpd_max_iterations", type=int, default=30)
     parser.add_argument("--cpd_tolerance", type=float, default=1e-5)
     parser.add_argument("--cpd_w", type=float, default=0.0)
+    parser.add_argument("--teaser_noise_bound", type=float, default=0.05)
+    parser.add_argument("--teaser_voxel_size", type=float, default=0.05)
+    parser.add_argument("--teaser_normal_radius", type=float, default=0.1)
+    parser.add_argument("--teaser_feature_radius", type=float, default=0.25)
+    parser.add_argument("--teaser_normal_max_nn", type=int, default=30)
+    parser.add_argument("--teaser_feature_max_nn", type=int, default=100)
+    parser.add_argument("--teaser_max_correspondences", type=int, default=512)
+    parser.add_argument("--super4pcs_binary", default=None)
+    parser.add_argument("--super4pcs_overlap", type=float, default=0.4)
+    parser.add_argument("--super4pcs_delta", type=float, default=0.05)
+    parser.add_argument("--super4pcs_n_points", type=int, default=300)
+    parser.add_argument("--super4pcs_max_time_seconds", type=int, default=10)
+    parser.add_argument("--super4pcs_timeout_seconds", type=int, default=20)
+    parser.add_argument("--goicp_binary", default=None)
+    parser.add_argument("--goicp_num_points", type=int, default=300)
+    parser.add_argument("--goicp_mse_threshold", type=float, default=0.001)
+    parser.add_argument("--goicp_trim_fraction", type=float, default=0.3)
+    parser.add_argument("--goicp_dist_trans_size", type=int, default=150)
+    parser.add_argument("--goicp_timeout_seconds", type=int, default=30)
     parser.add_argument("--ransac_iterations", type=int, default=500)
     parser.add_argument("--ransac_inlier_distance", type=float, default=0.05)
     parser.add_argument("--success_rotation_deg", type=float, default=15.0)
@@ -120,11 +139,32 @@ def parse_args() -> argparse.Namespace:
 
 
 def validate_relative_paths(args: argparse.Namespace) -> None:
-    for key in ("dataset_path", "output_dir"):
-        if Path(getattr(args, key)).is_absolute():
+    for key in ("dataset_path", "output_dir", "super4pcs_binary", "goicp_binary"):
+        value = getattr(args, key)
+        if value is not None and _is_policy_absolute_path(str(value)):
             raise ValueError(
                 f"{key} is configured as an absolute path. Use a relative path per benchmark policy."
             )
+
+
+def _is_policy_absolute_path(path_value: str) -> bool:
+    return (
+        Path(path_value).is_absolute()
+        or PurePosixPath(path_value).is_absolute()
+        or PureWindowsPath(path_value).is_absolute()
+    )
+
+
+def _json_safe(value: object) -> object:
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, np.generic):
+        return _json_safe(value.item())
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    return value
 
 
 def rotation_error_deg(pred: torch.Tensor, target: torch.Tensor) -> float:
@@ -348,8 +388,37 @@ def _benchmark_methods_case(
                 "w": args.cpd_w,
             }
             result = run_non_learning_baseline(method, src, ref, **kwargs)
-        elif method in {"teaserpp", "teaser", "super4pcs", "goicp", "go_icp"}:
-            result = run_non_learning_baseline(method, src, ref)
+        elif method in {"teaserpp", "teaser"}:
+            kwargs = {
+                "noise_bound": args.teaser_noise_bound,
+                "voxel_size": args.teaser_voxel_size,
+                "normal_radius": args.teaser_normal_radius,
+                "feature_radius": args.teaser_feature_radius,
+                "normal_max_nn": args.teaser_normal_max_nn,
+                "feature_max_nn": args.teaser_feature_max_nn,
+                "max_correspondences": args.teaser_max_correspondences,
+            }
+            result = run_non_learning_baseline(method, src, ref, **kwargs)
+        elif method == "super4pcs":
+            kwargs = {
+                "binary_path": args.super4pcs_binary,
+                "overlap": args.super4pcs_overlap,
+                "delta": args.super4pcs_delta,
+                "n_points": args.super4pcs_n_points,
+                "max_time_seconds": args.super4pcs_max_time_seconds,
+                "timeout_seconds": args.super4pcs_timeout_seconds,
+            }
+            result = run_non_learning_baseline(method, src, ref, **kwargs)
+        elif method in {"goicp", "go_icp"}:
+            kwargs = {
+                "binary_path": args.goicp_binary,
+                "num_points": args.goicp_num_points,
+                "mse_threshold": args.goicp_mse_threshold,
+                "trim_fraction": args.goicp_trim_fraction,
+                "dist_trans_size": args.goicp_dist_trans_size,
+                "timeout_seconds": args.goicp_timeout_seconds,
+            }
+            result = run_non_learning_baseline(method, src, ref, **kwargs)
         else:
             result = run_non_learning_baseline(method, src, ref)
         return result, kwargs, "", True
@@ -482,20 +551,21 @@ def main() -> None:
     payload = benchmark_methods(args)
     payload["benchmark_time_sec"] = float(time.perf_counter() - started)
     payload["args"] = vars(args)
+    safe_payload = _json_safe(payload)
 
     (output_dir / "baseline_summary.json").write_text(
-        json.dumps(payload, indent=2),
+        json.dumps(safe_payload, indent=2, allow_nan=False),
         encoding="utf-8",
     )
     (output_dir / "mps_gaf_eval_schema_summary.json").write_text(
-        json.dumps(payload["mps_gaf_eval_schema"], indent=2),
+        json.dumps(safe_payload["mps_gaf_eval_schema"], indent=2, allow_nan=False),
         encoding="utf-8",
     )
     (output_dir / "comparison_schema_summary.json").write_text(
-        json.dumps(payload["comparison_schema"], indent=2),
+        json.dumps(safe_payload["comparison_schema"], indent=2, allow_nan=False),
         encoding="utf-8",
     )
-    print(json.dumps(payload["benchmark"], indent=2))
+    print(json.dumps(safe_payload["benchmark"], indent=2, allow_nan=False))
 
 
 if __name__ == "__main__":
