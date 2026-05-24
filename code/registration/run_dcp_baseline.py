@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import math
 import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import SimpleNamespace
@@ -28,13 +29,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset_path", required=True)
     parser.add_argument("--output_dir", default="runs/dcp_source2_crop_eval20")
     parser.add_argument("--checkpoint", default=None)
-    parser.add_argument("--model_family", choices=["dcp", "prnet", "idam", "rpmnet", "pointnetlk"], default="dcp")
+    parser.add_argument("--model_family", choices=["dcp", "prnet", "idam", "rpmnet", "pointnetlk", "omnet"], default="dcp")
     parser.add_argument("--external_repo", default=None)
     parser.add_argument("--dcp_repo", default="external_src/learned_baselines/DCP")
     parser.add_argument("--prnet_repo", default="external_src/learned_baselines/PRNet")
     parser.add_argument("--idam_repo", default="external_src/learned_baselines/IDAM")
     parser.add_argument("--rpmnet_repo", default="external_src/learned_baselines/RPMNet")
     parser.add_argument("--pointnetlk_repo", default="external_src/learned_baselines/PointNetLK")
+    parser.add_argument("--omnet_repo", default="external_src/new_baselines/OMNet_Pytorch")
     parser.add_argument("--dataset_split", default="test", choices=["test", "train"])
     parser.add_argument("--noise_type", default="crop", choices=["clean", "jitter", "crop"])
     parser.add_argument("--num_points", type=int, default=1024)
@@ -42,6 +44,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rot_mag", type=float, default=45.0)
     parser.add_argument("--trans_mag", type=float, default=0.5)
     parser.add_argument("--num_sources_per_ref", type=int, default=2)
+    parser.add_argument("--train_category_file", default=None)
+    parser.add_argument("--val_category_file", default=None)
+    parser.add_argument("--test_category_file", default=None)
     parser.add_argument("--groups_per_batch", type=int, default=1)
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--epochs", type=int, default=180)
@@ -72,6 +77,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wt_chamfer", type=float, default=0.1)
     parser.add_argument("--wt_aux", type=float, default=0.01)
     parser.add_argument("--pose_trans_weight", type=float, default=50.0)
+    parser.add_argument("--overlap_dist", type=float, default=0.1)
+    parser.add_argument("--loss_alpha1", type=float, default=1.0)
+    parser.add_argument("--loss_alpha2", type=float, default=4.0)
+    parser.add_argument("--transform_type", default="modelnet_os_prnet_clean")
     parser.add_argument("--early_stop_patience", type=int, default=0)
     parser.add_argument("--early_stop_min_delta", type=float, default=0.0)
     parser.add_argument("--no_checkpoint_model_args", action="store_true")
@@ -91,6 +100,10 @@ def validate_relative_paths(args: argparse.Namespace) -> None:
         "idam_repo",
         "rpmnet_repo",
         "pointnetlk_repo",
+        "omnet_repo",
+        "train_category_file",
+        "val_category_file",
+        "test_category_file",
     ):
         value = getattr(args, key)
         if value is not None and _is_policy_absolute_path(str(value)):
@@ -170,6 +183,8 @@ def selected_external_repo(args: argparse.Namespace) -> str:
         return args.external_repo
     if args.model_family == "rpmnet":
         return args.rpmnet_repo
+    if args.model_family == "omnet":
+        return args.omnet_repo
     if args.model_family == "pointnetlk":
         return args.pointnetlk_repo
     if args.model_family == "idam":
@@ -181,6 +196,33 @@ def selected_external_repo(args: argparse.Namespace) -> str:
 
 def build_model(args: argparse.Namespace) -> torch.nn.Module:
     repo = selected_external_repo(args)
+    if args.model_family == "omnet":
+        repo_path = _resolve_relative_dir(repo)
+        old_model = sys.modules.pop("model", None)
+        old_common = sys.modules.pop("common", None)
+        sys.path.insert(0, str(repo_path))
+        try:
+            omnet_module = importlib.import_module("model.net")
+            omnet_args = SimpleNamespace(
+                net_type="omnet",
+                titer=args.n_iters,
+                overlap_dist=args.overlap_dist,
+                loss_type="omnet",
+                loss_alpha1=args.loss_alpha1,
+                loss_alpha2=args.loss_alpha2,
+                transform_type=args.transform_type,
+            )
+            model = omnet_module.fetch_net(omnet_args)
+            model._mps_gaf_omnet_params = omnet_args
+            return model
+        finally:
+            if sys.path and sys.path[0] == str(repo_path):
+                sys.path.pop(0)
+            if old_model is not None:
+                sys.modules["model"] = old_model
+            if old_common is not None:
+                sys.modules["common"] = old_common
+
     if args.model_family == "pointnetlk":
         repo_path = _resolve_relative_dir(repo)
         sys.path.insert(0, str(repo_path))
@@ -280,8 +322,29 @@ def build_data_config(args: argparse.Namespace) -> MPSGAFDataConfig:
         trans_mag=args.trans_mag,
         partial=tuple(args.partial),
         num_sources_per_ref=args.num_sources_per_ref,
+        train_category_file=args.train_category_file,
+        val_category_file=args.val_category_file,
+        test_category_file=args.test_category_file,
         seed=args.seed,
     )
+
+
+def rotation_matrix_to_quaternion_wxyz(rotation: torch.Tensor) -> torch.Tensor:
+    r00 = rotation[:, 0, 0]
+    r01 = rotation[:, 0, 1]
+    r02 = rotation[:, 0, 2]
+    r10 = rotation[:, 1, 0]
+    r11 = rotation[:, 1, 1]
+    r12 = rotation[:, 1, 2]
+    r20 = rotation[:, 2, 0]
+    r21 = rotation[:, 2, 1]
+    r22 = rotation[:, 2, 2]
+    qw = 0.5 * torch.sqrt(torch.clamp(1.0 + r00 + r11 + r22, min=1e-8))
+    qx = 0.5 * torch.copysign(torch.sqrt(torch.clamp(1.0 + r00 - r11 - r22, min=1e-8)), r21 - r12)
+    qy = 0.5 * torch.copysign(torch.sqrt(torch.clamp(1.0 - r00 + r11 - r22, min=1e-8)), r02 - r20)
+    qz = 0.5 * torch.copysign(torch.sqrt(torch.clamp(1.0 - r00 - r11 + r22, min=1e-8)), r10 - r01)
+    quat = torch.stack((qw, qx, qy, qz), dim=1)
+    return F.normalize(quat, dim=1, eps=1e-8)
 
 
 def make_loader(args: argparse.Namespace, split: str):
@@ -311,6 +374,32 @@ def predict_transform(
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
     src = batch["points_src"][..., :3].to(device).transpose(1, 2).contiguous()
     ref = batch["points_ref"][..., :3].to(device).transpose(1, 2).contiguous()
+    if args.model_family == "omnet":
+        src_points = batch["points_src"][..., :3].to(device)
+        ref_points = batch["points_ref"][..., :3].to(device)
+        gt = batch["transform_gt"].to(device)
+        pose_gt = torch.cat((rotation_matrix_to_quaternion_wxyz(gt[:, :3, :3]), gt[:, :3, 3]), dim=1)
+        omnet_batch = {
+            "points_src": src_points,
+            "points_ref": ref_points,
+            "transform_gt": gt,
+            "pose_gt": pose_gt,
+        }
+        endpoints = model(omnet_batch)
+        transform = endpoints["transform_pair"][1].contiguous()
+        pred_points = src_points @ transform[:, :3, :3].transpose(1, 2) + transform[:, :3, 3].unsqueeze(1)
+        aux_loss = None
+        if model.training:
+            repo_path = _resolve_relative_dir(selected_external_repo(args))
+            sys.path.insert(0, str(repo_path))
+            try:
+                loss_module = importlib.import_module("loss.loss")
+                aux_loss = loss_module.compute_loss(endpoints, model._mps_gaf_omnet_params)["total"]
+            finally:
+                if sys.path and sys.path[0] == str(repo_path):
+                    sys.path.pop(0)
+        return transform, pred_points, aux_loss
+
     if args.model_family == "pointnetlk":
         src_points = batch["points_src"][..., :3].to(device)
         ref_points = batch["points_ref"][..., :3].to(device)
@@ -444,6 +533,10 @@ CHECKPOINT_MODEL_ARG_KEYS = (
     "num_neighbors",
     "num_sk_iter",
     "no_slack",
+    "overlap_dist",
+    "loss_alpha1",
+    "loss_alpha2",
+    "transform_type",
 )
 
 
@@ -478,6 +571,26 @@ def load_checkpoint(path: str, model: torch.nn.Module, optimizer: torch.optim.Op
     return int(checkpoint.get("epoch", 0))
 
 
+def load_previous_selection_state(output_dir: Path) -> tuple[float, Dict[str, float] | None, int]:
+    summary_path = output_dir / "last_train_summary.json"
+    if not summary_path.exists():
+        return float("inf"), None, 0
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return float("inf"), None, 0
+    best_metric = summary.get("best_selection_metric", float("inf"))
+    if not isinstance(best_metric, (int, float)) or not math.isfinite(float(best_metric)):
+        return float("inf"), None, 0
+    best_metrics = summary.get("best_validation")
+    if not isinstance(best_metrics, dict):
+        best_metrics = None
+    epochs_since_best = summary.get("epochs_since_best", 0)
+    if not isinstance(epochs_since_best, int) or epochs_since_best < 0:
+        epochs_since_best = 0
+    return float(best_metric), best_metrics, epochs_since_best
+
+
 def train(args: argparse.Namespace) -> None:
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -493,6 +606,8 @@ def train(args: argparse.Namespace) -> None:
     best_metric = float("inf")
     best_metrics: Dict[str, float] | None = None
     epochs_since_best = 0
+    if args.checkpoint:
+        best_metric, best_metrics, epochs_since_best = load_previous_selection_state(output_dir)
 
     for epoch in range(start_epoch, args.epochs):
         if hasattr(train_dataset, "set_epoch"):

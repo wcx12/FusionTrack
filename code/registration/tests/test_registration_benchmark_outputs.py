@@ -67,11 +67,29 @@ def test_validate_relative_paths_rejects_absolute_external_binaries() -> None:
     args = Namespace(
         dataset_path="datasets/modelnet40_ply_hdf5_2048",
         output_dir="runs/test",
-        super4pcs_binary="/opt/super4pcs",
+        super4pcs_binary=str((Path("external_src") / "Super4PCS").resolve()),
         goicp_binary=None,
+        train_category_file=None,
+        val_category_file=None,
+        test_category_file=None,
     )
 
     with pytest.raises(ValueError, match="super4pcs_binary"):
+        run_registration_benchmark.validate_relative_paths(args)
+
+
+def test_validate_relative_paths_rejects_absolute_category_file() -> None:
+    args = Namespace(
+        dataset_path="datasets/modelnet40_ply_hdf5_2048",
+        output_dir="runs/test",
+        super4pcs_binary=None,
+        goicp_binary=None,
+        train_category_file=None,
+        val_category_file=None,
+        test_category_file=str((Path("splits") / "test.txt").resolve()),
+    )
+
+    with pytest.raises(ValueError, match="test_category_file"):
         run_registration_benchmark.validate_relative_paths(args)
 
 

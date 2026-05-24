@@ -1,5 +1,6 @@
 from argparse import Namespace
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import types
@@ -75,6 +76,10 @@ def make_args(**overrides) -> Namespace:
         idam_repo="external_src/learned_baselines/IDAM",
         rpmnet_repo="external_src/learned_baselines/RPMNet",
         pointnetlk_repo="external_src/learned_baselines/PointNetLK",
+        omnet_repo="external_src/new_baselines/OMNet_Pytorch",
+        train_category_file=None,
+        val_category_file=None,
+        test_category_file=None,
     )
     values.update(overrides)
     return Namespace(**values)
@@ -96,6 +101,22 @@ def test_validate_relative_paths_rejects_absolute_pointnetlk_repo() -> None:
         run_dcp_baseline.validate_learned_runner_paths(args)
 
 
+def test_validate_relative_paths_rejects_absolute_omnet_repo() -> None:
+    args = make_args(external_repo=None, omnet_repo=str(Path("external") / "OMNet_Pytorch"))
+    args.omnet_repo = str(Path(args.omnet_repo).resolve())
+
+    with pytest.raises(ValueError, match="omnet_repo"):
+        run_dcp_baseline.validate_learned_runner_paths(args)
+
+
+def test_validate_relative_paths_rejects_absolute_category_file() -> None:
+    args = make_args(test_category_file=str(Path("splits") / "test.txt"))
+    args.test_category_file = str(Path(args.test_category_file).resolve())
+
+    with pytest.raises(ValueError, match="test_category_file"):
+        run_dcp_baseline.validate_learned_runner_paths(args)
+
+
 def test_pose_metric_uses_mps_gaf_translation_weight() -> None:
     metrics = {
         "rotation_error_deg_mean": 10.0,
@@ -103,6 +124,24 @@ def test_pose_metric_uses_mps_gaf_translation_weight() -> None:
     }
 
     assert run_dcp_baseline.pose_metric(metrics, pose_trans_weight=50.0) == 20.0
+
+
+def test_resume_selection_state_preserves_previous_best(tmp_path) -> None:
+    summary = {
+        "best_selection_metric": 12.5,
+        "best_validation": {
+            "rotation_error_deg_mean": 10.0,
+            "translation_error_mean": 0.05,
+        },
+        "epochs_since_best": 7,
+    }
+    (tmp_path / "last_train_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+
+    best_metric, best_metrics, epochs_since_best = run_dcp_baseline.load_previous_selection_state(tmp_path)
+
+    assert best_metric == 12.5
+    assert best_metrics == summary["best_validation"]
+    assert epochs_since_best == 7
 
 
 def test_external_model_module_loading_does_not_pollute_global_modules(tmp_path, monkeypatch) -> None:
@@ -181,3 +220,31 @@ def test_apply_checkpoint_model_args_can_be_disabled(monkeypatch) -> None:
     assert updated.emb_nn == "pointnet"
     assert updated.emb_dims == 512
     assert updated.n_iters == 3
+
+
+def test_build_data_config_passes_category_files(monkeypatch) -> None:
+    captured = {}
+
+    def fake_config(**kwargs):
+        captured.update(kwargs)
+        return kwargs
+
+    monkeypatch.setattr(run_dcp_baseline, "MPSGAFDataConfig", fake_config)
+    args = make_args(
+        num_points=1024,
+        noise_type="crop",
+        rot_mag=45.0,
+        trans_mag=0.5,
+        partial=[0.7, 0.7],
+        num_sources_per_ref=2,
+        train_category_file="splits/train.txt",
+        val_category_file="splits/val.txt",
+        test_category_file="splits/test.txt",
+        seed=0,
+    )
+
+    run_dcp_baseline.build_data_config(args)
+
+    assert captured["train_category_file"] == "splits/train.txt"
+    assert captured["val_category_file"] == "splits/val.txt"
+    assert captured["test_category_file"] == "splits/test.txt"

@@ -618,6 +618,26 @@ def save_checkpoint(
     return path
 
 
+def load_previous_selection_state(output_dir: Path) -> Tuple[float, Dict[str, float] | None, int]:
+    summary_path = output_dir / "last_train_summary.json"
+    if not summary_path.exists():
+        return float("inf"), None, 0
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return float("inf"), None, 0
+    best_value = summary.get("best_selection_metric", float("inf"))
+    if not isinstance(best_value, (int, float)) or not math.isfinite(float(best_value)):
+        return float("inf"), None, 0
+    best_metrics = summary.get("best_validation")
+    if not isinstance(best_metrics, dict):
+        best_metrics = None
+    epochs_since_best = summary.get("epochs_since_best", 0)
+    if not isinstance(epochs_since_best, int) or epochs_since_best < 0:
+        epochs_since_best = 0
+    return float(best_value), best_metrics, epochs_since_best
+
+
 def load_checkpoint(
     path: str,
     model: MPSGAFRegistration,
@@ -709,6 +729,7 @@ def train(args: argparse.Namespace) -> None:
     epochs_since_best = 0
     if args.checkpoint:
         start_epoch = load_checkpoint(args.checkpoint, model, optimizer, map_location=device)
+        best_value, best_metrics, epochs_since_best = load_previous_selection_state(output_dir)
 
     for epoch in range(start_epoch, args.epochs):
         if hasattr(train_dataset, "set_epoch"):
@@ -792,7 +813,7 @@ def train(args: argparse.Namespace) -> None:
         if scheduler is not None:
             scheduler.step(current_value)
         checkpoint_path = save_checkpoint(output_dir, model, optimizer, epoch + 1, args)
-        best_checkpoint_path = None
+        best_checkpoint_path = output_dir / "mps_gaf_best.pt" if (output_dir / "mps_gaf_best.pt").exists() else None
         improved = current_value < best_value - args.early_stop_min_delta
         if improved:
             best_value = current_value

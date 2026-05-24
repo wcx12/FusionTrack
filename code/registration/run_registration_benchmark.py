@@ -84,6 +84,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rot_mag", type=float, default=45.0)
     parser.add_argument("--trans_mag", type=float, default=0.5)
     parser.add_argument("--num_sources_per_ref", type=int, default=2)
+    parser.add_argument("--train_category_file", default=None)
+    parser.add_argument("--val_category_file", default=None)
+    parser.add_argument("--test_category_file", default=None)
     parser.add_argument("--groups_per_batch", type=int, default=1)
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
@@ -139,7 +142,15 @@ def parse_args() -> argparse.Namespace:
 
 
 def validate_relative_paths(args: argparse.Namespace) -> None:
-    for key in ("dataset_path", "output_dir", "super4pcs_binary", "goicp_binary"):
+    for key in (
+        "dataset_path",
+        "output_dir",
+        "super4pcs_binary",
+        "goicp_binary",
+        "train_category_file",
+        "val_category_file",
+        "test_category_file",
+    ):
         value = getattr(args, key)
         if value is not None and _is_policy_absolute_path(str(value)):
             raise ValueError(
@@ -444,6 +455,9 @@ def benchmark_methods(args: argparse.Namespace) -> Dict[str, object]:
         trans_mag=args.trans_mag,
         partial=tuple(args.partial),
         num_sources_per_ref=args.num_sources_per_ref,
+        train_category_file=args.train_category_file,
+        val_category_file=args.val_category_file,
+        test_category_file=args.test_category_file,
         seed=args.seed,
     )
     if args.dataset_split == "train":
