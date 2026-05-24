@@ -182,7 +182,7 @@ def rotation_error_deg(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor
 def rotation_error_rad(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     residual = target[:, :3, :3].transpose(1, 2) @ pred[:, :3, :3]
     trace = residual[:, 0, 0] + residual[:, 1, 1] + residual[:, 2, 2]
-    return torch.acos(torch.clamp(0.5 * (trace - 1.0), min=-1.0 + 1e-6, max=1.0 - 1e-6))
+    return torch.acos(torch.clamp(0.5 * (trace - 1.0), min=-1.0, max=1.0))
 
 
 def chamfer_distance(src: torch.Tensor, ref: torch.Tensor, trim_fraction: float = 1.0) -> torch.Tensor:

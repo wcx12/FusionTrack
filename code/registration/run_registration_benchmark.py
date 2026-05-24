@@ -184,7 +184,7 @@ def rotation_error_deg(pred: torch.Tensor, target: torch.Tensor) -> float:
     residual = target.t() @ pred
     trace = residual[0, 0] + residual[1, 1] + residual[2, 2]
     value = 0.5 * (trace - 1.0)
-    value = max(min(float(value), 1.0 - 1e-6), -1.0 + 1e-6)
+    value = max(min(float(value), 1.0), -1.0)
     return float(math.degrees(math.acos(value)))
 
 

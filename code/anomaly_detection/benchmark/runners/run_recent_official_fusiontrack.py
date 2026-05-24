@@ -77,6 +77,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--official-root", required=True, type=Path)
     parser.add_argument("--train-jsonl", required=True, type=Path)
     parser.add_argument("--val-jsonl", required=True, type=Path)
+    parser.add_argument(
+        "--score-jsonl",
+        type=Path,
+        default=None,
+        help=(
+            "Optional anomalous/evaluation JSONL to score. When provided, "
+            "--val-jsonl is used only for clean convergence monitoring."
+        ),
+    )
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--epochs", type=int, default=20)
@@ -108,26 +117,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     args.win_size = win_size
     train_samples = _load_samples(args.train_jsonl, args.task, win_size)
     val_samples = _load_samples(args.val_jsonl, args.task, win_size)
+    score_input_jsonl = args.score_jsonl or args.val_jsonl
+    score_samples = _load_samples(score_input_jsonl, args.task, win_size)
     if len(train_samples) > int(args.max_train_samples):
         train_samples = random.Random(args.seed).sample(train_samples, int(args.max_train_samples))
-    if not train_samples or not val_samples:
-        raise ValueError("Need non-empty train and validation samples")
-    _standardize(train_samples, val_samples)
+    if not train_samples or not val_samples or not score_samples:
+        raise ValueError("Need non-empty train, validation, and score samples")
+    _standardize(train_samples, val_samples, score_samples)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     if args.method == "catch":
-        history, score_rows, model_manifest = _run_catch(args, train_samples, val_samples, device)
+        history, score_rows, model_manifest = _run_catch(
+            args, train_samples, val_samples, score_samples, device
+        )
     elif args.method == "sensitive_hue":
         history, score_rows, model_manifest = _run_sensitive_hue(
-            args, train_samples, val_samples, device
+            args, train_samples, val_samples, score_samples, device
         )
     elif args.method == "cutaddpaste":
         history, score_rows, model_manifest = _run_cutaddpaste(
-            args, train_samples, val_samples, device
+            args, train_samples, val_samples, score_samples, device
         )
     elif args.method == "timemixer":
         history, score_rows, model_manifest = _run_timemixer(
-            args, train_samples, val_samples, device
+            args, train_samples, val_samples, score_samples, device
         )
     else:  # pragma: no cover - guarded by argparse
         raise ValueError(args.method)
@@ -153,6 +166,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "official_root": str(args.official_root),
         "train_jsonl": str(args.train_jsonl),
         "val_jsonl": str(args.val_jsonl),
+        "score_input_jsonl": str(score_input_jsonl),
         "score_jsonl": str(score_jsonl),
         "score_csv": str(score_csv),
         "device": str(device),
@@ -165,6 +179,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "e_layers": int(args.e_layers),
         "num_train": len(train_samples),
         "num_val": len(val_samples),
+        "num_score": len(score_samples),
         "history": history,
         "convergence": convergence,
         "model_manifest": model_manifest,
@@ -187,6 +202,7 @@ def _run_catch(
     args: argparse.Namespace,
     train_samples: list[SequenceSample],
     val_samples: list[SequenceSample],
+    score_samples: list[SequenceSample],
     device: torch.device,
 ) -> tuple[list[dict[str, float | int]], list[dict[str, Any]], dict[str, Any]]:
     _prepare_catch_imports(args.official_root)
@@ -215,6 +231,12 @@ def _run_catch(
     )
     val_loader = DataLoader(
         SequenceDataset(val_samples),
+        batch_size=int(args.batch_size),
+        shuffle=False,
+        drop_last=False,
+    )
+    score_loader = DataLoader(
+        SequenceDataset(score_samples),
         batch_size=int(args.batch_size),
         shuffle=False,
         drop_last=False,
@@ -257,8 +279,8 @@ def _run_catch(
     score_rows = _score_reconstruction_method(
         args,
         model,
-        val_loader,
-        val_samples,
+        score_loader,
+        score_samples,
         device,
         lambda inputs, outputs: torch.mean(point_criterion(inputs, outputs), dim=-1)
         + config.score_lambda * torch.mean(freq_criterion(inputs, outputs), dim=-1),
@@ -376,6 +398,7 @@ def _run_sensitive_hue(
     args: argparse.Namespace,
     train_samples: list[SequenceSample],
     val_samples: list[SequenceSample],
+    score_samples: list[SequenceSample],
     device: torch.device,
 ) -> tuple[list[dict[str, float | int]], list[dict[str, Any]], dict[str, Any]]:
     from sensitive_hue.model import SensitiveHUE
@@ -399,6 +422,12 @@ def _run_sensitive_hue(
     )
     val_loader = DataLoader(
         SequenceDataset(val_samples),
+        batch_size=int(args.batch_size),
+        shuffle=False,
+        drop_last=False,
+    )
+    score_loader = DataLoader(
+        SequenceDataset(score_samples),
         batch_size=int(args.batch_size),
         shuffle=False,
         drop_last=False,
@@ -429,7 +458,7 @@ def _run_sensitive_hue(
         history.append(row)
         print(json.dumps(row, sort_keys=True))
 
-    score_rows = _score_sensitive_hue(args, model, val_loader, val_samples, device)
+    score_rows = _score_sensitive_hue(args, model, score_loader, score_samples, device)
     return history, score_rows, {
         "official_components": ["sensitive_hue.model.SensitiveHUE"],
         "input_dim": input_dim,
@@ -497,6 +526,7 @@ def _run_cutaddpaste(
     args: argparse.Namespace,
     train_samples: list[SequenceSample],
     val_samples: list[SequenceSample],
+    score_samples: list[SequenceSample],
     device: torch.device,
 ) -> tuple[list[dict[str, float | int]], list[dict[str, Any]], dict[str, Any]]:
     generate_negative = _load_official_module(
@@ -562,7 +592,7 @@ def _run_cutaddpaste(
         drop_last=False,
     )
     score_loader = DataLoader(
-        SequenceDataset(val_samples, channel_first=True),
+        SequenceDataset(score_samples, channel_first=True),
         batch_size=int(args.batch_size),
         shuffle=False,
         drop_last=False,
@@ -587,7 +617,7 @@ def _run_cutaddpaste(
         history.append(row)
         print(json.dumps(row, sort_keys=True))
 
-    score_rows = _score_cutaddpaste(args, model, score_loader, val_samples, device)
+    score_rows = _score_cutaddpaste(args, model, score_loader, score_samples, device)
     return history, score_rows, {
         "official_components": [
             "models.CutAddPaste.network.model.base_Model",
@@ -603,6 +633,7 @@ def _run_timemixer(
     args: argparse.Namespace,
     train_samples: list[SequenceSample],
     val_samples: list[SequenceSample],
+    score_samples: list[SequenceSample],
     device: torch.device,
 ) -> tuple[list[dict[str, float | int]], list[dict[str, Any]], dict[str, Any]]:
     from models.TimeMixer import Model
@@ -621,6 +652,12 @@ def _run_timemixer(
     )
     val_loader = DataLoader(
         SequenceDataset(val_samples),
+        batch_size=int(args.batch_size),
+        shuffle=False,
+        drop_last=False,
+    )
+    score_loader = DataLoader(
+        SequenceDataset(score_samples),
         batch_size=int(args.batch_size),
         shuffle=False,
         drop_last=False,
@@ -651,7 +688,7 @@ def _run_timemixer(
         history.append(row)
         print(json.dumps(row, sort_keys=True))
 
-    score_rows = _score_timemixer(args, model, val_loader, val_samples, point_criterion, device)
+    score_rows = _score_timemixer(args, model, score_loader, score_samples, point_criterion, device)
     return history, score_rows, {
         "official_components": ["models.TimeMixer.Model"],
         "input_dim": input_dim,
@@ -1060,12 +1097,15 @@ def _resample(values: np.ndarray, win_size: int) -> np.ndarray:
     return np.stack(columns, axis=1).astype(np.float32)
 
 
-def _standardize(train_samples: list[SequenceSample], val_samples: list[SequenceSample]) -> None:
+def _standardize(
+    train_samples: list[SequenceSample],
+    *sample_groups: list[SequenceSample],
+) -> None:
     train_values = np.concatenate([sample.values for sample in train_samples], axis=0)
     mean = train_values.mean(axis=0, keepdims=True)
     std = train_values.std(axis=0, keepdims=True)
     std[std < 1e-6] = 1.0
-    for sample in [*train_samples, *val_samples]:
+    for sample in [*train_samples, *(sample for group in sample_groups for sample in group)]:
         sample.values = ((sample.values - mean) / std).astype(np.float32)
 
 

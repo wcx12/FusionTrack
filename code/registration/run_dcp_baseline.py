@@ -347,6 +347,26 @@ def rotation_matrix_to_quaternion_wxyz(rotation: torch.Tensor) -> torch.Tensor:
     return F.normalize(quat, dim=1, eps=1e-8)
 
 
+def compute_omnet_aux_loss(endpoints: Dict, loss_alpha1: float, loss_alpha2: float) -> torch.Tensor:
+    losses = []
+    weight = None
+    for src_pair, ref_pair, pose_pair in zip(
+        endpoints["all_src_cls_pair"],
+        endpoints["all_ref_cls_pair"],
+        endpoints["all_pose_pair"],
+    ):
+        src_gt, src_pred = src_pair
+        ref_gt, ref_pred = ref_pair
+        if weight is None:
+            weight = torch.tensor([0.7, 0.3], dtype=src_pred.dtype, device=src_pred.device)
+        losses.append(F.cross_entropy(src_pred, src_gt.long(), weight=weight))
+        losses.append(F.cross_entropy(ref_pred, ref_gt.long(), weight=weight))
+        pose_gt, pose_pred = pose_pair
+        losses.append(F.l1_loss(pose_pred[:, :4], pose_gt[:, :4]) * loss_alpha1)
+        losses.append(F.mse_loss(pose_pred[:, 4:], pose_gt[:, 4:]) * loss_alpha2)
+    return torch.stack([loss.float() for loss in losses]).sum()
+
+
 def make_loader(args: argparse.Namespace, split: str):
     data_config = build_data_config(args)
     if split == "train":
@@ -389,15 +409,8 @@ def predict_transform(
         transform = endpoints["transform_pair"][1].contiguous()
         pred_points = src_points @ transform[:, :3, :3].transpose(1, 2) + transform[:, :3, 3].unsqueeze(1)
         aux_loss = None
-        if model.training:
-            repo_path = _resolve_relative_dir(selected_external_repo(args))
-            sys.path.insert(0, str(repo_path))
-            try:
-                loss_module = importlib.import_module("loss.loss")
-                aux_loss = loss_module.compute_loss(endpoints, model._mps_gaf_omnet_params)["total"]
-            finally:
-                if sys.path and sys.path[0] == str(repo_path):
-                    sys.path.pop(0)
+        if model.training and args.wt_aux > 0.0:
+            aux_loss = compute_omnet_aux_loss(endpoints, args.loss_alpha1, args.loss_alpha2)
         return transform, pred_points, aux_loss
 
     if args.model_family == "pointnetlk":

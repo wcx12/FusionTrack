@@ -5,6 +5,7 @@ import math
 import sys
 import types
 
+import numpy as np
 import pytest
 
 
@@ -63,6 +64,23 @@ def _load_run_registration_benchmark():
 run_registration_benchmark = _load_run_registration_benchmark()
 
 
+class _MatrixLike:
+    def __init__(self, value):
+        self.value = np.asarray(value, dtype=float)
+
+    def __getitem__(self, item):
+        out = self.value[item]
+        if np.isscalar(out):
+            return float(out)
+        return _MatrixLike(out)
+
+    def __matmul__(self, other):
+        return _MatrixLike(self.value @ other.value)
+
+    def t(self):
+        return _MatrixLike(self.value.T)
+
+
 def test_validate_relative_paths_rejects_absolute_external_binaries() -> None:
     args = Namespace(
         dataset_path="datasets/modelnet40_ply_hdf5_2048",
@@ -91,6 +109,12 @@ def test_validate_relative_paths_rejects_absolute_category_file() -> None:
 
     with pytest.raises(ValueError, match="test_category_file"):
         run_registration_benchmark.validate_relative_paths(args)
+
+
+def test_rotation_error_is_zero_for_identical_rotations() -> None:
+    identity = _MatrixLike(np.eye(4))
+
+    assert run_registration_benchmark.rotation_error_deg(identity, identity) == 0.0
 
 
 def test_json_safe_replaces_non_finite_values_for_strict_json() -> None:

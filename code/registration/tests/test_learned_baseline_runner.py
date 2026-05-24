@@ -248,3 +248,69 @@ def test_build_data_config_passes_category_files(monkeypatch) -> None:
     assert captured["train_category_file"] == "splits/train.txt"
     assert captured["val_category_file"] == "splits/val.txt"
     assert captured["test_category_file"] == "splits/test.txt"
+
+
+class _FakeTensor:
+    def __getitem__(self, _item):
+        return self
+
+    def __matmul__(self, _other):
+        return self
+
+    def __add__(self, _other):
+        return self
+
+    def to(self, _device):
+        return self
+
+    def transpose(self, *_args):
+        return self
+
+    def contiguous(self):
+        return self
+
+    def unsqueeze(self, *_args):
+        return self
+
+
+class _FakeOmnetModel:
+    training = True
+    _mps_gaf_omnet_params = {}
+
+    def __call__(self, _batch):
+        transform = _FakeTensor()
+        return {"transform_pair": [transform, transform]}
+
+
+def test_omnet_predict_transform_skips_aux_loss_import_when_disabled(monkeypatch) -> None:
+    monkeypatch.setattr(
+        run_dcp_baseline,
+        "_resolve_relative_dir",
+        lambda _repo: pytest.fail("auxiliary loss repo should not be resolved"),
+    )
+    monkeypatch.setattr(
+        run_dcp_baseline,
+        "rotation_matrix_to_quaternion_wxyz",
+        lambda _rotation: _FakeTensor(),
+    )
+    monkeypatch.setattr(
+        run_dcp_baseline.torch,
+        "cat",
+        lambda _items, dim=0: _FakeTensor(),
+        raising=False,
+    )
+    args = make_args(model_family="omnet", wt_aux=0.0)
+    batch = {
+        "points_src": _FakeTensor(),
+        "points_ref": _FakeTensor(),
+        "transform_gt": _FakeTensor(),
+    }
+
+    _transform, _pred_points, aux_loss = run_dcp_baseline.predict_transform(
+        _FakeOmnetModel(),
+        batch,
+        "cpu",
+        args,
+    )
+
+    assert aux_loss is None
