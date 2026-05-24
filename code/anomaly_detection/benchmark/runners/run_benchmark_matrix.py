@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
+import hashlib
 import json
+import platform
 from pathlib import Path
+import subprocess
 import sys
 from typing import Any, Sequence
 
@@ -143,8 +147,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             {
                 "name": str(name),
                 "task": str(task),
+                "experiment_config": dict(experiment),
                 "score_file": str(score_path),
+                "score_sha256": _file_sha256(score_path),
                 "metrics_file": str(metric_path),
+                "metrics_sha256": _file_sha256(metric_path),
                 "key_fields": list(key_fields),
                 "require_unique_keys": require_unique_keys,
                 "require_score_key_match": require_score_key_match,
@@ -157,7 +164,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     summarize_metric_files(metric_files, output_csv=summary_csv)
     manifest = {
+        "manifest_schema_version": 2,
+        "generated_at_utc": _utc_now(),
         "config_json": str(config_path),
+        "config_sha256": _file_sha256(config_path),
         "label_file": str(label_file),
         "output_dir": str(output_dir),
         "summary_csv": str(summary_csv),
@@ -167,6 +177,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         "method_registry": method_registry.manifest_metadata(),
         "require_unique_keys": default_require_unique_keys,
         "require_score_key_match": default_require_score_key_match,
+        "inputs": {
+            "label_file": str(label_file),
+            "key_fields": list(key_fields),
+            "k": int(k) if k is not None else None,
+        },
+        "git": _git_metadata(),
+        "environment": _environment_metadata(),
         "runs": manifest_runs,
     }
     manifest_path = output_dir / "manifest.json"
@@ -353,6 +370,53 @@ def _safe_name(value: Any) -> str:
     if not text:
         raise ValueError("Experiment name cannot be empty")
     return "".join(char if char.isalnum() or char in ("-", "_", ".") else "_" for char in text)
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
+        "+00:00",
+        "Z",
+    )
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _git_metadata() -> dict[str, Any]:
+    status = _run_git(["status", "--short"])
+    return {
+        "commit": _run_git(["rev-parse", "HEAD"]),
+        "branch": _run_git(["rev-parse", "--abbrev-ref", "HEAD"]),
+        "dirty": bool(status),
+    }
+
+
+def _run_git(args: Sequence[str]) -> str:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=Path(__file__).resolve().parents[4],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def _environment_metadata() -> dict[str, str]:
+    return {
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+    }
 
 
 if __name__ == "__main__":

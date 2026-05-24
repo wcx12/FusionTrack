@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import csv
+import hashlib
 import json
 import subprocess
 import sys
@@ -277,6 +278,22 @@ def test_run_benchmark_matrix_runs_methods_evaluates_and_summarizes(tmp_path: Pa
     assert (output_dir / "scores" / "individual_physics.jsonl").exists()
     assert (output_dir / "metrics" / "group_prediction.json").exists()
     assert manifest["summary_csv"] == str(output_dir / "summary.csv")
+    assert manifest["manifest_schema_version"] == 2
+    assert manifest["generated_at_utc"].endswith("Z")
+    assert manifest["config_sha256"] == hashlib.sha256(
+        config_path.read_bytes()
+    ).hexdigest()
+    assert set(manifest["git"]) >= {"commit", "branch", "dirty"}
+    assert len(manifest["git"]["commit"]) in (0, 40)
+    assert manifest["environment"]["python_version"].startswith(
+        f"{sys.version_info.major}.{sys.version_info.minor}"
+    )
+    assert manifest["inputs"] == {
+        "label_file": str(label_path),
+        "key_fields": ["sample_id"],
+        "k": 1,
+    }
+    assert manifest["runs"][6]["experiment_config"]["calibration_bins"] == 2
 
     group_hybrid_rows = [
         json.loads(line)

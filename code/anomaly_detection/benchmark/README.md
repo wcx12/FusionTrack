@@ -1236,3 +1236,16 @@ run name，同时写入 registry 的 canonical `method_profile.name`。
 5. 当 CLI 或 reporting 入口启用 `--require-unique-keys` 时，重复 label key 或 score key 会直接失败。
 
 该校验已经接入 `evaluation.reporting.evaluate_score_file()`，因此 `run_evaluation.py`、批量矩阵评估和后续 dashboard 结果聚合都会在指标计算前先检查输入数据。这样可以避免错误 score 被 `_finite_scores()` 或对齐逻辑静默吞掉，保证实验表格中的 AUROC/AUPRC/F1/P@K/R@K 都来自结构合法的数据文件。
+
+## 2026-05-25 更新：benchmark run manifest
+
+`runners/run_benchmark_matrix.py` 生成的 `manifest.json` 已升级到 `manifest_schema_version = 2`。除原有的 config、label、summary、method registry 和 runs 信息外，现在会额外记录：
+
+1. `generated_at_utc`：本次矩阵运行的 UTC 时间。
+2. `config_sha256`：矩阵配置文件的 SHA-256，用于确认结果对应的配置版本。
+3. `git`：当前仓库 commit、branch 和 dirty 状态，用于判断结果是否来自干净版本。
+4. `environment`：Python 版本和平台信息。
+5. `inputs`：label 文件、key 字段和 P@K 使用的 `k`。
+6. 每个 run 的 `experiment_config`、`score_sha256` 和 `metrics_sha256`。
+
+这一步把“跑出结果”推进为“结果可追溯”：后续无论是在本地、服务器还是导出包中查看结果，都能判断该结果对应的代码版本、配置哈希、输入约束和每个方法的实际运行参数。

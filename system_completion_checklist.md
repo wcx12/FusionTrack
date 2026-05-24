@@ -146,3 +146,10 @@
 - label 行必须包含任务 key 与二值 `label`；score 行必须包含任务 key 与有限数值 `score`。
 - 支持 `sample_id` 与 `sample_id + window_id` 等任务级 key 字段，并沿用 `require_unique_keys` 策略检查重复 key。
 - 该更新推进了 A/D 层中的 `labels/scores schema`、`strict key 管理` 和 `缺失字段一致性约束`，但完整系统仍需继续补齐 run manifest、真实标签 adapter、事件段解释链路和一键运行套件。
+
+## 2026-05-25 更新：run manifest 可追溯性
+
+- `run_benchmark_matrix.py` 输出的 `manifest.json` 升级为 `manifest_schema_version = 2`。
+- 新增 `generated_at_utc`、`config_sha256`、`git`、`environment` 和 `inputs` 字段。
+- 每个 run 现在记录 `experiment_config`、`score_sha256` 与 `metrics_sha256`，便于追踪方法参数、分数文件和指标文件来源。
+- 该更新推进了 D/F 层中的 `seed/commit/config` 可追溯和交付归档能力；后续还需要把同类 manifest 约束扩展到 holdout multiseed、官方 baseline runner 和最终 dashboard 导出包。
