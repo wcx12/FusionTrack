@@ -10,8 +10,14 @@ from sklearn.preprocessing import StandardScaler
 
 from baselines.group_prediction import run_prediction_baseline
 from baselines.group_features import FEATURE_COLUMNS, build_group_feature_table
-from fusiontrack.group_scoring import score_group_windows
+from fusiontrack.group_scoring import COMPONENT_NAMES, score_group_windows
 from protocol.schemas import build_sample_id
+
+
+GROUP_EVENT_COMPONENT_SCORE_KEYS = {
+    f"graph_{name}"
+    for name in COMPONENT_NAMES
+}
 
 
 def fit_group_temporal_knn(
@@ -192,10 +198,13 @@ def run_group_hybrid_fusiontrack(
             "prediction_residual_rank": float(prediction_rank[index]),
             "graph_rank": float(graph_rank[index]),
             "temporal_profile_rank": float(temporal_rank[index]),
+            **_prefixed_graph_component_scores(graph_row),
         }
         if use_residual_gate:
             component_scores["residual_side_gate"] = float(side_gates[index])
         score = fused_scores[index]
+        frame_event_scores = _graph_frame_event_scores(graph_row)
+        event_segments = _graph_event_segments(graph_row)
         rows.append(
             {
                 "sample_id": str(row["sample_id"]),
@@ -206,6 +215,9 @@ def run_group_hybrid_fusiontrack(
                 "frame_end": row.get("frame_end"),
                 "source": "fusiontrack_group_hybrid",
                 "score": float(score) if np.isfinite(score) else 0.0,
+                "event_score": _graph_event_score(graph_row, frame_event_scores),
+                "event_segments": event_segments,
+                "frame_event_scores": frame_event_scores,
                 "component_scores": component_scores,
                 "metadata": {
                     "method": "fusiontrack_group_hybrid",
@@ -233,10 +245,19 @@ def run_group_hybrid_fusiontrack(
                         "floor": float(min(1.0, max(0.0, residual_gate_floor))),
                     },
                     "raw_scores": {
-                        "prediction_residual": float(row.get("score", 0.0) or 0.0),
-                        "graph": float(graph_row.get("score", 0.0) or 0.0),
-                        "temporal_profile": float(temporal_row.get("score", 0.0) or 0.0),
+                        "prediction_residual": _finite_float(row.get("score", 0.0)),
+                        "graph": _finite_float(graph_row.get("score", 0.0)),
+                        "temporal_profile": _finite_float(temporal_row.get("score", 0.0)),
                     },
+                    "event_component_schema_version": 1,
+                    "event_component_keys": sorted(GROUP_EVENT_COMPONENT_SCORE_KEYS),
+                    "score_sources": _score_source_summary(
+                        row,
+                        graph_row,
+                        temporal_row,
+                        frame_event_scores,
+                        event_segments,
+                    ),
                 },
             }
         )
@@ -259,12 +280,98 @@ def _component_scores(score: float, feature_row: dict[str, Any]) -> dict[str, fl
     }
 
 
+def _prefixed_graph_component_scores(row: dict[str, Any]) -> dict[str, float]:
+    components = row.get("component_scores") or {}
+    return {
+        f"graph_{name}": _finite_float(components.get(name, 0.0))
+        for name in COMPONENT_NAMES
+    }
+
+
+def _score_source_summary(
+    prediction_row: dict[str, Any],
+    graph_row: dict[str, Any],
+    temporal_row: dict[str, Any],
+    frame_event_scores: list[dict[str, Any]],
+    event_segments: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    graph_components = {
+        name: _finite_float((graph_row.get("component_scores") or {}).get(name, 0.0))
+        for name in COMPONENT_NAMES
+    }
+    prediction_components = {
+        str(key): _finite_float(value)
+        for key, value in (prediction_row.get("component_scores") or {}).items()
+    }
+    temporal_components = {
+        str(key): _finite_float(value)
+        for key, value in (temporal_row.get("component_scores") or {}).items()
+    }
+    return {
+        "prediction": {
+            "source": str(prediction_row.get("source", "group_prediction")),
+            "raw_score": _finite_float(prediction_row.get("score", 0.0)),
+            "component_scores": prediction_components,
+        },
+        "graph": {
+            "source": str(graph_row.get("source", "fusiontrack_group_graph")),
+            "raw_score": _finite_float(graph_row.get("score", 0.0)),
+            "event_score": _graph_event_score(graph_row, frame_event_scores),
+            "dominant_reason": str(
+                (graph_row.get("metadata") or {}).get("dominant_reason", "")
+            ),
+            "event_segment_count": len(event_segments),
+            "frame_event_count": len(frame_event_scores),
+            "component_scores": graph_components,
+        },
+        "temporal_profile": {
+            "source": str(temporal_row.get("source", "fusiontrack_group_temporal_knn")),
+            "raw_score": _finite_float(temporal_row.get("score", 0.0)),
+            "component_scores": temporal_components,
+        },
+    }
+
+
+def _graph_frame_event_scores(row: dict[str, Any]) -> list[dict[str, Any]]:
+    events = row.get("frame_event_scores")
+    if not isinstance(events, list):
+        return []
+    return [dict(item) for item in events if isinstance(item, dict)]
+
+
+def _graph_event_segments(row: dict[str, Any]) -> list[dict[str, Any]]:
+    segments = row.get("event_segments")
+    if not isinstance(segments, list):
+        return []
+    return [dict(item) for item in segments if isinstance(item, dict)]
+
+
+def _graph_event_score(
+    row: dict[str, Any],
+    frame_event_scores: list[dict[str, Any]],
+) -> float:
+    if "event_score" in row:
+        return _finite_float(row.get("event_score"))
+    return max(
+        (_finite_float(item.get("score", 0.0)) for item in frame_event_scores),
+        default=0.0,
+    )
+
+
 def _float_feature(row: dict[str, Any], key: str) -> float:
     try:
         value = float(row.get(key, 0.0) or 0.0)
     except (TypeError, ValueError):
         return 0.0
     return value if np.isfinite(value) else 0.0
+
+
+def _finite_float(value: Any) -> float:
+    try:
+        clean = float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    return clean if np.isfinite(clean) else 0.0
 
 
 def _window_frame_bounds(window: dict) -> tuple[int, int]:

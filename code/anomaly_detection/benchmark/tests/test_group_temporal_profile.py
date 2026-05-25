@@ -9,6 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fusiontrack.group_temporal_profile import (
+    GROUP_EVENT_COMPONENT_SCORE_KEYS,
     _residual_gated_rank_fusion,
     fit_group_temporal_knn,
     run_group_hybrid_fusiontrack,
@@ -149,6 +150,37 @@ def test_group_hybrid_records_residual_gate_config() -> None:
             "power": 2.0,
             "floor": 0.05,
         }
+
+
+def test_group_hybrid_exposes_event_components_and_score_sources() -> None:
+    rows = run_group_hybrid_fusiontrack(
+        _train_windows(),
+        [_stable_window("stable"), _anomalous_window("broken")],
+        n_neighbors=3,
+        prediction_weight=0.6,
+        graph_weight=0.2,
+        temporal_weight=0.2,
+    )
+
+    broken = next(row for row in rows if row["metadata"]["window_id"] == "broken")
+
+    assert GROUP_EVENT_COMPONENT_SCORE_KEYS <= set(broken["component_scores"])
+    assert broken["event_score"] == max(item["score"] for item in broken["frame_event_scores"])
+    assert broken["event_segments"]
+    assert all(
+        {"frame", "score", "dominant_reason", "component_scores"} <= set(item)
+        for item in broken["frame_event_scores"]
+    )
+    assert broken["metadata"]["event_component_schema_version"] == 1
+    assert broken["metadata"]["event_component_keys"] == sorted(GROUP_EVENT_COMPONENT_SCORE_KEYS)
+    assert set(broken["metadata"]["score_sources"]) == {
+        "prediction",
+        "graph",
+        "temporal_profile",
+    }
+    assert "prediction_residual" in broken["metadata"]["score_sources"]["prediction"]["component_scores"]
+    assert "temporal_profile_distance" in broken["metadata"]["score_sources"]["temporal_profile"]["component_scores"]
+    assert broken["metadata"]["score_sources"]["graph"]["dominant_reason"]
 
 
 def test_outputs_object_window_schema_and_preserves_sample_id() -> None:

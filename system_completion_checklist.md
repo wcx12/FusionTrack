@@ -56,9 +56,9 @@
   现状：`fusiontrack/individual_scoring.py` 已为 nearest 与 ensemble score rows 统一输出 `route_score`、`speed_score`、`speed_slowdown_score`、`jump_score`、`shape_score`、`route_shape_score` 和 `modal_offset_score`；这些字段写入 `component_scores`，dashboard 子模块解释面板可直接读取，metadata 记录 schema 版本和分量对应的 feature columns。
   下一步：后续可把分量阈值和 top reason 文案进一步从前端规则迁移为后端事件解释输出。
 
-- Group 分支（群体结构与事件）：🟡  
-  现状：有群体关系与相关可视化。  
-  下一步：事件分量与 score 详细来源打通。
+- Group 分支（群体结构与事件）：✅（基础闭环）
+  现状：`fusiontrack/group_scoring.py` 已输出 `event_score`、`event_segments`、`frame_event_scores` 与群体图结构分量；`fusiontrack/group_temporal_profile.py` 已在 `fusiontrack_group_hybrid` score rows 中透传 `graph_leave`、`graph_motion`、`graph_neighbor`、`graph_count`、`graph_dispersion`、`graph_split_merge`、`graph_object_group`、`graph_group_event`，并通过 `metadata.score_sources` 记录 prediction / graph / temporal_profile 三个子分支的原始分数和组件来源。
+  下一步：后续把 group top reason 文案和事件段阈值策略进一步固化为后端 explanation schema。
 
 - 个体-群体融合：☐  
   现状：存在 fused-score 思路，但前端并非强制读取融合分量链。  

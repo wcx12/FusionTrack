@@ -61,7 +61,7 @@ code/anomaly_detection/benchmark/
 | `configs/final_experiment_settings.json` | 机器可读的最终实验配置，记录统一协议、方法列表、预算、官方 baseline、已完成和未完成 rerun。 |
 | `configs/final_experiment_settings.md` | 人类可读的最终实验配置，论文和后续实验优先看这个文件。 |
 | `fusiontrack/individual_scoring.py` | 个体级 FusionTrack scoring 实现，包括 nearest feature、LOF novelty、Isolation Forest rank ensemble、feature-stratified rank calibration，以及 route/speed/shape/modal 行为分量输出。 |
-| `fusiontrack/group_temporal_profile.py` | 群体级 FusionTrack scoring 实现，包括 prediction residual、graph cohesion、temporal profile、hybrid fusion，以及新增 residual gate。 |
+| `fusiontrack/group_temporal_profile.py` | 群体级 FusionTrack scoring 实现，包括 prediction residual、graph cohesion、temporal profile、hybrid fusion、residual gate，以及群体事件分量与 score 来源输出。 |
 | `runners/prepare_vt_tiny_mot_protocol.py` | 生成 validation 协议、异常标签、score 路径和 benchmark matrix。 |
 | `runners/prepare_vt_tiny_mot_holdout_protocol.py` | 生成 train -> test holdout 协议；训练只来自 train，异常注入和评价来自 test。 |
 | `runners/run_benchmark_matrix.py` | 统一运行 individual/group benchmark matrix，负责把配置参数传给对应 scorer，并输出 summary。 |
@@ -629,6 +629,24 @@ eta = 0.5
 
 融合方式同样采用 rank fusion，避免不同组件分数尺度不一致。
 
+当前 score row 会同时保留融合分数来源和群体事件解释字段：
+
+```text
+prediction_residual_rank
+graph_rank
+temporal_profile_rank
+graph_leave
+graph_motion
+graph_neighbor
+graph_count
+graph_dispersion
+graph_split_merge
+graph_object_group
+graph_group_event
+```
+
+其中 `graph_*` 字段来自群体图结构分支；row 顶层还会携带 `event_score`、`event_segments` 和 `frame_event_scores`。`metadata.score_sources` 会分别记录 prediction、graph、temporal_profile 三个子分支的原始分数、组件分数和来源方法，便于 dashboard、导出包和论文 case 分析解释“这个群体窗口为什么被打高分”。
+
 定位：
 
 ```text
@@ -849,6 +867,7 @@ fusiontrack/group_temporal_profile.py
 3. 新增 `_residual_side_gates`。
 4. 新增 `_rank_array`。
 5. metadata 中记录 gate 参数。
+6. `fusiontrack_group_hybrid` score row 透传 `event_score`、`event_segments`、`frame_event_scores` 和 `metadata.score_sources`，并把 graph 分支的 `leave/motion/neighbor/count/dispersion/split_merge/object_group/group_event` 统一写成 `graph_*` 分量。
 
 对应测试：
 
