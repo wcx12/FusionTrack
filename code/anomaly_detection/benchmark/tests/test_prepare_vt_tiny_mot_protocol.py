@@ -1,12 +1,70 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from runners.prepare_vt_tiny_mot_holdout_protocol import _experiments_for_split
-from runners.prepare_vt_tiny_mot_protocol import DEFAULT_EXPERIMENTS
+from runners.prepare_vt_tiny_mot_protocol import (
+    DEFAULT_EXPERIMENTS,
+    _prepare_anomaly_data_args,
+    _write_protocol_dataset_manifest,
+)
+
+
+def _write_annotation(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "images": [{"id": 1, "file_name": "000001.jpg"}],
+                "annotations": [{"id": 1, "image_id": 1}],
+                "videos": [{"id": 1, "name": "seq_a"}],
+                "categories": [{"id": 1, "name": "person"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_protocol_dataset_manifest_records_requested_splits(tmp_path: Path) -> None:
+    data_root = tmp_path / "VT-Tiny-MOT"
+    for split in ("train", "test"):
+        _write_annotation(data_root / "annotations" / f"instances_00_{split}2017.json")
+        _write_annotation(data_root / "annotations" / f"instances_01_{split}2017.json")
+    (data_root / "train2017" / "seq_a").mkdir(parents=True)
+    (data_root / "train2017" / "seq_a" / "000001.jpg").write_bytes(b"jpg")
+    output_root = tmp_path / "protocol"
+
+    manifest, manifest_path = _write_protocol_dataset_manifest(
+        data_root=data_root,
+        output_root=output_root,
+        splits=("train", "test"),
+    )
+
+    assert manifest_path == output_root / "dataset_manifest.json"
+    assert manifest_path.exists()
+    assert manifest["status"] == "ok"
+    assert set(manifest["splits"]) == {"train", "test"}
+    assert len(manifest["dataset_fingerprint"]) == 64
+
+
+def test_prepare_anomaly_data_args_bind_dataset_manifest() -> None:
+    args = _prepare_anomaly_data_args(
+        level="individual",
+        input_jsonl=Path("input.jsonl"),
+        output_jsonl=Path("output.jsonl"),
+        labels_jsonl=Path("labels.jsonl"),
+        anomaly_fraction=0.1,
+        seed=42,
+        manifest_json=Path("injection_manifest.json"),
+        dataset_manifest_json=Path("dataset_manifest.json"),
+    )
+
+    assert "--dataset-manifest-json" in args
+    assert args[args.index("--dataset-manifest-json") + 1] == "dataset_manifest.json"
 
 
 def test_default_group_matrix_includes_learning_fusiontrack_knn() -> None:

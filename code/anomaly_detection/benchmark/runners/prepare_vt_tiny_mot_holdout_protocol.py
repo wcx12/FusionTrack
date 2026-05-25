@@ -17,8 +17,10 @@ from evaluation.io import load_jsonl, write_jsonl
 from fusiontrack.fused_trajectories import build_fused_trajectories
 from runners.prepare_vt_tiny_mot_protocol import (
     DEFAULT_EXPERIMENTS,
+    _prepare_anomaly_data_args,
     _run_benchmark_script,
     _run_individual_script,
+    _write_protocol_dataset_manifest,
     _write_json,
 )
 
@@ -77,6 +79,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     work_root = args.work_root.resolve()
     output_root.mkdir(parents=True, exist_ok=True)
     work_root.mkdir(parents=True, exist_ok=True)
+    dataset_manifest, dataset_manifest_path = _write_protocol_dataset_manifest(
+        data_root=data_root,
+        output_root=output_root,
+        splits=tuple(sorted({str(args.train_source_split), str(args.eval_source_split)})),
+    )
 
     train_exports = _extract_split(
         data_root=data_root,
@@ -113,37 +120,29 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     _run_benchmark_script(
         "prepare_anomaly_data.py",
-        "--level",
-        "individual",
-        "--input-jsonl",
-        str(output_root / f"fused_trajectories_{split_name}_clean.jsonl"),
-        "--output-jsonl",
-        str(output_root / f"fused_trajectories_{split_name}.jsonl"),
-        "--labels-jsonl",
-        str(output_root / f"individual_labels_{split_name}.jsonl"),
-        "--anomaly-fraction",
-        str(args.individual_anomaly_fraction),
-        "--seed",
-        str(args.seed),
-        "--manifest-json",
-        str(output_root / f"individual_injection_manifest_{split_name}.json"),
+        *_prepare_anomaly_data_args(
+            level="individual",
+            input_jsonl=output_root / f"fused_trajectories_{split_name}_clean.jsonl",
+            output_jsonl=output_root / f"fused_trajectories_{split_name}.jsonl",
+            labels_jsonl=output_root / f"individual_labels_{split_name}.jsonl",
+            anomaly_fraction=float(args.individual_anomaly_fraction),
+            seed=int(args.seed),
+            manifest_json=output_root / f"individual_injection_manifest_{split_name}.json",
+            dataset_manifest_json=dataset_manifest_path,
+        ),
     )
     _run_benchmark_script(
         "prepare_anomaly_data.py",
-        "--level",
-        "group",
-        "--input-jsonl",
-        str(output_root / f"group_windows_{split_name}_clean.jsonl"),
-        "--output-jsonl",
-        str(output_root / f"group_windows_{split_name}.jsonl"),
-        "--labels-jsonl",
-        str(output_root / f"group_labels_{split_name}.jsonl"),
-        "--anomaly-fraction",
-        str(args.group_anomaly_fraction),
-        "--seed",
-        str(args.seed),
-        "--manifest-json",
-        str(output_root / f"group_injection_manifest_{split_name}.json"),
+        *_prepare_anomaly_data_args(
+            level="group",
+            input_jsonl=output_root / f"group_windows_{split_name}_clean.jsonl",
+            output_jsonl=output_root / f"group_windows_{split_name}.jsonl",
+            labels_jsonl=output_root / f"group_labels_{split_name}.jsonl",
+            anomaly_fraction=float(args.group_anomaly_fraction),
+            seed=int(args.seed),
+            manifest_json=output_root / f"group_injection_manifest_{split_name}.json",
+            dataset_manifest_json=dataset_manifest_path,
+        ),
     )
 
     individual_config = _holdout_matrix_config(
@@ -178,6 +177,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "data_root": str(data_root),
         "output_root": str(output_root),
         "work_root": str(work_root),
+        "dataset_manifest": dataset_manifest,
+        "dataset_manifest_path": str(dataset_manifest_path),
         "train_source_split": str(args.train_source_split),
         "eval_source_split": str(args.eval_source_split),
         "score_split": split_name,

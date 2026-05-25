@@ -15,6 +15,7 @@ if str(BENCHMARK_ROOT) not in sys.path:
 
 from evaluation.io import load_jsonl, write_jsonl
 from fusiontrack.fused_trajectories import build_fused_trajectories
+from protocol.dataset_manifest import write_vt_tiny_mot_dataset_manifest
 
 
 DEFAULT_EXPERIMENTS = {
@@ -367,6 +368,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     work_root = args.work_root.resolve()
     output_root.mkdir(parents=True, exist_ok=True)
     work_root.mkdir(parents=True, exist_ok=True)
+    dataset_manifest, dataset_manifest_path = _write_protocol_dataset_manifest(
+        data_root=data_root,
+        output_root=output_root,
+        splits=(str(args.source_split),),
+    )
 
     trajectory_dir = work_root / "vt_tiny_mot_trajectories"
     individual_dir = work_root / "vt_tiny_mot_individual"
@@ -403,37 +409,29 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     _run_benchmark_script(
         "prepare_anomaly_data.py",
-        "--level",
-        "individual",
-        "--input-jsonl",
-        str(output_root / "fused_trajectories_val_clean.jsonl"),
-        "--output-jsonl",
-        str(output_root / "fused_trajectories_val.jsonl"),
-        "--labels-jsonl",
-        str(output_root / "individual_labels_val.jsonl"),
-        "--anomaly-fraction",
-        str(args.individual_anomaly_fraction),
-        "--seed",
-        str(args.seed),
-        "--manifest-json",
-        str(output_root / "individual_injection_manifest.json"),
+        *_prepare_anomaly_data_args(
+            level="individual",
+            input_jsonl=output_root / "fused_trajectories_val_clean.jsonl",
+            output_jsonl=output_root / "fused_trajectories_val.jsonl",
+            labels_jsonl=output_root / "individual_labels_val.jsonl",
+            anomaly_fraction=float(args.individual_anomaly_fraction),
+            seed=int(args.seed),
+            manifest_json=output_root / "individual_injection_manifest.json",
+            dataset_manifest_json=dataset_manifest_path,
+        ),
     )
     _run_benchmark_script(
         "prepare_anomaly_data.py",
-        "--level",
-        "group",
-        "--input-jsonl",
-        str(output_root / "group_windows_val_clean.jsonl"),
-        "--output-jsonl",
-        str(output_root / "group_windows_val.jsonl"),
-        "--labels-jsonl",
-        str(output_root / "group_labels_val.jsonl"),
-        "--anomaly-fraction",
-        str(args.group_anomaly_fraction),
-        "--seed",
-        str(args.seed),
-        "--manifest-json",
-        str(output_root / "group_injection_manifest.json"),
+        *_prepare_anomaly_data_args(
+            level="group",
+            input_jsonl=output_root / "group_windows_val_clean.jsonl",
+            output_jsonl=output_root / "group_windows_val.jsonl",
+            labels_jsonl=output_root / "group_labels_val.jsonl",
+            anomaly_fraction=float(args.group_anomaly_fraction),
+            seed=int(args.seed),
+            manifest_json=output_root / "group_injection_manifest.json",
+            dataset_manifest_json=dataset_manifest_path,
+        ),
     )
 
     individual_config = _matrix_config(
@@ -458,6 +456,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "data_root": str(data_root),
         "output_root": str(output_root),
         "work_root": str(work_root),
+        "dataset_manifest": dataset_manifest,
+        "dataset_manifest_path": str(dataset_manifest_path),
         "seed": int(args.seed),
         "val_ratio": float(args.val_ratio),
         "num_fused_train": len(fused_train),
@@ -471,6 +471,51 @@ def main(argv: Sequence[str] | None = None) -> int:
     _write_json(output_root / "protocol_manifest.json", manifest)
     print(json.dumps(manifest, ensure_ascii=False, sort_keys=True))
     return 0
+
+
+def _write_protocol_dataset_manifest(
+    data_root: Path,
+    output_root: Path,
+    splits: Iterable[str],
+) -> tuple[dict[str, Any], Path]:
+    manifest_path = output_root / "dataset_manifest.json"
+    manifest = write_vt_tiny_mot_dataset_manifest(
+        data_root=data_root,
+        output_path=manifest_path,
+        splits=tuple(splits),
+    )
+    return manifest, manifest_path
+
+
+def _prepare_anomaly_data_args(
+    *,
+    level: str,
+    input_jsonl: Path,
+    output_jsonl: Path,
+    labels_jsonl: Path,
+    anomaly_fraction: float,
+    seed: int,
+    manifest_json: Path,
+    dataset_manifest_json: Path,
+) -> list[str]:
+    return [
+        "--level",
+        level,
+        "--input-jsonl",
+        str(input_jsonl),
+        "--output-jsonl",
+        str(output_jsonl),
+        "--labels-jsonl",
+        str(labels_jsonl),
+        "--anomaly-fraction",
+        str(anomaly_fraction),
+        "--seed",
+        str(seed),
+        "--manifest-json",
+        str(manifest_json),
+        "--dataset-manifest-json",
+        str(dataset_manifest_json),
+    ]
 
 
 def _extract_and_export(

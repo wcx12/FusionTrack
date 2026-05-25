@@ -24,9 +24,9 @@
   现状：protocol 中定义了 `sample_id` / `sample_id+window_id` 口径。  
   下一步：在评估入口集中强制统一。
 
-- 合成异常协议治理：🟡  
-  现状：异常注入脚本已输出 manifest v2，记录注入参数、输入/输出/标签 hash、label 分布、重放命令，并支持绑定 dataset manifest 指纹。
-  下一步：在 validation/holdout suite 层强制传入 dataset manifest，并把协议 manifest 汇总到最终 dashboard/export。
+- 合成异常协议治理：✅（主协议闭环）
+  现状：异常注入脚本已输出 manifest v2，validation/holdout 协议生成器会自动生成 `dataset_manifest.json` 并传入注入 manifest，记录参数、文件 hash、label 分布、重放命令和 dataset fingerprint。
+  下一步：把协议 manifest 汇总到最终 dashboard/export 的解释层。
 
 - 真实标签并行接口：☐  
   现状：主要以 synthetic 为主。  
@@ -179,4 +179,5 @@
 - `prepare_anomaly_data.py` 的 `--manifest-json` 输出升级为 `manifest_schema_version = 2`。
 - 新 manifest 记录合成异常任务层级、key 字段、异常比例、seed、异常类型全集/子集、输入/输出/标签文件 SHA-256、label 分布和 replay argv。
 - 新增 `--dataset-manifest-json` 参数，可把 dataset manifest 的 `dataset_fingerprint` 和 manifest 文件 SHA-256 写入异常注入 manifest。
-- 该更新推进了 A 层中的“合成异常协议治理”；后续仍需在 validation/holdout 总控 runner 中强制生成并传递 dataset manifest。
+- `prepare_vt_tiny_mot_protocol.py` 与 `prepare_vt_tiny_mot_holdout_protocol.py` 现在会自动生成 `dataset_manifest.json`，并强制传给 individual/group 注入 manifest。
+- 该更新推进了 A 层中的“合成异常协议治理”；后续仍需把协议 manifest 汇总到最终 dashboard/export 的说明层。

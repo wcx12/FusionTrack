@@ -108,6 +108,8 @@ runners/prepare_anomaly_data.py --manifest-json <manifest.json>
 
 当前 manifest 使用 `manifest_schema_version = 2`，记录任务层级、评价 key 字段、异常比例、seed、异常类型、输入/输出/标签文件 SHA-256、label 分布和 replay argv。若同时传入 `--dataset-manifest-json`，manifest 会记录数据集 `dataset_fingerprint` 与 dataset manifest 文件 SHA-256，从而把“哪一版数据”和“哪一套异常注入参数”绑定在一起。
 
+`prepare_vt_tiny_mot_protocol.py` 和 `prepare_vt_tiny_mot_holdout_protocol.py` 会在协议输出目录自动生成 `dataset_manifest.json`，并将它传入 individual/group 的异常注入 manifest。也就是说，validation 与 holdout 主入口默认已经绑定数据版本，不需要手工额外传参。
+
 ## 4. 实验协议
 
 ### 4.1 验证集协议
