@@ -100,6 +100,14 @@ server_artifacts/final_results_20260522/holdout_multiseed_20260522/
 
 当前实验不是直接使用数据集原始异常标签，而是在统一协议中构造 normal/anomaly 对照。这样做的目的不是声称这是数据集原始 benchmark，而是为了在同一数据、同一异常注入、同一评价指标下比较不同方法。
 
+异常注入脚本会为每次 synthetic protocol 生成 manifest：
+
+```text
+runners/prepare_anomaly_data.py --manifest-json <manifest.json>
+```
+
+当前 manifest 使用 `manifest_schema_version = 2`，记录任务层级、评价 key 字段、异常比例、seed、异常类型、输入/输出/标签文件 SHA-256、label 分布和 replay argv。若同时传入 `--dataset-manifest-json`，manifest 会记录数据集 `dataset_fingerprint` 与 dataset manifest 文件 SHA-256，从而把“哪一版数据”和“哪一套异常注入参数”绑定在一起。
+
 ## 4. 实验协议
 
 ### 4.1 验证集协议

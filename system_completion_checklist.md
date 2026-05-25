@@ -25,8 +25,8 @@
   下一步：在评估入口集中强制统一。
 
 - 合成异常协议治理：🟡  
-  现状：合成异常可用，元信息散落。  
-  下一步：协议参数写入 run manifest，支持重放。
+  现状：异常注入脚本已输出 manifest v2，记录注入参数、输入/输出/标签 hash、label 分布、重放命令，并支持绑定 dataset manifest 指纹。
+  下一步：在 validation/holdout suite 层强制传入 dataset manifest，并把协议 manifest 汇总到最终 dashboard/export。
 
 - 真实标签并行接口：☐  
   现状：主要以 synthetic 为主。  
@@ -173,3 +173,10 @@
 - manifest 记录 VT-Tiny-MOT 数据根目录状态、annotation 文件 SHA-256、annotation/image/video/category 计数、图像目录文件数和 `dataset_fingerprint`。
 - pipeline summary、pipeline manifest 和导出 zip 都会携带 dataset manifest 信息，便于确认实验结果来自哪一版数据结构。
 - 若只是离线渲染已有结果，缺失数据根目录会记录为 `missing_data_root`，不会阻断 dashboard 构建；真正重新抽取轨迹时仍由抽取脚本 fail-fast。
+
+## 2026-05-25 更新：synthetic protocol manifest v2
+
+- `prepare_anomaly_data.py` 的 `--manifest-json` 输出升级为 `manifest_schema_version = 2`。
+- 新 manifest 记录合成异常任务层级、key 字段、异常比例、seed、异常类型全集/子集、输入/输出/标签文件 SHA-256、label 分布和 replay argv。
+- 新增 `--dataset-manifest-json` 参数，可把 dataset manifest 的 `dataset_fingerprint` 和 manifest 文件 SHA-256 写入异常注入 manifest。
+- 该更新推进了 A 层中的“合成异常协议治理”；后续仍需在 validation/holdout 总控 runner 中强制生成并传递 dataset manifest。

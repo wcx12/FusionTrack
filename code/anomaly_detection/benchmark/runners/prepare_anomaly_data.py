@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
+from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -20,6 +23,7 @@ from protocol.inject_individual import (
 
 
 LEVELS = ("individual", "group")
+MANIFEST_SCHEMA_VERSION = 2
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -43,6 +47,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional JSON manifest with injection metadata.",
+    )
+    parser.add_argument(
+        "--dataset-manifest-json",
+        type=Path,
+        default=None,
+        help="Optional dataset manifest JSON to bind this synthetic protocol run to a dataset fingerprint.",
     )
     return parser.parse_args(argv)
 
@@ -75,18 +85,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     write_jsonl(args.output_jsonl, injected)
     write_jsonl(args.labels_jsonl, label_rows)
 
-    manifest = {
-        "level": args.level,
-        "input_jsonl": str(args.input_jsonl),
-        "output_jsonl": str(args.output_jsonl),
-        "labels_jsonl": str(args.labels_jsonl),
-        "anomaly_fraction": float(args.anomaly_fraction),
-        "seed": int(args.seed),
-        "anomaly_types": list(anomaly_types),
-        "num_input_rows": len(rows),
-        "num_output_rows": len(injected),
-        "num_labels": len(label_rows),
-    }
+    manifest = _build_manifest(
+        args=args,
+        anomaly_types=anomaly_types,
+        num_input_rows=len(rows),
+        num_output_rows=len(injected),
+        label_rows=label_rows,
+    )
     if args.manifest_json is not None:
         args.manifest_json.parent.mkdir(parents=True, exist_ok=True)
         args.manifest_json.write_text(
@@ -97,12 +102,131 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
+def _build_manifest(
+    args: argparse.Namespace,
+    anomaly_types: Sequence[str],
+    num_input_rows: int,
+    num_output_rows: int,
+    label_rows: list[dict],
+) -> dict:
+    manifest = {
+        "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
+        "kind": "synthetic_anomaly_protocol",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "level": args.level,
+        "input_jsonl": str(args.input_jsonl),
+        "output_jsonl": str(args.output_jsonl),
+        "labels_jsonl": str(args.labels_jsonl),
+        "anomaly_fraction": float(args.anomaly_fraction),
+        "seed": int(args.seed),
+        "anomaly_types": list(anomaly_types),
+        "num_input_rows": int(num_input_rows),
+        "num_output_rows": int(num_output_rows),
+        "num_labels": len(label_rows),
+        "protocol": {
+            "level": args.level,
+            "key_fields": _key_fields(args.level),
+            "anomaly_fraction": float(args.anomaly_fraction),
+            "seed": int(args.seed),
+            "anomaly_types": list(anomaly_types),
+            "allowed_anomaly_types": list(_selected_types(args.level, None)),
+            "label_completion": "all_samples_with_normal_negatives",
+        },
+        "artifacts": {
+            "input_jsonl": _artifact_summary(args.input_jsonl, num_input_rows),
+            "output_jsonl": _artifact_summary(args.output_jsonl, num_output_rows),
+            "labels_jsonl": _artifact_summary(args.labels_jsonl, len(label_rows)),
+        },
+        "label_distribution": _label_distribution(label_rows),
+        "dataset_manifest": _dataset_manifest_summary(args.dataset_manifest_json),
+        "replay": {
+            "working_directory": str(BENCHMARK_ROOT),
+            "argv": _replay_argv(args, anomaly_types),
+        },
+    }
+    return manifest
+
+
 def _selected_types(level: str, values: list[str] | None) -> tuple[str, ...]:
     if values is not None:
         return tuple(values)
     if level == "individual":
         return DEFAULT_INDIVIDUAL_ANOMALIES
     return DEFAULT_GROUP_ANOMALIES
+
+
+def _key_fields(level: str) -> list[str]:
+    return ["sample_id", "window_id"] if level == "group" else ["sample_id"]
+
+
+def _artifact_summary(path: Path, num_rows: int) -> dict:
+    return {
+        "path": str(path),
+        "sha256": _file_sha256(path),
+        "size_bytes": path.stat().st_size if path.exists() else 0,
+        "num_rows": int(num_rows),
+    }
+
+
+def _dataset_manifest_summary(path: Path | None) -> dict | None:
+    if path is None:
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        payload = {}
+    return {
+        "path": str(path),
+        "sha256": _file_sha256(path),
+        "schema_version": payload.get("schema_version"),
+        "dataset_name": payload.get("dataset_name"),
+        "status": payload.get("status"),
+        "dataset_fingerprint": payload.get("dataset_fingerprint"),
+    }
+
+
+def _label_distribution(label_rows: list[dict]) -> dict:
+    by_type = Counter(str(row.get("anomaly_type", "unknown")) for row in label_rows)
+    num_positive = sum(1 for row in label_rows if int(row.get("label", 0) or 0) == 1)
+    return {
+        "num_labels": len(label_rows),
+        "num_positive": num_positive,
+        "num_negative": len(label_rows) - num_positive,
+        "by_anomaly_type": dict(sorted(by_type.items())),
+    }
+
+
+def _replay_argv(args: argparse.Namespace, anomaly_types: Sequence[str]) -> list[str]:
+    argv = [
+        "python",
+        "runners/prepare_anomaly_data.py",
+        "--level",
+        str(args.level),
+        "--input-jsonl",
+        str(args.input_jsonl),
+        "--output-jsonl",
+        str(args.output_jsonl),
+        "--labels-jsonl",
+        str(args.labels_jsonl),
+        "--anomaly-fraction",
+        str(float(args.anomaly_fraction)),
+        "--seed",
+        str(int(args.seed)),
+    ]
+    if anomaly_types:
+        argv.extend(["--anomaly-types", *[str(item) for item in anomaly_types]])
+    if args.manifest_json is not None:
+        argv.extend(["--manifest-json", str(args.manifest_json)])
+    if args.dataset_manifest_json is not None:
+        argv.extend(["--dataset-manifest-json", str(args.dataset_manifest_json)])
+    return argv
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _complete_individual_labels(

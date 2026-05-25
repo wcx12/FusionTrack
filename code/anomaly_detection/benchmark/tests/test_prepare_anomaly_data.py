@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
+import json
 import subprocess
 import sys
 
@@ -13,6 +15,8 @@ def test_prepare_anomaly_data_injects_individual_rows_and_labels(tmp_path: Path)
     input_path = tmp_path / "trajectories.jsonl"
     output_path = tmp_path / "trajectories_injected.jsonl"
     label_path = tmp_path / "labels.jsonl"
+    manifest_path = tmp_path / "individual_manifest.json"
+    dataset_manifest_path = tmp_path / "dataset_manifest.json"
     repo_root = Path(__file__).resolve().parents[4]
     script = Path("code/anomaly_detection/benchmark/runners/prepare_anomaly_data.py")
 
@@ -29,6 +33,17 @@ def test_prepare_anomaly_data_injects_individual_rows_and_labels(tmp_path: Path)
                 ],
             }
         ],
+    )
+    dataset_manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "dataset_name": "VT-Tiny-MOT",
+                "status": "ok",
+                "dataset_fingerprint": "dataset-fp-001",
+            }
+        ),
+        encoding="utf-8",
     )
 
     result = subprocess.run(
@@ -49,6 +64,10 @@ def test_prepare_anomaly_data_injects_individual_rows_and_labels(tmp_path: Path)
             "7",
             "--anomaly-types",
             "route_shift",
+            "--manifest-json",
+            str(manifest_path),
+            "--dataset-manifest-json",
+            str(dataset_manifest_path),
         ],
         cwd=repo_root,
         text=True,
@@ -62,6 +81,29 @@ def test_prepare_anomaly_data_injects_individual_rows_and_labels(tmp_path: Path)
     assert labels[0]["sample_id"] == "seq_a:t1"
     assert labels[0]["anomaly_type"] == "route_shift"
     assert load_jsonl(output_path)[0]["points"] != load_jsonl(input_path)[0]["points"]
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["manifest_schema_version"] == 2
+    assert manifest["kind"] == "synthetic_anomaly_protocol"
+    assert manifest["protocol"]["level"] == "individual"
+    assert manifest["protocol"]["key_fields"] == ["sample_id"]
+    assert manifest["protocol"]["anomaly_fraction"] == 1.0
+    assert manifest["protocol"]["anomaly_types"] == ["route_shift"]
+    assert manifest["artifacts"]["input_jsonl"]["sha256"] == hashlib.sha256(
+        input_path.read_bytes()
+    ).hexdigest()
+    assert manifest["artifacts"]["output_jsonl"]["sha256"] == hashlib.sha256(
+        output_path.read_bytes()
+    ).hexdigest()
+    assert manifest["artifacts"]["labels_jsonl"]["sha256"] == hashlib.sha256(
+        label_path.read_bytes()
+    ).hexdigest()
+    assert manifest["label_distribution"]["num_positive"] == 1
+    assert manifest["label_distribution"]["by_anomaly_type"]["route_shift"] == 1
+    assert manifest["dataset_manifest"]["dataset_fingerprint"] == "dataset-fp-001"
+    assert manifest["dataset_manifest"]["sha256"] == hashlib.sha256(
+        dataset_manifest_path.read_bytes()
+    ).hexdigest()
+    assert "--anomaly-fraction" in manifest["replay"]["argv"]
 
 
 def test_prepare_anomaly_data_injects_group_rows_and_labels(tmp_path: Path) -> None:
