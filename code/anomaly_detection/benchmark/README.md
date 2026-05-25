@@ -110,6 +110,17 @@ runners/prepare_anomaly_data.py --manifest-json <manifest.json>
 
 `prepare_vt_tiny_mot_protocol.py` 和 `prepare_vt_tiny_mot_holdout_protocol.py` 会在协议输出目录自动生成 `dataset_manifest.json`，并将它传入 individual/group 的异常注入 manifest。也就是说，validation 与 holdout 主入口默认已经绑定数据版本，不需要手工额外传参。
 
+如果后续拿到人工或真实异常标注，不需要走 synthetic injection。可以先用真实标签适配入口统一字段：
+
+```bash
+python code/anomaly_detection/benchmark/runners/prepare_real_labels.py \
+  --level group \
+  --input-labels real_labels.csv \
+  --output-labels real_group_labels.jsonl
+```
+
+适配器支持 CSV/JSONL，输出仍是 `label`、`sample_id`、`sequence`、`track_id`、`anomaly_type` 等统一字段。个体级使用 `sample_id` 对齐；群体级必须提供 `window_id`，最终按 `sample_id + window_id` 对齐。这个入口用于真实标签并行实验，不会改变当前 synthetic benchmark 的结果口径。
+
 ## 4. 实验协议
 
 ### 4.1 验证集协议

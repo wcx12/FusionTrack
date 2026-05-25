@@ -16,21 +16,21 @@
   现状：系统入口会生成 `dataset_manifest_<split>.json`，记录 annotation hash、图像目录计数、数据集指纹，并写入 pipeline summary / manifest / 导出包。
   下一步：继续把 synthetic protocol 参数与 dataset manifest 绑定成完整 protocol manifest。
 
-- labels/scores schema 与校验：🟡  
-  现状：有 `jsonl/csv` 读写，但缺统一 schema 层。  
-  下一步：新增 schema 定义 + 校验失败 fail-fast。
+- labels/scores schema 与校验：✅（基础闭环）
+  现状：`evaluation/schema.py` 已统一校验 label/score 行，评估前会 fail-fast 检查 key、二值标签、有限 score 和帧范围。
+  下一步：后续扩展真实数据集 preset 时继续补充字段级提示信息。
 
-- strict key 管理：🟡  
-  现状：protocol 中定义了 `sample_id` / `sample_id+window_id` 口径。  
-  下一步：在评估入口集中强制统一。
+- strict key 管理：✅（基础闭环）
+  现状：`run_evaluation.py` 和 matrix 配置均支持任务级 `key_fields`；主协议 individual 使用 `sample_id`，group 使用 `sample_id + window_id`，并支持唯一键和 score/label 完全匹配检查。
+  下一步：后续把 key policy 也展示到 dashboard/export 的治理说明中。
 
 - 合成异常协议治理：✅（主协议闭环）
   现状：异常注入脚本已输出 manifest v2，validation/holdout 协议生成器会自动生成 `dataset_manifest.json` 并传入注入 manifest，记录参数、文件 hash、label 分布、重放命令和 dataset fingerprint。
   下一步：把协议 manifest 汇总到最终 dashboard/export 的解释层。
 
-- 真实标签并行接口：☐  
-  现状：主要以 synthetic 为主。  
-  下一步：增加真实标注 adapter 并统一入口字段。
+- 真实标签并行接口：✅（基础入口）
+  现状：新增 `prepare_real_labels.py` 和 `dataset_adapters/real_labels.py`，可把外部真实标注 CSV/JSONL 归一化到统一 label schema，支持 individual 的 `sample_id` 与 group 的 `sample_id + window_id`。
+  下一步：后续如果拿到真实异常标注，需要补数据集专属字段映射 preset 和人工标注质量审计。
 
 ### B. 融合与轨迹构建层
 
@@ -181,3 +181,11 @@
 - 新增 `--dataset-manifest-json` 参数，可把 dataset manifest 的 `dataset_fingerprint` 和 manifest 文件 SHA-256 写入异常注入 manifest。
 - `prepare_vt_tiny_mot_protocol.py` 与 `prepare_vt_tiny_mot_holdout_protocol.py` 现在会自动生成 `dataset_manifest.json`，并强制传给 individual/group 注入 manifest。
 - 该更新推进了 A 层中的“合成异常协议治理”；后续仍需把协议 manifest 汇总到最终 dashboard/export 的说明层。
+
+## 2026-05-25 更新：真实标签并行接口
+
+- 新增 `code/anomaly_detection/benchmark/dataset_adapters/real_labels.py`，用于把外部真实异常标注统一转为 FusionTrack label schema。
+- 新增 `code/anomaly_detection/benchmark/runners/prepare_real_labels.py`，支持 CSV/JSONL 输入，输出可直接被 `run_evaluation.py` 使用的 label JSONL。
+- individual 标签使用 `sample_id`；如果源文件只有 `sequence + track_id`，会自动构造 `sample_id`。
+- group 标签使用 `sample_id + window_id`，缺失 `window_id` 会 fail-fast，避免把群体窗口标签退化成轨迹级标签。
+- 该接口不会改变当前 synthetic 实验，只提供将来接入人工/真实异常标注时的并行入口。
