@@ -5,6 +5,7 @@ import csv
 from datetime import datetime, timezone
 import hashlib
 import json
+import platform
 from pathlib import Path
 import subprocess
 import sys
@@ -52,6 +53,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "output_dir": str(output_dir),
         "aggregate_summary_csv": str(aggregate_summary),
         "aggregate_summary_sha256": _file_sha256(aggregate_summary),
+        "git": _git_metadata(),
+        "environment": _environment_metadata(),
         "matrices": matrix_results,
     }
     manifest_path = output_dir / "suite_manifest.json"
@@ -165,6 +168,38 @@ def _file_sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _git_metadata() -> dict[str, Any]:
+    status = _run_git(["status", "--short"])
+    return {
+        "commit": _run_git(["rev-parse", "HEAD"]),
+        "branch": _run_git(["rev-parse", "--abbrev-ref", "HEAD"]),
+        "dirty": bool(status),
+    }
+
+
+def _run_git(args: Sequence[str]) -> str:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def _environment_metadata() -> dict[str, str]:
+    return {
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+    }
 
 
 if __name__ == "__main__":

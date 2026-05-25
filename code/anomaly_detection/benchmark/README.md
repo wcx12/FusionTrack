@@ -131,6 +131,8 @@ python code/anomaly_detection/benchmark/runners/run_suite.py \
 
 `suite.json` 中的 `matrices` 字段列出若干个 `config_json`。脚本会逐个运行 `run_benchmark_matrix.py`，保留每个 matrix 的 `manifest.json` 和 `summary.csv`，并在 suite 输出目录生成 `suite_manifest.json` 与 `aggregate_summary.csv`。这用于把 individual、group、真实标签或 synthetic 标签的多组评测统一归档。
 
+`suite_manifest.json` 会记录 suite 配置 SHA-256、每个 matrix 的 config/manifest/summary SHA-256、git commit/branch/dirty 状态和 Python 环境。它和 matrix 级 manifest 一起构成实验复现的主要证据链。
+
 ## 4. 实验协议
 
 ### 4.1 验证集协议

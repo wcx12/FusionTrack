@@ -70,9 +70,9 @@
 
 ### D. 评测与治理层
 
-- 方法注册表：🟡  
-  现状：页面展示 owner/role/family，但未集中于单一 registry。  
-  下一步：建立 `method_registry` 作为唯一来源。
+- 方法注册表：✅（基础闭环）
+  现状：`configs/method_registry.json` 已作为 benchmark manifest、最终 dashboard 和方法画像字段的统一来源，支持 aliases 与未注册方法标记。
+  下一步：后续新增方法时继续先注册画像，再接入 matrix 或 dashboard。
 
 - 指标聚合：✅（部分）  
   现状：AUROC/AUPRC/F1/P@K/R@K 已支持。  
@@ -82,9 +82,9 @@
   现状：新增 `run_suite.py`，可一次调度多个 matrix config，分别运行 `run_benchmark_matrix.py`，并输出 `suite_manifest.json` 与 `aggregate_summary.csv`。
   下一步：后续把 suite runner 接到最终 dashboard 构建命令，形成实验到展示的一键链路。
 
-- 实验可追溯（seed/epoch/commit/config）：🟡  
-  现状：散落于日志与 README。  
-  下一步：引入 run manifest 并入结果目录。
+- 实验可追溯（seed/epoch/commit/config）：✅（基础闭环）
+  现状：matrix、suite、holdout multiseed 和 official runner 均输出 manifest，记录 config hash、输入/输出 hash、git、Python 环境与运行配置。
+  下一步：把同一套追溯信息继续汇总到最终 dashboard/export 的说明层。
 
 ### E. 可视化与交互层
 
@@ -195,5 +195,5 @@
 - 新增 `code/anomaly_detection/benchmark/runners/run_suite.py`。
 - suite JSON 可以列出多个 matrix config，例如 individual 与 group 两个任务；脚本会逐个调用 `run_benchmark_matrix.py`。
 - 每个 matrix 保留自己的 `manifest.json`、`summary.csv`、scores 和 metrics。
-- suite 层新增 `suite_manifest.json` 和 `aggregate_summary.csv`，用于统一记录多任务评测输出路径、hash 和运行数量。
-- 该更新推进了 D 层中的“多任务多方法批量评测”；后续还需要把 suite 输出直接接入最终 dashboard/export。
+- suite 层新增 `suite_manifest.json` 和 `aggregate_summary.csv`，用于统一记录多任务评测输出路径、hash、运行数量、git 状态和 Python 环境。
+- 该更新推进了 D 层中的“多任务多方法批量评测”和“实验可追溯”；后续还需要把 suite 输出直接接入最终 dashboard/export。

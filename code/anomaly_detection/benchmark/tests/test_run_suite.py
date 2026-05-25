@@ -122,6 +122,10 @@ def test_run_suite_executes_multiple_matrices_and_aggregates_outputs(tmp_path: P
     manifest = json.loads((output_dir / "suite_manifest.json").read_text(encoding="utf-8"))
     assert manifest["manifest_schema_version"] == 1
     assert manifest["suite_name"] == "unit_suite"
+    assert "git" in manifest
+    assert {"commit", "branch", "dirty"} <= set(manifest["git"])
+    assert "environment" in manifest
+    assert {"python_version", "platform"} <= set(manifest["environment"])
     assert [matrix["name"] for matrix in manifest["matrices"]] == ["individual", "group"]
     assert manifest["matrices"][0]["num_runs"] == 1
     assert (output_dir / "individual" / "manifest.json").exists()
