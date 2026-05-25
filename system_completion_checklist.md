@@ -38,17 +38,17 @@
   现状：新增 `mtf_ba/observation_standardization.py`，统一把扁平 `observations_<split>.csv` 行转换为 `rgb/thermal/modal_relation/quality` 结构；individual 轨迹导出与 group window 导出已共用该入口，避免两条链路各自解析字段。
   下一步：继续把标准化质量统计汇总到 protocol manifest 与 dashboard 数据流面板。
 
-- 跨模态关联与跨帧关联：🟡  
-  现状：已有实现思路与展示链路，缺乏统一 pipeline 封装。  
-  下一步：形成可复用 `fused track pipeline`。
+- 跨模态关联与跨帧关联：✅（基础闭环）
+  现状：新增 `mtf_ba/fused_track_pipeline.py` 与 `export_fused_track_pipeline.py`，可从 `observations_<split>.csv` 一次生成 individual trajectories、fused trajectories、group windows、summary 和 manifest；fused 轨迹点保留跨模态中心融合、来源模态、offset confidence，轨迹级保留 frame ids/gaps/max gap 等跨帧 linkage。
+  下一步：把该 pipeline 作为 protocol 生成器的默认内部路径，减少旧脚本分步调用。
 
 - 噪声抑制与目标持久化策略：🟡  
   现状：可视化有描述。  
   下一步：参数化配置并与实验日志绑定。
 
-- 融合轨迹可追溯输出：🟡  
-  现状：可用于可视化。  
-  下一步：统一输出目录与版本标识。
+- 融合轨迹可追溯输出：✅（基础闭环）
+  现状：`fused track pipeline` 已统一输出目录与文件命名，并写出 `fused_track_pipeline_summary_<split>.json` 和 `fused_track_pipeline_manifest_<split>.json`，记录输入 CSV hash、输出 artifact hash、配置和模态覆盖率。
+  下一步：把 pipeline manifest 汇总到最终 dashboard/export 的数据治理说明层。
 
 ### C. 行为异常检测层
 

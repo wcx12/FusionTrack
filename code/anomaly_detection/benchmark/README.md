@@ -211,6 +211,74 @@ code/anomaly_detection/individual/mtf_ba/observation_standardization.py
 
 这个模块完成的是 B 层“多模态标准化”的基础闭环。它不是新的异常检测算法，而是把后续融合、轨迹构建、群体建模和可视化解释都建立在同一份字段语义上。下一步应把 `quality` 统计写入 protocol manifest 和 dashboard 数据流面板，便于展示每个序列的模态覆盖率、缺失模态数量和跨模态偏移分布。
 
+### 3.2 Fused Track Pipeline
+
+为了让跨模态关联和跨帧关联不再散落在多个导出脚本中，当前系统新增了统一轨迹构建入口：
+
+```text
+code/anomaly_detection/individual/mtf_ba/fused_track_pipeline.py
+code/anomaly_detection/individual/export_fused_track_pipeline.py
+```
+
+它以 `observations_<split>.csv` 为唯一输入，一次性生成：
+
+| 输出文件 | 含义 |
+| --- | --- |
+| `individual_trajectories_<split>.jsonl` | 按 `sequence + track_id` 聚合的 object-centric 轨迹。 |
+| `fused_trajectories_<split>.jsonl` | 在 individual 轨迹基础上加入 fused point state 和 trajectory-level temporal linkage。 |
+| `group_windows_<split>.jsonl` | 与同一份观测对齐的 group/window 样本。 |
+| `fused_track_pipeline_summary_<split>.json` | 轨迹数、点数、group window 数、模态覆盖率等汇总。 |
+| `fused_track_pipeline_manifest_<split>.json` | 输入 CSV hash、输出文件 hash、pipeline 配置和 summary，路径会尽量保持相对化，便于服务器迁移。 |
+
+运行示例：
+
+```bash
+python code/anomaly_detection/individual/export_fused_track_pipeline.py \
+  --csv-path outputs/vt_tiny_mot_trajectories/observations_train.csv \
+  --output-dir outputs/fused_track_pipeline_train \
+  --split train \
+  --window-size 16 \
+  --stride 8 \
+  --min-visible-frames 2
+```
+
+`fused_trajectories_<split>.jsonl` 中每个点会包含：
+
+```json
+{
+  "frame_id": 12,
+  "rgb": {"center_xy": [25.0, 40.0]},
+  "thermal": {"center_xy": [28.0, 44.0]},
+  "fused": {
+    "center_xy": [26.5, 42.0],
+    "source_modalities": ["rgb", "thermal"],
+    "confidence": 0.8333,
+    "component_scores": {
+      "modal_offset_distance": 5.0,
+      "rgb_weight": 0.5,
+      "thermal_weight": 0.5
+    }
+  }
+}
+```
+
+每条 fused trajectory 还会包含：
+
+```json
+{
+  "temporal_linkage": {
+    "frame_start": 1,
+    "frame_end": 64,
+    "frame_ids": [1, 2, 3],
+    "frame_gaps": [1, 1],
+    "max_frame_gap": 1,
+    "missing_frame_count": 0
+  }
+}
+```
+
+这一步完成的是 B 层的“跨模态关联与跨帧关联”基础闭环：跨模态部分由 fused point state 表达，跨帧部分由 object-centric 轨迹和 `temporal_linkage` 表达；manifest 则给出可复现与可追溯证据。后续应把现有 protocol runner 的分步导出路径替换为该 pipeline，减少重复逻辑。
+
 ## 4. 实验协议
 
 ### 4.1 验证集协议
