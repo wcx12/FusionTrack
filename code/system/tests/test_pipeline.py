@@ -110,4 +110,6 @@ def test_build_final_results_report_from_summary_files(tmp_path: Path) -> None:
 
     assert summary["mode"] == "final_results_dashboard"
     assert summary["dashboard"]["num_methods"] == 3
+    assert summary["dataset_manifest"]["status"] == "missing_data_root"
+    assert (paths.work_root / "dataset_manifest_all.json").exists()
     assert (paths.work_root / "final_dashboard" / "index.html").exists()

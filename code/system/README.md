@@ -19,6 +19,7 @@
 - `code/system/fusiontrack/visualization.py`：轨迹、背景帧和基础可视化工具。
 - `code/system/fusiontrack/registration_adapter.py`：配准实验结果接入 dashboard。
 - `code/system/fusiontrack/final_results.py`：最终结果表、排行榜、case 和方法分类汇总。
+- `code/system/fusiontrack/dataset_manifest.py`：生成数据集结构、annotation hash、图像目录计数和数据集指纹。
 - `code/system/fusiontrack/method_registry.py`：读取和校验中心方法注册表。
 - `code/anomaly_detection/benchmark/configs/method_registry.json`：中心方法注册表，是方法归属、角色、方法族、学习类型、来源类型和接入状态的权威来源。
 
@@ -28,6 +29,7 @@
 - `server_artifacts/remote_result/report/assets/final_dashboard_data.json`
 - `server_artifacts/remote_result/report/assets/final_playback_data.json`
 - `server_artifacts/remote_result/report/assets/background_*.jpg`
+- `runs/<work_root>/dataset_manifest_<split>.json`
 
 注意：`server_artifacts/` 默认被 `.gitignore` 忽略，不会提交到主分支。公开部署时必须把 `index.html`、`assets/final_*.json` 和 `assets/background_*.jpg` 作为同一套静态资源一起发布。
 
@@ -182,14 +184,30 @@ python -c "from fusiontrack.method_registry import validate_method_registry; pri
 
 校验会检查必填字段、重复方法、重复 alias、alias 是否撞到同任务下的其他方法名。真实注册表应保持 `status == "ok"`，这样排行榜、算法接入表和 README 中的方法分类才不会互相矛盾。
 
+## 数据集 Manifest 治理
+
+系统入口会为每次运行生成 `dataset_manifest_<split>.json`。最终 dashboard 使用 `dataset_manifest_all.json`，普通实验报告使用对应 split 的 manifest。
+
+manifest 记录：
+
+- 数据集名称和 schema version。
+- `annotations` 或 `annotations_tc` 目录是否存在。
+- RGB / thermal annotation 文件路径、大小、SHA-256、image / annotation / video / category 数量。
+- `train2017`、`test2017`、`val2017` 图像目录是否存在、图片文件数和后缀统计。
+- `dataset_fingerprint`，用于判断两次实验是否基于同一套 annotation 与图像目录结构。
+
+如果数据根目录不存在，manifest 不会让页面构建直接失败，而是记录 `status == "missing_data_root"`；这样可以支持只渲染已有结果的离线场景。真正需要从数据集重新抽取轨迹时，抽取脚本仍会按缺失文件直接报错。
+
+导出包会自动包含 dataset manifest，并把本机绝对路径脱敏为 `${work_root}`、`${data_root}` 或 `${external}` 占位符。
+
 ## 验证建议
 
 修改网页后至少运行：
 
 ```bash
 python -m py_compile code/system/fusiontrack/final_dashboard.py
-python -m py_compile code/system/fusiontrack/final_results.py code/system/fusiontrack/method_registry.py
-python -c "import collections, collections.abc; collections.Callable = collections.abc.Callable; import pytest, sys; sys.exit(pytest.main(['code/system/tests/test_method_registry.py', 'code/system/tests/test_final_results.py', '-q']))"
+python -m py_compile code/system/fusiontrack/final_results.py code/system/fusiontrack/method_registry.py code/system/fusiontrack/dataset_manifest.py
+python -c "import collections, collections.abc; collections.Callable = collections.abc.Callable; import pytest, sys; sys.exit(pytest.main(['code/system/tests/test_dataset_manifest.py', 'code/system/tests/test_method_registry.py', 'code/system/tests/test_final_results.py', 'code/system/tests/test_pipeline.py', '-q']))"
 ```
 
 生成网页后建议用浏览器或 Playwright 截图验证：

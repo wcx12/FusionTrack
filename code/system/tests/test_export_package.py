@@ -17,12 +17,15 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
     (assets_dir / "curve.png").write_bytes(b"png")
     summary_path = work_root / "pipeline_summary_final_dashboard.json"
     manifest_path = work_root / "pipeline_manifest_final_dashboard_all.json"
+    dataset_manifest_path = work_root / "dataset_manifest_all.json"
     summary = {
         "mode": "final_results_dashboard",
         "work_root": str(work_root),
         "data_root": str(tmp_path / "data" / "VT-Tiny-MOT"),
         "summary_path": str(summary_path),
         "manifest_path": str(manifest_path),
+        "dataset_manifest_path": str(dataset_manifest_path),
+        "dataset_manifest": {"status": "ok", "dataset_fingerprint": "abc123"},
         "dashboard": {
             "report_html": str(report_dir / "index.html"),
             "assets_dir": str(assets_dir),
@@ -31,6 +34,16 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
     }
     summary_path.write_text(json.dumps(summary), encoding="utf-8")
     manifest_path.write_text(json.dumps({"mode": "final_results_dashboard"}), encoding="utf-8")
+    dataset_manifest_path.write_text(
+        json.dumps(
+            {
+                "dataset_fingerprint": "abc123",
+                "data_root": str(tmp_path / "data" / "VT-Tiny-MOT"),
+                "annotation_dir": str(tmp_path / "data" / "VT-Tiny-MOT" / "annotations"),
+            }
+        ),
+        encoding="utf-8",
+    )
 
     package_path = tmp_path / "exports" / "fusiontrack_export.zip"
 
@@ -46,8 +59,12 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
         assert "report/assets/curve.png" in names
         assert "summary/pipeline_summary.json" in names
         assert "summary/pipeline_manifest.json" in names
+        assert "artifacts/work_root/dataset_manifest_all.json" in names
         assert "export_manifest.json" in names
         assert not any(name.startswith("artifacts/work_root/pipeline_summary") for name in names)
+        dataset_manifest_text = archive.read("artifacts/work_root/dataset_manifest_all.json").decode("utf-8")
+        assert str(tmp_path) not in dataset_manifest_text
+        assert "${data_root}/annotations" in dataset_manifest_text
         manifest = json.loads(archive.read("export_manifest.json").decode("utf-8"))
         manifest_text = json.dumps(manifest, ensure_ascii=False)
         assert str(tmp_path) not in manifest_text

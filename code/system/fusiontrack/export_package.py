@@ -69,7 +69,7 @@ def build_analysis_export_package(summary: dict[str, Any], output_zip: str | Pat
             if summary_path is not None and path == summary_path:
                 continue
             arcname = "artifacts/" + _artifact_arcname(path, roots)
-            _write_file(archive, path, arcname, files, written, roots)
+            _write_file(archive, path, arcname, files, written, roots, sanitize_json=True)
 
         export_manifest = {
             "package_format": PACKAGE_FORMAT,
@@ -103,9 +103,25 @@ def _write_file(
     files: list[dict[str, Any]],
     written: set[str],
     roots: dict[str, Path],
+    sanitize_json: bool = False,
 ) -> None:
     if arcname in written:
         return
+    if sanitize_json and path.suffix.lower() == ".json":
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            pass
+        else:
+            _write_json_bytes(
+                archive,
+                arcname,
+                _sanitize_value(payload, roots),
+                files,
+                written,
+                source=_sanitize_path(path, roots),
+            )
+            return
     archive.write(path, arcname)
     written.add(arcname)
     files.append(

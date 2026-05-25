@@ -12,9 +12,9 @@
 
 ### A. 数据与实验配置层
 
-- 数据版本治理：🟡  
-  现状：README 有命令示例，但缺统一 dataset/protocol manifest。  
-  下一步：建立 `dataset manifest` 与统一配置入口。
+- 数据版本治理：✅（基础闭环）
+  现状：系统入口会生成 `dataset_manifest_<split>.json`，记录 annotation hash、图像目录计数、数据集指纹，并写入 pipeline summary / manifest / 导出包。
+  下一步：继续把 synthetic protocol 参数与 dataset manifest 绑定成完整 protocol manifest。
 
 - labels/scores schema 与校验：🟡  
   现状：有 `jsonl/csv` 读写，但缺统一 schema 层。  
@@ -165,3 +165,11 @@
 - `run_recent_official_fusiontrack.py` 输出的 `run_manifest.json` 升级为 `manifest_schema_version = 2`。
 - 新增官方 runner 的协议参数、超参数、git 元数据、环境信息，以及 score/convergence 文件 SHA-256。
 - 该更新补齐了官方 baseline 适配运行的基础可追溯字段；后续仍需把真实官方仓库 commit/license、运行环境包版本和最终 dashboard 展示链路继续固化。
+
+## 2026-05-25 更新：dataset manifest 数据版本治理
+
+- 新增 `code/system/fusiontrack/dataset_manifest.py`。
+- 系统入口现在会为 `smoke`、`experiment_report` 和 `final_results_dashboard` 生成 `dataset_manifest_<split>.json`。
+- manifest 记录 VT-Tiny-MOT 数据根目录状态、annotation 文件 SHA-256、annotation/image/video/category 计数、图像目录文件数和 `dataset_fingerprint`。
+- pipeline summary、pipeline manifest 和导出 zip 都会携带 dataset manifest 信息，便于确认实验结果来自哪一版数据结构。
+- 若只是离线渲染已有结果，缺失数据根目录会记录为 `missing_data_root`，不会阻断 dashboard 构建；真正重新抽取轨迹时仍由抽取脚本 fail-fast。

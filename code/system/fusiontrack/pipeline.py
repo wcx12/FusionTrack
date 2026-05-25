@@ -18,6 +18,7 @@ from mtf_ba.group_interface import (
 )
 
 from fusiontrack.config import FusionTrackPaths
+from fusiontrack.dataset_manifest import write_dataset_manifest
 from fusiontrack.experiment_adapter import load_experiment_result, write_scores_csv
 from fusiontrack.final_dashboard import build_final_dashboard
 from fusiontrack.final_results import load_final_results_dashboard
@@ -108,6 +109,17 @@ def _write_manifest(paths: FusionTrackPaths, mode: str, split: str, payload: dic
     return str(manifest_path)
 
 
+def _write_dataset_manifest(paths: FusionTrackPaths, split: str) -> tuple[dict[str, Any], Path]:
+    splits = ("train", "test", "val") if split == "all" else (split,)
+    manifest_path = paths.work_root / f"dataset_manifest_{split}.json"
+    manifest = write_dataset_manifest(
+        data_root=paths.data_root,
+        output_path=manifest_path,
+        splits=splits,
+    )
+    return manifest, manifest_path
+
+
 def _sync_remote_report(source_dir: Path, target_dir: Path) -> None:
     """Mirror generated dashboard outputs to the expected remote-result preview directory."""
     if not source_dir.exists():
@@ -170,6 +182,7 @@ def run_smoke_pipeline(
     skip_extraction: bool = False,
 ) -> dict[str, Any]:
     ensure_output_dirs(paths)
+    dataset_manifest, dataset_manifest_path = _write_dataset_manifest(paths, split)
 
     observations_csv = paths.observations_csv(split)
     if not skip_extraction:
@@ -220,6 +233,8 @@ def run_smoke_pipeline(
         "mode": "smoke",
         "split": split,
         "data_root": str(paths.data_root),
+        "dataset_manifest": dataset_manifest,
+        "dataset_manifest_path": str(dataset_manifest_path),
         "work_root": str(paths.work_root),
         "observations_csv": str(observations_csv),
         "fusion": fusion_summary,
@@ -291,6 +306,7 @@ def build_experiment_report(
     top_sequences: int = 5,
 ) -> dict[str, Any]:
     ensure_output_dirs(paths)
+    dataset_manifest, dataset_manifest_path = _write_dataset_manifest(paths, split)
     result = load_experiment_result(result_manifest, method_name=result_method)
     score_csv = paths.final_dir / f"experiment_scores_{_safe_filename(result.method_name)}.csv"
     score_summary = write_scores_csv(result, score_csv)
@@ -312,6 +328,8 @@ def build_experiment_report(
         "mode": "experiment_report",
         "split": split,
         "data_root": str(paths.data_root),
+        "dataset_manifest": dataset_manifest,
+        "dataset_manifest_path": str(dataset_manifest_path),
         "work_root": str(paths.work_root),
         "result_manifest": str(result_manifest),
         "fused_jsonl": str(source_fused_jsonl),
@@ -329,6 +347,8 @@ def build_experiment_report(
         split=split,
         payload={
             "result_manifest": str(result_manifest),
+            "dataset_manifest": dataset_manifest,
+            "dataset_manifest_path": str(dataset_manifest_path),
             "selected_method": result.method_name,
             "result_manifest_context": {
                 "method": result.method_name,
@@ -358,6 +378,7 @@ def build_final_results_report(
     sync_remote_report: bool = True,
 ) -> dict[str, Any]:
     ensure_output_dirs(paths)
+    dataset_manifest, dataset_manifest_path = _write_dataset_manifest(paths, "all")
     manifest_registration = Path(registration_manifest) if registration_manifest is not None else None
     manifest_fused = Path(registration_fused_jsonl) if registration_fused_jsonl is not None else None
     dashboard = load_final_results_dashboard(
@@ -390,6 +411,8 @@ def build_final_results_report(
     summary = {
         "mode": "final_results_dashboard",
         "data_root": str(paths.data_root),
+        "dataset_manifest": dataset_manifest,
+        "dataset_manifest_path": str(dataset_manifest_path),
         "work_root": str(paths.work_root),
         "final_results_root": str(final_results_root),
         "individual_label_file": str(individual_label_file),
@@ -410,6 +433,8 @@ def build_final_results_report(
         split="all",
         payload={
             "final_results_root": str(final_results_root),
+            "dataset_manifest": dataset_manifest,
+            "dataset_manifest_path": str(dataset_manifest_path),
             "individual_label_file": str(individual_label_file),
             "group_label_file": str(group_label_file),
             "score_search_roots": [str(path) for path in score_search_roots],
