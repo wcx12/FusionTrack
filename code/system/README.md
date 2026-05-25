@@ -19,6 +19,8 @@
 - `code/system/fusiontrack/visualization.py`：轨迹、背景帧和基础可视化工具。
 - `code/system/fusiontrack/registration_adapter.py`：配准实验结果接入 dashboard。
 - `code/system/fusiontrack/final_results.py`：最终结果表、排行榜、case 和方法分类汇总。
+- `code/system/fusiontrack/method_registry.py`：读取和校验中心方法注册表。
+- `code/anomaly_detection/benchmark/configs/method_registry.json`：中心方法注册表，是方法归属、角色、方法族、学习类型、来源类型和接入状态的权威来源。
 
 常见生成产物：
 
@@ -159,13 +161,35 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 
 这些模块用于回答“当前系统接入了哪些结果、哪些数据完整、哪些方法只是 proxy 或 baseline”的问题。
 
+## 方法注册表治理
+
+最终结果看板会同时读取最终实验 CSV、score JSONL 和中心方法注册表。为避免旧的 categorized CSV 把方法身份写错，当前规则是：
+
+- `method_registry.json` 是方法治理字段的唯一权威来源。
+- 权威字段包括 `owner`、`role`、`method_family`、`learning_type`、`source_type`、`status`、`aliases` 和 `registry_status`。
+- `final_*_categorized.csv` 只能补充历史指标或非治理字段，不能覆盖中心注册表中的方法身份。
+- 未登记方法会被标记为 `registry_status == "unregistered"`，并显示为 `owner == "unregistered"`。
+- 已登记方法会被标记为 `registry_status == "registered"`。
+
+新增或更名方法时，应先更新 `method_registry.json`，再生成最终结果和网页。注册表支持 `aliases`，用于把历史方法名或实验产物中的临时方法名映射到正式方法名。
+
+可以用下面的方式检查注册表：
+
+```bash
+cd code/system
+python -c "from fusiontrack.method_registry import validate_method_registry; print(validate_method_registry())"
+```
+
+校验会检查必填字段、重复方法、重复 alias、alias 是否撞到同任务下的其他方法名。真实注册表应保持 `status == "ok"`，这样排行榜、算法接入表和 README 中的方法分类才不会互相矛盾。
+
 ## 验证建议
 
 修改网页后至少运行：
 
 ```bash
 python -m py_compile code/system/fusiontrack/final_dashboard.py
-python -c "import collections, collections.abc; collections.Callable = collections.abc.Callable; import pytest, sys; sys.exit(pytest.main(['code/system/tests/test_final_results.py', '-q']))"
+python -m py_compile code/system/fusiontrack/final_results.py code/system/fusiontrack/method_registry.py
+python -c "import collections, collections.abc; collections.Callable = collections.abc.Callable; import pytest, sys; sys.exit(pytest.main(['code/system/tests/test_method_registry.py', 'code/system/tests/test_final_results.py', '-q']))"
 ```
 
 生成网页后建议用浏览器或 Playwright 截图验证：

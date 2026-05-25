@@ -6,10 +6,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
-from fusiontrack.method_registry import method_profile
+from fusiontrack.method_registry import PROFILE_FIELDS, method_profile
 
 
 METRIC_KEYS = ("auroc", "auprc", "f1", "precision_at_k", "recall_at_k")
+REGISTRY_CATEGORY_FIELDS = (set(PROFILE_FIELDS) - {"name", "task"}) | {"aliases", "registry_status"}
 
 
 @dataclass
@@ -535,7 +536,7 @@ def _category_with_registry(
         if key not in {"name", "task"} and value not in (None, "")
     }
     for key, value in category.items():
-        if value not in (None, ""):
+        if key not in REGISTRY_CATEGORY_FIELDS and value not in (None, ""):
             merged[key] = value
     return merged
 

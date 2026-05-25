@@ -253,6 +253,22 @@ def test_final_results_falls_back_to_central_method_registry(tmp_path: Path) -> 
     assert group_method.category["method_family"] == "linear_prediction_residual"
 
 
+def test_central_method_registry_overrides_stale_categorized_fields(tmp_path: Path) -> None:
+    final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
+
+    dashboard = load_final_results_dashboard(
+        final_results_root=final_root,
+        individual_label_file=individual_labels,
+        group_label_file=group_labels,
+        score_search_roots=[score_root],
+    )
+
+    method = dashboard.tasks["individual"].methods["fusiontrack_individual_nn"]
+    assert method.category["role"] == "component"
+    assert method.category["method_family"] == "fusiontrack_nearest_neighbor"
+    assert method.category["registry_status"] == "registered"
+
+
 def test_load_final_results_dashboard_builds_leaderboards_type_stats_and_cases(tmp_path: Path) -> None:
     final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
 
