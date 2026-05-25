@@ -78,9 +78,9 @@
   现状：AUROC/AUPRC/F1/P@K/R@K 已支持。  
   下一步：补缺失字段告警与一致性约束。
 
-- 多任务多方法批量评测：🟡  
-  现状：有矩阵式流程。  
-  下一步：封装 `run_suite` 一键运行脚本。
+- 多任务多方法批量评测：✅（基础闭环）
+  现状：新增 `run_suite.py`，可一次调度多个 matrix config，分别运行 `run_benchmark_matrix.py`，并输出 `suite_manifest.json` 与 `aggregate_summary.csv`。
+  下一步：后续把 suite runner 接到最终 dashboard 构建命令，形成实验到展示的一键链路。
 
 - 实验可追溯（seed/epoch/commit/config）：🟡  
   现状：散落于日志与 README。  
@@ -189,3 +189,11 @@
 - individual 标签使用 `sample_id`；如果源文件只有 `sequence + track_id`，会自动构造 `sample_id`。
 - group 标签使用 `sample_id + window_id`，缺失 `window_id` 会 fail-fast，避免把群体窗口标签退化成轨迹级标签。
 - 该接口不会改变当前 synthetic 实验，只提供将来接入人工/真实异常标注时的并行入口。
+
+## 2026-05-25 更新：run suite 批量评测入口
+
+- 新增 `code/anomaly_detection/benchmark/runners/run_suite.py`。
+- suite JSON 可以列出多个 matrix config，例如 individual 与 group 两个任务；脚本会逐个调用 `run_benchmark_matrix.py`。
+- 每个 matrix 保留自己的 `manifest.json`、`summary.csv`、scores 和 metrics。
+- suite 层新增 `suite_manifest.json` 和 `aggregate_summary.csv`，用于统一记录多任务评测输出路径、hash 和运行数量。
+- 该更新推进了 D 层中的“多任务多方法批量评测”；后续还需要把 suite 输出直接接入最终 dashboard/export。

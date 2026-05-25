@@ -121,6 +121,16 @@ python code/anomaly_detection/benchmark/runners/prepare_real_labels.py \
 
 适配器支持 CSV/JSONL，输出仍是 `label`、`sample_id`、`sequence`、`track_id`、`anomaly_type` 等统一字段。个体级使用 `sample_id` 对齐；群体级必须提供 `window_id`，最终按 `sample_id + window_id` 对齐。这个入口用于真实标签并行实验，不会改变当前 synthetic benchmark 的结果口径。
 
+多个任务或多组 matrix 可以通过 suite 入口统一调度：
+
+```bash
+python code/anomaly_detection/benchmark/runners/run_suite.py \
+  --suite-json suite.json \
+  --output-dir outputs/suite_run
+```
+
+`suite.json` 中的 `matrices` 字段列出若干个 `config_json`。脚本会逐个运行 `run_benchmark_matrix.py`，保留每个 matrix 的 `manifest.json` 和 `summary.csv`，并在 suite 输出目录生成 `suite_manifest.json` 与 `aggregate_summary.csv`。这用于把 individual、group、真实标签或 synthetic 标签的多组评测统一归档。
+
 ## 4. 实验协议
 
 ### 4.1 验证集协议
