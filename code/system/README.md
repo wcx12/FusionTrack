@@ -122,6 +122,8 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 - `media.background_frame_count`：已复制到网页资产中的背景帧数量。
 - `media.explanation_key`：前端提示文案 key。
 - `modality_audit.background_status`：数据流审计中的背景状态。
+- `background_frames[].src`：当前帧附近优先加载的抽样原始背景帧。
+- `background_frames[].fallback_src`：抽样帧缺失或静态部署漏传时的序列首帧回退背景。
 
 因此，如果网页里某些“视频”没有背景，需要先看当前任务和序列：
 
@@ -129,6 +131,16 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 - `batch_****` 或配准 batch：点云配准实验样本，本来就没有原始视频背景。
 
 如果 `DJI_****` 序列仍然提示无背景，才需要检查数据集路径、资源部署和 `rgb.file` 是否能解析到真实图片。
+
+### 背景加载回退机制
+
+最终网页不会直接播放完整 MP4，而是逐帧绘制 `assets/background_*.jpg` 或 `assets/background_*.png`。为了避免静态部署时某个抽样背景帧漏传导致整块 canvas 变成“加载中”，当前生成器会给每个抽样帧写入 `fallback_src`：
+
+- 优先加载当前帧对应的 `background_<sequence>_<frame>.jpg`。
+- 如果该帧加载失败，自动回退到 `background_<sequence>.jpg`。
+- 如果主背景也加载失败，页面显示“背景帧加载失败，请检查静态网页 assets 是否已同步发布”。
+
+公开部署时必须保持 `index.html` 和 `assets/` 的相对目录结构不变。只提交 `index.html` 或只提交 `final_playback_data.json` 都不够，背景帧、最终数据 JSON 和页面文件必须来自同一次生成结果。
 
 ## 事件解释链路
 

@@ -268,7 +268,15 @@ def _build_playback_payloads(
             "sequence": sequence,
             "background": f"assets/{background_asset.name}" if background_asset else None,
             "background_frames": [
-                {"frame": int(item["frame"]), "src": f"assets/{item['path'].name}"}
+                {
+                    "frame": int(item["frame"]),
+                    "src": f"assets/{item['path'].name}",
+                    **(
+                        {"fallback_src": f"assets/{background_asset.name}"}
+                        if background_asset and item["path"].name != background_asset.name
+                        else {}
+                    ),
+                }
                 for item in background_frames
             ],
             "size": {"width": width, "height": height},
@@ -1273,6 +1281,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           playSpeedLabel: "Play speed",
           noPlayback: "Playback is not available for the current task.",
           backgroundLoading: "Loading original background frame...",
+          backgroundLoadFailed: "Original background frame failed to load. Check whether the static assets folder was published with the page.",
           registrationNoVideoBackground: "Registration is a point-cloud alignment diagnostic task, so it has no VT-Tiny-MOT original video background. Inspect the registration evidence panel for source, reference, and aligned point clouds.",
           registrationNoVideoBackgroundShort: "Registration point-cloud task: no original video background",
           sequenceNoVideoBackground: "No original RGB background frame was found for this sequence. The page can still show tracks, heatmaps, and structured evidence.",
@@ -1407,6 +1416,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         playSpeedLabel: "播放速度",
         noPlayback: "当前任务没有可播放轨迹。",
         backgroundLoading: "\u80cc\u666f\u5e27\u52a0\u8f7d\u4e2d...",
+        backgroundLoadFailed: "\u80cc\u666f\u5e27\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u9759\u6001\u7f51\u9875 assets \u662f\u5426\u5df2\u540c\u6b65\u53d1\u5e03\u3002",
         registrationNoVideoBackground: "Registration \u662f\u70b9\u4e91\u914d\u51c6\u8bca\u65ad\u4efb\u52a1\uff0c\u6ca1\u6709 VT-Tiny-MOT \u539f\u59cb\u89c6\u9891\u80cc\u666f\uff1b\u8bf7\u5728\u4e0b\u65b9\u914d\u51c6\u8bc1\u636e\u67e5\u770b\u6e90\u70b9\u4e91\u3001\u53c2\u8003\u70b9\u4e91\u548c\u5bf9\u9f50\u7ed3\u679c\u3002",
         registrationNoVideoBackgroundShort: "\u914d\u51c6\u70b9\u4e91\u4efb\u52a1\uff0c\u65e0\u539f\u59cb\u89c6\u9891\u80cc\u666f",
         registrationPlaybackTitle: "\u70b9\u4e91\u914d\u51c6\u52a8\u6001\u89c6\u56fe",
@@ -1606,6 +1616,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         chartNoData: "No frame-level curve data"
       }});
       const backgroundCache = new Map();
+      const backgroundFailures = new Set();
       const state = {{
         language: localStorage.getItem("fusiontrack.finalDashboard.language") || "zh",
         task: "{html.escape(initial_task)}",
@@ -1623,6 +1634,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         selectedSampleId: "",
         image: null,
         imageKey: null,
+        imageStatus: "idle",
         timer: null
       }};
       const rawSavedSpeed = Number(localStorage.getItem("fusiontrack.finalDashboard.playSpeed"));
@@ -2704,6 +2716,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           state.sequence = names[0];
           state.image = null;
           state.imageKey = null;
+          state.imageStatus = "idle";
         }}
         sequenceSelector.disabled = false;
         playToggle.disabled = false;
@@ -2940,6 +2953,30 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         return selected;
       }}
 
+      function backgroundFallbackForFrame(data, background) {{
+        if (!data || !background) {{
+          return null;
+        }}
+        const src = background.fallback_src || data.background;
+        if (!src || src === background.src) {{
+          return null;
+        }}
+        return {{ frame: data.frame_range?.[0] || background.frame || 0, src }};
+      }}
+
+      function backgroundCandidatesForFrame(data, frame) {{
+        const primary = backgroundForFrame(data, frame);
+        const fallback = backgroundFallbackForFrame(data, primary);
+        const seen = new Set();
+        return [primary, fallback].filter(item => {{
+          if (!item || !item.src || seen.has(item.src)) {{
+            return false;
+          }}
+          seen.add(item.src);
+          return true;
+        }});
+      }}
+
       function hasVideoBackground(data) {{
         return Boolean(data && (data.background || (data.background_frames || []).length));
       }}
@@ -2983,7 +3020,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         if (playbackMediaKind(data) === "registration_point_cloud") {{
           return t("registrationNoVideoBackgroundShort");
         }}
-        return hasVideoBackground(data) ? t("backgroundLoading") : t("sequenceNoVideoBackgroundShort");
+        if (!hasVideoBackground(data)) {{
+          return t("sequenceNoVideoBackgroundShort");
+        }}
+        return state.imageStatus === "failed" ? t("backgroundLoadFailed") : t("backgroundLoading");
       }}
 
       function updateBackgroundNotice(data) {{
@@ -3013,33 +3053,49 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       }}
 
       function ensureBackground(data, frame) {{
-        const background = backgroundForFrame(data, frame);
-        if (!background || !background.src) {{
+        const candidates = backgroundCandidatesForFrame(data, frame).filter(background => {{
+          const key = `${{data.sequence}}:${{background.src}}`;
+          return !backgroundFailures.has(key);
+        }});
+        if (!candidates.length) {{
           state.image = null;
           state.imageKey = null;
+          state.imageStatus = hasVideoBackground(data) ? "failed" : "idle";
           return;
         }}
+        const cached = candidates.find(background => backgroundCache.has(`${{data.sequence}}:${{background.src}}`));
+        if (cached) {{
+          const cachedKey = `${{data.sequence}}:${{cached.src}}`;
+          state.image = backgroundCache.get(cachedKey);
+          state.imageKey = cachedKey;
+          state.imageStatus = "loaded";
+          return;
+        }}
+        const background = candidates[0];
         const key = `${{data.sequence}}:${{background.src}}`;
         if (state.imageKey === key) {{
           return;
         }}
         state.imageKey = key;
-        if (backgroundCache.has(key)) {{
-          state.image = backgroundCache.get(key);
-          return;
-        }}
+        state.imageStatus = "loading";
         const image = new Image();
         image.onload = () => {{
           backgroundCache.set(key, image);
           if (state.imageKey === key) {{
             state.image = image;
+            state.imageStatus = "loaded";
             drawPlayback();
           }}
         }};
         image.onerror = () => {{
+          backgroundFailures.add(key);
           if (state.imageKey === key) {{
             state.image = null;
-            drawPlayback();
+            state.imageKey = null;
+            ensureBackground(data, frame);
+            if (state.imageStatus === "failed" || state.image) {{
+              drawPlayback();
+            }}
           }}
         }};
         image.src = background.src;
@@ -3428,6 +3484,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         if (isRegistrationTask()) {{
           state.image = null;
           state.imageKey = null;
+          state.imageStatus = "idle";
           drawRegistrationPlayback(data, ranked, maxScore);
         }} else {{
           ensureBackground(data, state.frame);
@@ -3540,6 +3597,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         state.sequence = "";
         state.image = null;
         state.imageKey = null;
+        state.imageStatus = "idle";
         state.frame = -1;
         state.selectedSampleId = "";
         stopPlayback();
@@ -3562,6 +3620,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         state.sequence = sequenceSelector.value;
         state.image = null;
         state.imageKey = null;
+        state.imageStatus = "idle";
         state.frame = -1;
         state.selectedSampleId = "";
         resetFrameForSequence();

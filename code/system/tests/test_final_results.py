@@ -24,6 +24,16 @@ def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     )
 
 
+def _write_tiny_png(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+        b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
+        b"\x00\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0\x00\x00\x03\x01\x01\x00"
+        b"\xc9\xfe\x92\xef\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+
+
 def _build_small_final_result_tree(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     final_root = tmp_path / "final"
     score_root = tmp_path / "scores"
@@ -541,6 +551,66 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "renderMethodView" in html
     assert "playbackData" in html
     assert "fusiontrack_individual_nn" in html
+
+
+def test_final_dashboard_background_frames_include_fallback_source(tmp_path: Path) -> None:
+    final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
+    dashboard = load_final_results_dashboard(
+        final_results_root=final_root,
+        individual_label_file=individual_labels,
+        group_label_file=group_labels,
+        score_search_roots=[score_root],
+        top_k=2,
+        case_limit=3,
+    )
+    data_root = tmp_path / "data"
+    _write_tiny_png(data_root / "S1" / "00" / "00010.png")
+    _write_tiny_png(data_root / "S1" / "00" / "00020.png")
+    fused_jsonl = tmp_path / "fused.jsonl"
+    _write_jsonl(
+        fused_jsonl,
+        [
+            {
+                "sample_id": "S1:1",
+                "sequence": "S1",
+                "track_id": "1",
+                "category_name": "plane",
+                "points": [
+                    {
+                        "frame_id": 10,
+                        "fused": {"center_xy": [10, 20], "confidence": 0.9},
+                        "rgb": {"file": "S1/00/00010.png"},
+                    },
+                    {
+                        "frame_id": 20,
+                        "fused": {"center_xy": [20, 30], "confidence": 0.8},
+                        "rgb": {"file": "S1/00/00020.png"},
+                    },
+                ],
+            }
+        ],
+    )
+
+    build_final_dashboard(
+        dashboard=dashboard,
+        output_dir=tmp_path / "dashboard",
+        fused_jsonl=fused_jsonl,
+        data_root=data_root,
+        top_sequences=1,
+    )
+
+    html = (tmp_path / "dashboard" / "index.html").read_text(encoding="utf-8")
+    playback_data = json.loads(
+        (tmp_path / "dashboard" / "assets" / "final_playback_data.json").read_text(encoding="utf-8")
+    )
+    assert playback_data["S1"]["background"] == "assets/background_S1.png"
+    assert playback_data["S1"]["background_frames"] == [
+        {"frame": 10, "src": "assets/background_S1_000010.png", "fallback_src": "assets/background_S1.png"},
+        {"frame": 20, "src": "assets/background_S1_000020.png", "fallback_src": "assets/background_S1.png"},
+    ]
+    assert "fallback_src" in html
+    assert "backgroundFallbackForFrame" in html
+    assert "backgroundLoadFailed" in html
 
 
 def test_final_dashboard_includes_registration_playback_without_labels(tmp_path: Path) -> None:

@@ -88,8 +88,8 @@
 
 ### E. 可视化与交互层
 
-- 四联视图（原图/热力/轨迹/叠加）：✅  
-  现状：已实现，且已支持单视图模式切换。  
+- 四联视图（原图/热力/轨迹/叠加）：✅
+  现状：已实现，且已支持单视图模式切换；背景帧现在带 `fallback_src`，抽样帧加载失败时会回退到序列首帧，并在所有背景资源都缺失时给出明确 assets 发布提示。
 
 - 方法与 case 分析：✅  
   现状：leaderboard、types、cases、method status 已展示。  
@@ -108,9 +108,9 @@
 
 ### F. 部署与交付层
 
-- 一键构建与页面发布：🟡  
-  现状：可构建并已发布。  
-  下一步：标准化 CLI，固定版本化发布路径。
+- 一键构建与页面发布：🟡
+  现状：可构建并已发布；本地 `server_artifacts/remote_result/report` 已重新生成，`final_playback_data.json` 的背景引用与回退引用均通过资源存在性检查。
+  下一步：标准化 CLI，固定版本化发布路径，并把 GitHub Pages 的静态资源发布流程固化为可复现命令。
 
 - 中文文档与复现实验说明：🟡  
   现状：README 已较完整，但系统层面清单与流程未集中。  
@@ -173,6 +173,13 @@
 - manifest 记录 VT-Tiny-MOT 数据根目录状态、annotation 文件 SHA-256、annotation/image/video/category 计数、图像目录文件数和 `dataset_fingerprint`。
 - pipeline summary、pipeline manifest 和导出 zip 都会携带 dataset manifest 信息，便于确认实验结果来自哪一版数据结构。
 - 若只是离线渲染已有结果，缺失数据根目录会记录为 `missing_data_root`，不会阻断 dashboard 构建；真正重新抽取轨迹时仍由抽取脚本 fail-fast。
+
+## 2026-05-26 更新：可视化背景回退与部署检查
+
+- `code/system/fusiontrack/final_dashboard.py` 现在为每个抽样背景帧写入 `fallback_src`，前端优先加载当前帧背景，失败后回退到序列首帧背景。
+- 前端新增 `backgroundFailures` 与 `imageStatus`，避免同一个缺失资源反复请求；所有候选背景都失败时显示明确的静态资源发布错误提示。
+- 新增回归测试 `test_final_dashboard_background_frames_include_fallback_source`，保证生成的 `final_playback_data.json` 和 HTML 都包含背景回退链路。
+- 已重新生成 `server_artifacts/remote_result/report`，并检查主背景、抽样背景和 fallback 背景引用均存在；该目录仍被 `.gitignore` 忽略，公开部署时需要把 `index.html` 与完整 `assets/` 同步发布。
 
 ## 2026-05-25 更新：synthetic protocol manifest v2
 
