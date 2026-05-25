@@ -12,10 +12,30 @@ from mtf_ba.individual_trajectories import load_object_trajectories
 
 
 @dataclass(frozen=True)
+class TrackQualityConfig:
+    min_points: int = 1
+    min_visible_any_frames: int = 1
+    max_frame_gap: int | None = None
+    min_fused_ratio: float = 0.0
+    keep_filtered: bool = False
+
+    def __post_init__(self) -> None:
+        if self.min_points < 0:
+            raise ValueError("min_points must be non-negative.")
+        if self.min_visible_any_frames < 0:
+            raise ValueError("min_visible_any_frames must be non-negative.")
+        if self.max_frame_gap is not None and self.max_frame_gap < 0:
+            raise ValueError("max_frame_gap must be non-negative when set.")
+        if not 0.0 <= self.min_fused_ratio <= 1.0:
+            raise ValueError("min_fused_ratio must be in [0, 1].")
+
+
+@dataclass(frozen=True)
 class FusedTrackPipelineConfig:
     split: str = "train"
     offset_scale: float = 25.0
     group: GroupWindowConfig = field(default_factory=GroupWindowConfig)
+    quality: TrackQualityConfig = field(default_factory=TrackQualityConfig)
 
 
 def run_fused_track_pipeline(
@@ -32,8 +52,35 @@ def run_fused_track_pipeline(
     fused_trajectories = build_fused_trajectories(
         trajectories,
         offset_scale=config.offset_scale,
+        quality=config.quality,
     )
+    kept_trajectories = [
+        trajectory
+        for trajectory in fused_trajectories
+        if trajectory.get("quality", {}).get("keep", True)
+    ]
+    filtered_trajectories = [
+        trajectory
+        for trajectory in fused_trajectories
+        if not trajectory.get("quality", {}).get("keep", True)
+    ]
+    written_fused_trajectories = (
+        fused_trajectories if config.quality.keep_filtered else kept_trajectories
+    )
+    written_sample_ids = {
+        str(trajectory.get("sample_id"))
+        for trajectory in written_fused_trajectories
+    }
+    written_individual_trajectories = [
+        trajectory
+        for trajectory in trajectories
+        if str(trajectory.get("sample_id")) in written_sample_ids
+    ]
     group_windows = build_group_windows(csv_path, config=config.group)
+    group_payloads = _filter_group_window_payloads(
+        [window.to_dict() for window in group_windows],
+        sample_ids=written_sample_ids,
+    )
 
     individual_path = output_dir / f"individual_trajectories_{config.split}.jsonl"
     fused_path = output_dir / f"fused_trajectories_{config.split}.jsonl"
@@ -41,26 +88,29 @@ def run_fused_track_pipeline(
     summary_path = output_dir / f"fused_track_pipeline_summary_{config.split}.json"
     manifest_path = output_dir / f"fused_track_pipeline_manifest_{config.split}.json"
 
-    _write_jsonl(individual_path, trajectories)
-    _write_jsonl(fused_path, fused_trajectories)
-    group_payloads = [window.to_dict() for window in group_windows]
+    _write_jsonl(individual_path, written_individual_trajectories)
+    _write_jsonl(fused_path, written_fused_trajectories)
     _write_jsonl(group_path, group_payloads)
 
-    coverage = _modality_coverage(fused_trajectories)
+    coverage = _modality_coverage(written_fused_trajectories)
+    quality_summary = _trajectory_quality_summary(fused_trajectories)
     summary = {
         "schema_version": 1,
         "pipeline": "fused_track_pipeline",
         "split": config.split,
         "counts": {
             "observations": _count_csv_rows(csv_path),
-            "trajectories": len(trajectories),
-            "fused_trajectories": len(fused_trajectories),
-            "points": sum(int(item.get("num_points", 0)) for item in trajectories),
+            "raw_trajectories": len(trajectories),
+            "trajectories": len(written_individual_trajectories),
+            "fused_trajectories": len(written_fused_trajectories),
+            "filtered_trajectories": len(filtered_trajectories),
+            "points": sum(int(item.get("num_points", 0)) for item in written_individual_trajectories),
             "fused_points": coverage["fused_points"],
             "group_windows": len(group_payloads),
             "group_window_objects": sum(int(item.get("num_objects", 0)) for item in group_payloads),
         },
         "modality_coverage": coverage,
+        "trajectory_quality": quality_summary,
         "outputs": {
             "individual_trajectories": individual_path.name,
             "fused_trajectories": fused_path.name,
@@ -92,9 +142,14 @@ def build_fused_trajectories(
     trajectories: Iterable[dict[str, Any]],
     *,
     offset_scale: float = 25.0,
+    quality: TrackQualityConfig | None = None,
 ) -> list[dict[str, Any]]:
     return [
-        build_fused_trajectory(trajectory, offset_scale=offset_scale)
+        build_fused_trajectory(
+            trajectory,
+            offset_scale=offset_scale,
+            quality=quality,
+        )
         for trajectory in trajectories
     ]
 
@@ -103,6 +158,7 @@ def build_fused_trajectory(
     trajectory: dict[str, Any],
     *,
     offset_scale: float = 25.0,
+    quality: TrackQualityConfig | None = None,
 ) -> dict[str, Any]:
     points: list[dict[str, Any]] = []
     for point in trajectory.get("points", []):
@@ -127,6 +183,10 @@ def build_fused_trajectory(
     }
     fused_trajectory["points"] = points
     fused_trajectory["temporal_linkage"] = temporal_linkage(points)
+    fused_trajectory["quality"] = evaluate_track_quality(
+        fused_trajectory,
+        quality or TrackQualityConfig(),
+    )
     return fused_trajectory
 
 
@@ -207,6 +267,47 @@ def temporal_linkage(points: Iterable[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def evaluate_track_quality(
+    trajectory: dict[str, Any],
+    config: TrackQualityConfig | None = None,
+) -> dict[str, Any]:
+    config = config or TrackQualityConfig()
+    points = list(trajectory.get("points", []))
+    linkage = trajectory.get("temporal_linkage") or temporal_linkage(points)
+    num_points = len(points)
+    visible_any_frames = sum(
+        1 for point in points if point.get("rgb") is not None or point.get("thermal") is not None
+    )
+    fused_points = sum(1 for point in points if point.get("fused") is not None)
+    fused_ratio = fused_points / num_points if num_points else 0.0
+    max_frame_gap = linkage.get("max_frame_gap")
+    drop_reasons: list[str] = []
+
+    if num_points < config.min_points:
+        drop_reasons.append("short_track")
+    if visible_any_frames < config.min_visible_any_frames:
+        drop_reasons.append("low_visible_frames")
+    if (
+        config.max_frame_gap is not None
+        and max_frame_gap is not None
+        and int(max_frame_gap) > config.max_frame_gap
+    ):
+        drop_reasons.append("large_frame_gap")
+    if fused_ratio < config.min_fused_ratio:
+        drop_reasons.append("low_fused_ratio")
+
+    return {
+        "keep": not drop_reasons,
+        "drop_reasons": drop_reasons,
+        "num_points": num_points,
+        "visible_any_frames": visible_any_frames,
+        "fused_points": fused_points,
+        "fused_ratio": fused_ratio,
+        "max_frame_gap": max_frame_gap,
+        "missing_frame_count": linkage.get("missing_frame_count"),
+    }
+
+
 def _center_xy(state: dict[str, Any]) -> list[float] | None:
     center = state.get("center_xy")
     if not isinstance(center, list) or len(center) != 2:
@@ -278,6 +379,50 @@ def _modality_coverage(fused_trajectories: Iterable[dict[str, Any]]) -> dict[str
         "paired_ratio": paired_points / total_points if total_points else 0.0,
         "fused_ratio": fused_points / total_points if total_points else 0.0,
     }
+
+
+def _trajectory_quality_summary(fused_trajectories: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    trajectories = list(fused_trajectories)
+    kept = [
+        trajectory
+        for trajectory in trajectories
+        if trajectory.get("quality", {}).get("keep", True)
+    ]
+    filtered = [
+        trajectory
+        for trajectory in trajectories
+        if not trajectory.get("quality", {}).get("keep", True)
+    ]
+    reason_counts: dict[str, int] = {}
+    for trajectory in filtered:
+        for reason in trajectory.get("quality", {}).get("drop_reasons", []):
+            reason_counts[str(reason)] = reason_counts.get(str(reason), 0) + 1
+    return {
+        "kept_trajectories": len(kept),
+        "filtered_trajectories": len(filtered),
+        "drop_reason_counts": dict(sorted(reason_counts.items())),
+    }
+
+
+def _filter_group_window_payloads(
+    windows: Iterable[dict[str, Any]],
+    *,
+    sample_ids: set[str],
+) -> list[dict[str, Any]]:
+    filtered_windows: list[dict[str, Any]] = []
+    for window in windows:
+        objects = [
+            obj
+            for obj in window.get("objects", [])
+            if str(obj.get("sample_id")) in sample_ids
+        ]
+        if not objects:
+            continue
+        payload = dict(window)
+        payload["objects"] = objects
+        payload["num_objects"] = len(objects)
+        filtered_windows.append(payload)
+    return filtered_windows
 
 
 def _count_csv_rows(csv_path: Path) -> int:

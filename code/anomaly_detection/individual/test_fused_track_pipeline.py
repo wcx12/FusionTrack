@@ -6,6 +6,7 @@ from pathlib import Path
 
 from mtf_ba.fused_track_pipeline import (
     FusedTrackPipelineConfig,
+    TrackQualityConfig,
     run_fused_track_pipeline,
 )
 from mtf_ba.group_interface import GroupWindowConfig
@@ -147,6 +148,50 @@ def _read_jsonl(path: Path) -> list[dict]:
         return [json.loads(line) for line in f if line.strip()]
 
 
+def _row(track_id: str, frame_id: int, rgb_cx: int, rgb_cy: int) -> dict[str, str]:
+    return {
+        "dataset": "toy",
+        "sequence": "SEQ-Q",
+        "track_id": track_id,
+        "category_id": "1",
+        "category_name": "vehicle",
+        "fps": "25",
+        "frame_id": str(frame_id),
+        "rgb_x": str(rgb_cx - 10),
+        "rgb_y": str(rgb_cy - 10),
+        "rgb_w": "20",
+        "rgb_h": "20",
+        "rgb_cx": str(rgb_cx),
+        "rgb_cy": str(rgb_cy),
+        "thermal_x": str(rgb_cx - 8),
+        "thermal_y": str(rgb_cy - 8),
+        "thermal_w": "20",
+        "thermal_h": "20",
+        "thermal_cx": str(rgb_cx + 2),
+        "thermal_cy": str(rgb_cy + 2),
+        "modal_offset_distance": "2.828427",
+    }
+
+
+def _write_quality_observations(path: Path) -> None:
+    rows = [
+        _row("1", 1, 10, 20),
+        _row("1", 2, 12, 20),
+        _row("1", 3, 14, 20),
+        _row("2", 1, 100, 40),
+        _row("2", 2, 102, 40),
+        _row("3", 1, 200, 40),
+        _row("3", 8, 202, 40),
+        _row("3", 9, 204, 40),
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
 def test_fused_track_pipeline_writes_linked_outputs_and_manifest(tmp_path: Path) -> None:
     csv_path = tmp_path / "observations_train.csv"
     output_dir = tmp_path / "pipeline"
@@ -194,3 +239,56 @@ def test_fused_track_pipeline_writes_linked_outputs_and_manifest(tmp_path: Path)
     assert manifest["pipeline"] == "fused_track_pipeline"
     assert "sha256" in manifest["artifacts"]["fused_trajectories"]
     assert not Path(manifest["inputs"]["observations_csv"]).is_absolute()
+
+
+def test_fused_track_pipeline_applies_track_quality_policy(tmp_path: Path) -> None:
+    csv_path = tmp_path / "observations_train.csv"
+    output_dir = tmp_path / "pipeline"
+    _write_quality_observations(csv_path)
+
+    summary = run_fused_track_pipeline(
+        csv_path,
+        output_dir,
+        FusedTrackPipelineConfig(
+            split="train",
+            group=GroupWindowConfig(
+                sample_mode="window",
+                window_size=2,
+                stride=1,
+                min_visible_frames=1,
+            ),
+            quality=TrackQualityConfig(
+                min_points=3,
+                min_visible_any_frames=3,
+                max_frame_gap=3,
+            ),
+        ),
+    )
+
+    assert summary["counts"]["raw_trajectories"] == 3
+    assert summary["counts"]["trajectories"] == 1
+    assert summary["counts"]["filtered_trajectories"] == 2
+    assert summary["trajectory_quality"]["kept_trajectories"] == 1
+    assert summary["trajectory_quality"]["filtered_trajectories"] == 2
+    assert summary["trajectory_quality"]["drop_reason_counts"]["short_track"] == 1
+    assert summary["trajectory_quality"]["drop_reason_counts"]["large_frame_gap"] == 1
+
+    fused = _read_jsonl(output_dir / "fused_trajectories_train.jsonl")
+    assert [trajectory["track_id"] for trajectory in fused] == ["1"]
+    assert fused[0]["quality"]["keep"] is True
+    assert fused[0]["quality"]["drop_reasons"] == []
+    assert fused[0]["quality"]["visible_any_frames"] == 3
+
+    group_windows = _read_jsonl(output_dir / "group_windows_train.jsonl")
+    assert group_windows
+    assert {
+        obj["track_id"]
+        for window in group_windows
+        for obj in window["objects"]
+    } == {"1"}
+
+    manifest = json.loads(
+        (output_dir / "fused_track_pipeline_manifest_train.json").read_text(encoding="utf-8")
+    )
+    assert manifest["config"]["quality"]["min_points"] == 3
+    assert manifest["config"]["quality"]["max_frame_gap"] == 3

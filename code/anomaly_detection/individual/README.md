@@ -176,6 +176,19 @@ python export_fused_track_pipeline.py `
   --output-dir outputs/vt_tiny_mot_fused_pipeline_test
 ```
 
+如果要同时启用基础噪声抑制和目标持久化策略，可以显式传入：
+
+```powershell
+python export_fused_track_pipeline.py `
+  --split train `
+  --csv-path outputs/vt_tiny_mot_trajectories/observations_train.csv `
+  --output-dir outputs/vt_tiny_mot_fused_pipeline_train `
+  --min-track-points 3 `
+  --min-track-visible-frames 3 `
+  --max-track-frame-gap 8 `
+  --min-track-fused-ratio 0.5
+```
+
 默认输出：
 
 ```text
@@ -193,6 +206,23 @@ outputs/vt_tiny_mot_fused_pipeline_train/
 - `fused_trajectories_<split>.jsonl`：在每个轨迹点上加入 `fused.center_xy`、`source_modalities`、`confidence` 和 offset 分量；轨迹级加入 `temporal_linkage`，记录 `frame_ids`、`frame_gaps` 和 `max_frame_gap`。
 - `group_windows_<split>.jsonl`：由同一份观测生成的群体窗口，后续 group 模型直接消费。
 - `summary` 和 `manifest`：记录轨迹数、点数、模态覆盖率、输入 CSV hash、输出 artifact hash 和 pipeline 参数。
+
+噪声抑制策略会在每条 fused trajectory 中写入 `quality` 字段：
+
+```json
+{
+  "quality": {
+    "keep": true,
+    "drop_reasons": [],
+    "num_points": 64,
+    "visible_any_frames": 64,
+    "fused_ratio": 1.0,
+    "max_frame_gap": 1
+  }
+}
+```
+
+默认情况下，不满足策略的轨迹不会写入最终 individual/fused/group 输出；如果需要审计这些轨迹，可以加入 `--keep-filtered-tracks`。过滤原因会进入 `summary.trajectory_quality.drop_reason_counts`，常见值包括 `short_track`、`low_visible_frames`、`large_frame_gap` 和 `low_fused_ratio`。
 
 这个入口是后续系统层推荐的 B 层轨迹构建入口；下面的单目标/群体导出脚本仍保留，用于兼容旧流程或调试单个模块。
 

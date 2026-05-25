@@ -7,6 +7,7 @@ from pathlib import Path
 
 from mtf_ba.fused_track_pipeline import (
     FusedTrackPipelineConfig,
+    TrackQualityConfig,
     run_fused_track_pipeline,
 )
 from mtf_ba.group_interface import GroupWindowConfig
@@ -42,6 +43,35 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Keep group objects only when both RGB and thermal are visible.",
     )
+    parser.add_argument(
+        "--min-track-points",
+        type=int,
+        default=1,
+        help="Minimum points required to keep a fused trajectory.",
+    )
+    parser.add_argument(
+        "--min-track-visible-frames",
+        type=int,
+        default=1,
+        help="Minimum frames with either RGB or thermal visible.",
+    )
+    parser.add_argument(
+        "--max-track-frame-gap",
+        type=int,
+        default=None,
+        help="Maximum allowed gap between adjacent frames; unset disables this filter.",
+    )
+    parser.add_argument(
+        "--min-track-fused-ratio",
+        type=float,
+        default=0.0,
+        help="Minimum ratio of points that can produce a fused state.",
+    )
+    parser.add_argument(
+        "--keep-filtered-tracks",
+        action="store_true",
+        help="Keep filtered tracks in outputs while still recording quality drop reasons.",
+    )
     return parser.parse_args()
 
 
@@ -59,6 +89,13 @@ def main() -> None:
                 stride=args.stride,
                 min_visible_frames=args.min_visible_frames,
                 require_both_modalities=args.require_both_modalities,
+            ),
+            quality=TrackQualityConfig(
+                min_points=args.min_track_points,
+                min_visible_any_frames=args.min_track_visible_frames,
+                max_frame_gap=args.max_track_frame_gap,
+                min_fused_ratio=args.min_track_fused_ratio,
+                keep_filtered=args.keep_filtered_tracks,
             ),
         ),
     )

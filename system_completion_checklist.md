@@ -42,9 +42,9 @@
   现状：新增 `mtf_ba/fused_track_pipeline.py` 与 `export_fused_track_pipeline.py`，可从 `observations_<split>.csv` 一次生成 individual trajectories、fused trajectories、group windows、summary 和 manifest；fused 轨迹点保留跨模态中心融合、来源模态、offset confidence，轨迹级保留 frame ids/gaps/max gap 等跨帧 linkage。
   下一步：把该 pipeline 作为 protocol 生成器的默认内部路径，减少旧脚本分步调用。
 
-- 噪声抑制与目标持久化策略：🟡  
-  现状：可视化有描述。  
-  下一步：参数化配置并与实验日志绑定。
+- 噪声抑制与目标持久化策略：✅（基础闭环）
+  现状：`TrackQualityConfig` 已接入 `fused track pipeline`，支持最小轨迹点数、最小可见帧、最大帧间断裂、最小 fused ratio 和是否保留过滤轨迹；每条 fused trajectory 写入 `quality.keep/drop_reasons`，summary/manifest 记录策略参数与过滤原因计数，group windows 会同步移除被过滤目标。
+  下一步：根据真实实验分布在 validation 上固定默认阈值，并把过滤统计展示到 dashboard 数据流面板。
 
 - 融合轨迹可追溯输出：✅（基础闭环）
   现状：`fused track pipeline` 已统一输出目录与文件命名，并写出 `fused_track_pipeline_summary_<split>.json` 和 `fused_track_pipeline_manifest_<split>.json`，记录输入 CSV hash、输出 artifact hash、配置和模态覆盖率。

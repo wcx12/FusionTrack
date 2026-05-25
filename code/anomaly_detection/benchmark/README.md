@@ -239,7 +239,10 @@ python code/anomaly_detection/individual/export_fused_track_pipeline.py \
   --split train \
   --window-size 16 \
   --stride 8 \
-  --min-visible-frames 2
+  --min-visible-frames 2 \
+  --min-track-points 3 \
+  --min-track-visible-frames 3 \
+  --max-track-frame-gap 8
 ```
 
 `fused_trajectories_<split>.jsonl` 中每个点会包含：
@@ -277,7 +280,33 @@ python code/anomaly_detection/individual/export_fused_track_pipeline.py \
 }
 ```
 
-这一步完成的是 B 层的“跨模态关联与跨帧关联”基础闭环：跨模态部分由 fused point state 表达，跨帧部分由 object-centric 轨迹和 `temporal_linkage` 表达；manifest 则给出可复现与可追溯证据。后续应把现有 protocol runner 的分步导出路径替换为该 pipeline，减少重复逻辑。
+噪声抑制与目标持久化策略由 `TrackQualityConfig` 控制，并会写入 `summary.config.quality` 与 manifest：
+
+| 参数 | 作用 |
+| --- | --- |
+| `--min-track-points` | 轨迹最少点数，低于该值标记为 `short_track`。 |
+| `--min-track-visible-frames` | 至少有 RGB 或 thermal 可见的帧数，低于该值标记为 `low_visible_frames`。 |
+| `--max-track-frame-gap` | 相邻轨迹点最大帧间隔，超过该值标记为 `large_frame_gap`。 |
+| `--min-track-fused-ratio` | 至少多少比例的点能产生 fused state，低于该值标记为 `low_fused_ratio`。 |
+| `--keep-filtered-tracks` | 默认会过滤掉不满足质量策略的轨迹；开启后仍写出这些轨迹，但保留 `quality.drop_reasons` 供审计。 |
+
+每条 fused trajectory 都会带 `quality` 字段，例如：
+
+```json
+{
+  "quality": {
+    "keep": true,
+    "drop_reasons": [],
+    "visible_any_frames": 64,
+    "fused_ratio": 1.0,
+    "max_frame_gap": 1
+  }
+}
+```
+
+`fused_track_pipeline_summary_<split>.json` 中的 `trajectory_quality` 会汇总保留/过滤轨迹数和各类过滤原因计数；`group_windows_<split>.jsonl` 也会同步移除被过滤轨迹对应的对象，避免群体窗口继续消费明显不稳定的目标。
+
+这一步完成的是 B 层的“跨模态关联与跨帧关联”基础闭环，也补齐了“噪声抑制与目标持久化策略”的参数化入口：跨模态部分由 fused point state 表达，跨帧部分由 object-centric 轨迹和 `temporal_linkage` 表达，噪声抑制由 `quality` 字段和过滤策略表达；manifest 则给出可复现与可追溯证据。后续应把现有 protocol runner 的分步导出路径替换为该 pipeline，减少重复逻辑。
 
 ## 4. 实验协议
 
