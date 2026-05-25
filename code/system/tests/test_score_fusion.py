@@ -18,7 +18,19 @@ def test_score_fusion_combines_and_falls_back(tmp_path: Path) -> None:
     write_jsonl(
         individual_jsonl,
         [
-            {"sample_id": "S1:1", "sequence": "S1", "track_id": "1", "source": "individual_simple", "score": 1.0, "component_scores": {"speed": 1.0}},
+            {
+                "sample_id": "S1:1",
+                "sequence": "S1",
+                "track_id": "1",
+                "source": "individual_simple",
+                "score": 1.0,
+                "event_score": 0.6,
+                "frame_event_scores": [
+                    {"frame": 11, "score": 0.6, "dominant_reason": "speed"},
+                    {"frame": 12, "score": 0.5, "dominant_reason": "speed"},
+                ],
+                "component_scores": {"speed": 1.0},
+            },
             {
                 "sample_id": "S1:2",
                 "sequence": "S1",
@@ -56,6 +68,16 @@ def test_score_fusion_combines_and_falls_back(tmp_path: Path) -> None:
     rows = [json.loads(line) for line in output_jsonl.read_text(encoding="utf-8").splitlines()]
     by_id = {row["sample_id"]: row for row in rows}
     assert by_id["S1:1"]["metadata"]["used_sources"] == ["individual"]
+    assert by_id["S1:1"]["event_segments"] == [
+        {
+            "frame_start": 11,
+            "frame_end": 12,
+            "score": 0.6,
+            "dominant_reason": "speed",
+            "num_frames": 2,
+            "source": "individual",
+        }
+    ]
     assert by_id["S1:3"]["metadata"]["used_sources"] == ["group"]
     assert by_id["S1:2"]["metadata"]["used_sources"] == ["individual", "group"]
     assert "individual_speed" in by_id["S1:2"]["component_scores"]

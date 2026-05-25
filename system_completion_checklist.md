@@ -64,9 +64,9 @@
   现状：`code/system/fusiontrack/score_fusion.py` 已把 individual/group score rows 融合为统一 JSONL/CSV，输出 `S_ind`、`S_grp`、`S_event`、`S_fused`，并合并 `event_segments` 与 `frame_event_scores`；`final_dashboard.py` 已在 `task_score_decomposition` 中读取顶层 `used_sources`、`metadata.used_sources` 和显式 `component_scores.S_*`，确保网页分数分解条与导出 score JSONL 使用同一条融合解释链。
   下一步：后续可把融合权重、事件阈值和 top reason 策略提升为统一 explanation schema。
 
-- 事件段生成与平滑：☐  
-  现状：未在主展示面板形成完整事件段语义。  
-  下一步：实现 frame 级 score 序列与事件段合并输出。
+- 事件段生成与平滑：✅（基础闭环）
+  现状：`code/system/fusiontrack/event_segments.py` 已提供统一的 `frame_event_scores` 标准化、阈值过滤、小间隔合并和事件段输出；`score_fusion.py` 与 `final_dashboard.py` 已接入该工具，方法只输出逐帧事件分数时也会在后端生成 `event_segments`。
+  下一步：把阈值、最大间隔和 top reason 文案提升为可配置 explanation schema。
 
 ### D. 评测与治理层
 
@@ -180,6 +180,14 @@
 - 前端新增 `backgroundFailures` 与 `imageStatus`，避免同一个缺失资源反复请求；所有候选背景都失败时显示明确的静态资源发布错误提示。
 - 新增回归测试 `test_final_dashboard_background_frames_include_fallback_source`，保证生成的 `final_playback_data.json` 和 HTML 都包含背景回退链路。
 - 已重新生成 `server_artifacts/remote_result/report`，并检查主背景、抽样背景和 fallback 背景引用均存在；该目录仍被 `.gitignore` 忽略，公开部署时需要把 `index.html` 与完整 `assets/` 同步发布。
+
+## 2026-05-26 更新：事件段生成与平滑
+
+- 新增 `code/system/fusiontrack/event_segments.py`，统一标准化 `frame_event_scores`，过滤非法帧号和非有限分数，并保留主导原因、来源和分量分数。
+- `event_segments_from_frame_scores()` 支持阈值筛选、最大帧间隔合并、最小长度过滤、峰值分数和分量最大值聚合。
+- `score_fusion.py` 已在缺少 `event_segments` 但存在 `frame_event_scores` 时自动生成后端事件段，导出的融合 JSONL 不再依赖前端临时推断。
+- `final_dashboard.py` 已在播放 payload 构建阶段使用同一工具，确保网页事件时间线、解释面板和导出数据共用同一套事件段语义。
+- 新增 `test_event_segments.py`，并扩展 `test_score_fusion.py` 与 `test_final_results.py`，覆盖共享工具、融合输出和最终看板 payload 三条链路。
 
 ## 2026-05-25 更新：synthetic protocol manifest v2
 

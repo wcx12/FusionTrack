@@ -7,6 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from fusiontrack.event_segments import event_segments_from_frame_scores, normalize_frame_event_scores
 from fusiontrack.final_results import FinalResultsDashboard
 from fusiontrack.visualization import (
     _copy_background_asset,
@@ -172,23 +173,7 @@ def _build_playback_payloads(
             }
             task_score_components = {
                 task_name: {
-                    method_name: {
-                        "score": round(float(method_rows.get("score", 0.0) or 0.0), 6),
-                        "used_sources": str(method_rows.get("used_sources", "")),
-                        "source": str(method_rows.get("source", "")),
-                        "event_score": method_rows.get("event_score", 0.0),
-                        "event_segments": method_rows.get("event_segments", []),
-                        "frame_event_scores": method_rows.get("frame_event_scores", []),
-                        "component_scores": method_rows.get("component_scores", {}),
-                        "metadata": method_rows.get("metadata", {}),
-                        "rotation_error_deg": method_rows.get("rotation_error_deg"),
-                        "translation_error": method_rows.get("translation_error"),
-                        "chamfer_distance": method_rows.get("chamfer_distance"),
-                        "runtime_sec": method_rows.get("runtime_sec"),
-                        "success": method_rows.get("success"),
-                        "skipped": method_rows.get("skipped"),
-                        "registration_points": method_rows.get("registration_points"),
-                    }
+                    method_name: _score_component_payload(method_rows)
                     for method_name, method_rows in method_rows_by_method.items()
                 }
                 for task_name, method_rows_by_method in task_score_rows.items()
@@ -648,6 +633,38 @@ def _score_decomposition(row: dict[str, Any]) -> dict[str, float]:
         "group_source": 1.0 if has_group else 0.0,
         "alpha": float(alpha),
         "component_count": float(len(components)),
+    }
+
+
+def _score_component_payload(method_rows: dict[str, Any]) -> dict[str, Any]:
+    frame_event_scores = normalize_frame_event_scores(method_rows.get("frame_event_scores", []))
+    raw_event_segments = method_rows.get("event_segments", [])
+    event_segments = [
+        dict(segment)
+        for segment in raw_event_segments
+        if isinstance(segment, dict)
+    ] if isinstance(raw_event_segments, list) else []
+    if not event_segments:
+        event_segments = event_segments_from_frame_scores(frame_event_scores)
+    event_score = method_rows.get("event_score")
+    if event_score is None:
+        event_score = max((float(row.get("score", 0.0) or 0.0) for row in frame_event_scores), default=0.0)
+    return {
+        "score": round(float(method_rows.get("score", 0.0) or 0.0), 6),
+        "used_sources": str(method_rows.get("used_sources", "")),
+        "source": str(method_rows.get("source", "")),
+        "event_score": event_score,
+        "event_segments": event_segments,
+        "frame_event_scores": frame_event_scores,
+        "component_scores": method_rows.get("component_scores", {}),
+        "metadata": method_rows.get("metadata", {}),
+        "rotation_error_deg": method_rows.get("rotation_error_deg"),
+        "translation_error": method_rows.get("translation_error"),
+        "chamfer_distance": method_rows.get("chamfer_distance"),
+        "runtime_sec": method_rows.get("runtime_sec"),
+        "success": method_rows.get("success"),
+        "skipped": method_rows.get("skipped"),
+        "registration_points": method_rows.get("registration_points"),
     }
 
 

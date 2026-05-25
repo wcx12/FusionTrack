@@ -150,7 +150,12 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 - `event_segments`：算法侧已经合并好的事件段，包含 `frame_start`、`frame_end`、`score` 和主导原因。
 - `frame_event_scores`：逐帧事件证据序列，包含帧号、逐帧分数、主导原因和分量分数。
 
-如果方法已经输出 `event_segments`，页面会直接使用该字段绘制预测事件段。如果方法只输出 `frame_event_scores`，页面会按逐帧分数自动合并连续正分帧，生成可视化事件段。这样可以让热力时间窗口、事件时间线和右侧解释面板围绕同一份逐帧证据工作。
+事件段合并现在由 `code/system/fusiontrack/event_segments.py` 统一处理：
+
+- `normalize_frame_event_scores()` 会过滤非法帧号、非有限分数，并统一 `frame`、`score`、`dominant_reason`、`component_scores` 和 `source`。
+- `event_segments_from_frame_scores()` 会按阈值筛选正事件帧，允许配置小间隔合并，保留峰值分数、主导原因、持续帧数和分量最大值。
+
+如果方法已经输出 `event_segments`，页面会直接使用该字段绘制预测事件段。如果方法只输出 `frame_event_scores`，`score_fusion.py` 和 `final_dashboard.py` 会先在后端合并生成 `event_segments`；前端的 `eventSegmentsFromFrameScores()` 只保留为兼容旧数据的兜底逻辑。这样可以让热力时间窗口、事件时间线、右侧解释面板和导出的 score JSONL 围绕同一份逐帧证据工作。
 
 当前群体图打分方法已经输出 `frame_event_scores` 和 `event_segments`；后续 individual route/speed/shape 分支也应采用相同字段接入。
 

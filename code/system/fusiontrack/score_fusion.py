@@ -6,6 +6,8 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
+from fusiontrack.event_segments import event_segments_from_frame_scores, normalize_frame_event_scores
+
 
 EPSILON = 1e-6
 
@@ -65,41 +67,23 @@ def _source_event_segments(source: str, record: dict[str, Any] | None) -> list[d
     if record is None:
         return []
     segments = record.get("event_segments", [])
-    if not isinstance(segments, list):
-        return []
     normalized = []
-    for segment in segments:
-        if not isinstance(segment, dict):
-            continue
-        item = dict(segment)
-        item["source"] = source
-        normalized.append(item)
-    return normalized
+    if isinstance(segments, list):
+        for segment in segments:
+            if not isinstance(segment, dict):
+                continue
+            item = dict(segment)
+            item["source"] = source
+            normalized.append(item)
+    if normalized:
+        return normalized
+    return event_segments_from_frame_scores(record.get("frame_event_scores", []), source=source)
 
 
 def _source_frame_event_scores(source: str, record: dict[str, Any] | None) -> list[dict[str, Any]]:
     if record is None:
         return []
-    rows = record.get("frame_event_scores", [])
-    if not isinstance(rows, list):
-        return []
-    normalized = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        frame = row.get("frame", row.get("frame_id"))
-        if frame is None:
-            continue
-        try:
-            frame_id = int(frame)
-        except (TypeError, ValueError):
-            continue
-        item = dict(row)
-        item["frame"] = frame_id
-        item["score"] = _coerce_float(row.get("score", 0.0), 0.0)
-        item["source"] = source
-        normalized.append(item)
-    return sorted(normalized, key=lambda item: (int(item["frame"]), item["source"]))
+    return normalize_frame_event_scores(record.get("frame_event_scores", []), source=source)
 
 
 def fuse_score_records(

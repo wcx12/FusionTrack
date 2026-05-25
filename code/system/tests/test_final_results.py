@@ -131,7 +131,17 @@ def _build_small_final_result_tree(tmp_path: Path) -> tuple[Path, Path, Path, Pa
                     {"frame": 8, "score": 0.8, "dominant_reason": "leave"},
                 ],
             },
-            {"sample_id": "G1:1", "sequence": "G1", "track_id": "1", "score": 0.25},
+            {
+                "sample_id": "G1:1",
+                "sequence": "G1",
+                "track_id": "1",
+                "score": 0.25,
+                "event_score": 0.55,
+                "frame_event_scores": [
+                    {"frame": 2, "score": 0.55, "dominant_reason": "dispersion", "component_scores": {"graph_dispersion": 0.55}},
+                    {"frame": 3, "score": 0.25, "dominant_reason": "dispersion", "component_scores": {"graph_dispersion": 0.25}},
+                ],
+            },
         ],
     )
     _write_csv(
@@ -471,6 +481,17 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     ]
     assert group_components["frame_event_scores"][1]["frame"] == 8
     assert group_components["frame_event_scores"][1]["dominant_reason"] == "leave"
+    derived_components = group_tracks["G1:1"]["task_score_components"]["group"]["group_prediction_linear"]
+    assert derived_components["event_segments"] == [
+        {
+            "frame_start": 2,
+            "frame_end": 3,
+            "score": 0.55,
+            "dominant_reason": "dispersion",
+            "num_frames": 2,
+            "component_scores": {"graph_dispersion": 0.55},
+        }
+    ]
     assert group_tracks["G1:1"]["task_labels"]["group"]["label"] == 1
     assert "FusionTrack 最终结果看板" in html
     assert "总标签数" in html
