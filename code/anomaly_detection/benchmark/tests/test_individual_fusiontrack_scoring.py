@@ -9,6 +9,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fusiontrack.individual_scoring import (
+    BEHAVIOR_COMPONENT_SCORE_KEYS,
     _feature_stratified_rank01,
     _rank01,
     run_individual_fusiontrack_baseline,
@@ -44,6 +45,13 @@ def test_individual_fusiontrack_nearest_feature_scores_rank_jump_higher() -> Non
         assert row["source"] == "fusiontrack_individual:nearest_feature"
         assert isinstance(row["score"], float)
         assert math.isfinite(row["score"])
+        assert BEHAVIOR_COMPONENT_SCORE_KEYS <= set(row["component_scores"])
+        assert all(
+            math.isfinite(float(row["component_scores"][key]))
+            for key in BEHAVIOR_COMPONENT_SCORE_KEYS
+        )
+        assert row["metadata"]["behavior_component_columns"]["route"]
+        assert row["metadata"]["behavior_component_schema_version"] == 1
         assert row["metadata"]["n_neighbors"] == 1
 
 
@@ -64,12 +72,36 @@ def test_individual_fusiontrack_ensemble_combines_ranked_components() -> None:
         assert row["source"] == "fusiontrack_individual:ensemble"
         assert isinstance(row["score"], float)
         assert math.isfinite(row["score"])
-        assert set(row["component_scores"]) == {
+        assert {
             "nearest_feature_rank",
             "lof_novelty_rank",
             "isolation_forest_rank",
-        }
+        } <= set(row["component_scores"])
+        assert BEHAVIOR_COMPONENT_SCORE_KEYS <= set(row["component_scores"])
         assert row["metadata"]["method"] == "fusiontrack_individual_ensemble"
+
+
+def test_individual_fusiontrack_behavior_components_expose_route_speed_shape() -> None:
+    train = [
+        _trajectory("train_a", [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]]),
+        _trajectory("train_b", [[0.0, 1.0], [1.0, 1.0], [2.0, 1.0], [3.0, 1.0]]),
+        _trajectory("train_c", [[0.0, 2.0], [1.0, 2.0], [2.0, 2.0], [3.0, 2.0]]),
+    ]
+    normal = _trajectory("normal", [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]])
+    jump = _trajectory("jump", [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [25.0, 0.0]])
+
+    rows = run_individual_fusiontrack_baseline(train, [normal, jump], n_neighbors=1)
+    by_track = {row["track_id"]: row for row in rows}
+
+    assert by_track["jump"]["component_scores"]["route_score"] > by_track["normal"]["component_scores"]["route_score"]
+    assert by_track["jump"]["component_scores"]["speed_score"] > by_track["normal"]["component_scores"]["speed_score"]
+    assert by_track["jump"]["component_scores"]["jump_score"] > by_track["normal"]["component_scores"]["jump_score"]
+    assert set(by_track["jump"]["metadata"]["behavior_component_columns"]) == {
+        "route",
+        "speed",
+        "shape",
+        "modal",
+    }
 
 
 def test_feature_stratified_rank_suppresses_scale_only_false_positives() -> None:

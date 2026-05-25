@@ -60,7 +60,7 @@ code/anomaly_detection/benchmark/
 | --- | --- |
 | `configs/final_experiment_settings.json` | 机器可读的最终实验配置，记录统一协议、方法列表、预算、官方 baseline、已完成和未完成 rerun。 |
 | `configs/final_experiment_settings.md` | 人类可读的最终实验配置，论文和后续实验优先看这个文件。 |
-| `fusiontrack/individual_scoring.py` | 个体级 FusionTrack scoring 实现，包括 nearest feature、LOF novelty、Isolation Forest rank ensemble，以及新增的 feature-stratified rank calibration。 |
+| `fusiontrack/individual_scoring.py` | 个体级 FusionTrack scoring 实现，包括 nearest feature、LOF novelty、Isolation Forest rank ensemble、feature-stratified rank calibration，以及 route/speed/shape/modal 行为分量输出。 |
 | `fusiontrack/group_temporal_profile.py` | 群体级 FusionTrack scoring 实现，包括 prediction residual、graph cohesion、temporal profile、hybrid fusion，以及新增 residual gate。 |
 | `runners/prepare_vt_tiny_mot_protocol.py` | 生成 validation 协议、异常标签、score 路径和 benchmark matrix。 |
 | `runners/prepare_vt_tiny_mot_holdout_protocol.py` | 生成 train -> test holdout 协议；训练只来自 train，异常注入和评价来自 test。 |
@@ -464,6 +464,19 @@ score key = sample_id + window_id
 #### `fusiontrack_individual_nn`
 
 最基础的 FusionTrack 个体级 nearest-neighbor scorer。它用正常轨迹特征作为 reference，对每条测试轨迹计算最近邻距离，距离越大越异常。
+当前输出的 `component_scores` 不只包含 `nearest_feature_distance`，还会附带统一行为分量：
+
+```text
+route_score
+speed_score
+speed_slowdown_score
+jump_score
+shape_score
+route_shape_score
+modal_offset_score
+```
+
+这些分量来自训练集 robust profile，会写入 score JSONL，并被最终 dashboard 的 route/speed/shape 子模块解释面板读取。
 
 定位：
 
@@ -490,6 +503,7 @@ score key = sample_id + window_id
 3. Isolation Forest score
 
 融合方式是 rank ensemble。先把不同组件分数转为 rank，再按权重加权，减少不同 score 尺度不一致的问题。
+同时，ensemble score row 会保留与 `fusiontrack_individual_nn` 相同的行为分量字段。也就是说，最终 score 的主排序仍来自 nearest/LOF/IForest rank ensemble，但解释层可以直接读取 route/speed/shape/modal 分量来说明“为什么这个轨迹异常”。
 
 默认定位：
 
@@ -812,6 +826,7 @@ fusiontrack/individual_scoring.py
 2. 新增 feature-stratified rank calibration。
 3. 支持按 `mean_speed`、`duration_frames`、`num_points` 等特征做分层 rank。
 4. metadata 中记录校准参数，方便后续复现实验。
+5. nearest 与 ensemble 输出统一行为分量字段：`route_score`、`speed_score`、`shape_score`、`modal_offset_score` 等；metadata 中记录 `behavior_component_schema_version` 和每个分量对应的 feature columns。
 
 对应测试：
 

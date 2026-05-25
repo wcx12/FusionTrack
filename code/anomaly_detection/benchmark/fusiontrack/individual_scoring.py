@@ -18,6 +18,34 @@ from baselines.individual_features import (
 )
 
 
+BEHAVIOR_COMPONENT_COLUMNS: dict[str, tuple[str, ...]] = {
+    "route": ("duration_frames", "num_points", "path_length", "displacement"),
+    "speed": (
+        "mean_speed",
+        "max_speed",
+        "std_speed",
+        "mean_acceleration",
+        "max_acceleration",
+    ),
+    "shape": (
+        "mean_turn_angle",
+        "max_turn_angle",
+        "bbox_area_mean",
+        "bbox_area_std",
+    ),
+    "modal": ("modal_offset_mean", "modal_offset_max"),
+}
+BEHAVIOR_COMPONENT_SCORE_KEYS = {
+    "route_score",
+    "speed_score",
+    "speed_slowdown_score",
+    "jump_score",
+    "shape_score",
+    "route_shape_score",
+    "modal_offset_score",
+}
+
+
 def fit_nearest_feature_profile(
     feature_df: pd.DataFrame,
     n_neighbors: int = 1,
@@ -57,9 +85,14 @@ def run_individual_fusiontrack_baseline(
     score_features = build_handcrafted_feature_table(score_trajectories)
     model = fit_nearest_feature_profile(train_features, n_neighbors=n_neighbors)
     scores = score_nearest_feature_profile(model, score_features)
+    behavior_scores = behavior_component_score_map(train_features, score_features)
 
     rows: list[dict[str, Any]] = []
     for (_, feature_row), score in zip(score_features.iterrows(), scores):
+        component_scores = {
+            "nearest_feature_distance": float(score),
+            **behavior_scores.get(str(feature_row["sample_id"]), _empty_behavior_scores()),
+        }
         rows.append(
             {
                 "sample_id": str(feature_row["sample_id"]),
@@ -67,11 +100,12 @@ def run_individual_fusiontrack_baseline(
                 "track_id": str(feature_row["track_id"]),
                 "source": "fusiontrack_individual:nearest_feature",
                 "score": float(score),
-                "component_scores": {"nearest_feature_distance": float(score)},
+                "component_scores": component_scores,
                 "metadata": {
                     "method": "nearest_feature",
                     "n_neighbors": max(1, int(n_neighbors)),
                     "feature_columns": list(FEATURE_COLUMNS),
+                    **_behavior_component_metadata(),
                 },
             }
         )
@@ -94,6 +128,7 @@ def run_individual_fusiontrack_ensemble(
     train_features = build_handcrafted_feature_table(train_trajectories)
     score_features = build_handcrafted_feature_table(score_trajectories)
     sample_ids = score_features["sample_id"].astype(str).tolist()
+    behavior_scores = behavior_component_score_map(train_features, score_features)
 
     nearest_model = fit_nearest_feature_profile(
         train_features,
@@ -157,6 +192,7 @@ def run_individual_fusiontrack_ensemble(
             "nearest_feature_rank": float(nearest_rank[index]),
             "lof_novelty_rank": float(lof_rank[index]),
             "isolation_forest_rank": float(iforest_rank[index]),
+            **behavior_scores.get(str(feature_row["sample_id"]), _empty_behavior_scores()),
         }
         if calibration_config["enabled"]:
             component_scores["uncalibrated_ensemble_rank"] = float(base_scores[index])
@@ -176,6 +212,7 @@ def run_individual_fusiontrack_ensemble(
                     "contamination": float(contamination),
                     "feature_columns": list(FEATURE_COLUMNS),
                     "calibration": dict(calibration_config),
+                    **_behavior_component_metadata(),
                     "weights": {
                         "nearest_feature_rank": float(weights[0]),
                         "lof_novelty_rank": float(weights[1]),
@@ -185,6 +222,120 @@ def run_individual_fusiontrack_ensemble(
             }
         )
     return rows
+
+
+def behavior_component_score_map(
+    train_features: pd.DataFrame,
+    score_features: pd.DataFrame,
+) -> dict[str, dict[str, float]]:
+    if score_features.empty:
+        return {}
+    group_scores = {
+        name: _robust_group_score(train_features, score_features, columns)
+        for name, columns in BEHAVIOR_COMPONENT_COLUMNS.items()
+    }
+    jump_scores = _robust_group_score(
+        train_features,
+        score_features,
+        ("max_speed", "max_acceleration"),
+    )
+    slowdown_scores = _slowdown_scores(train_features, score_features)
+
+    result: dict[str, dict[str, float]] = {}
+    for index, (_, row) in enumerate(score_features.iterrows()):
+        route_score = float(group_scores["route"][index])
+        speed_score = float(group_scores["speed"][index])
+        shape_score = float(group_scores["shape"][index])
+        modal_score = float(group_scores["modal"][index])
+        result[str(row["sample_id"])] = {
+            "route_score": route_score,
+            "speed_score": speed_score,
+            "speed_slowdown_score": float(slowdown_scores[index]),
+            "jump_score": float(jump_scores[index]),
+            "shape_score": shape_score,
+            "route_shape_score": float(max(route_score, shape_score)),
+            "modal_offset_score": modal_score,
+        }
+    return result
+
+
+def _behavior_component_metadata() -> dict[str, Any]:
+    return {
+        "behavior_component_schema_version": 1,
+        "behavior_component_method": "train_robust_z01",
+        "behavior_component_columns": {
+            key: list(columns)
+            for key, columns in BEHAVIOR_COMPONENT_COLUMNS.items()
+        },
+    }
+
+
+def _empty_behavior_scores() -> dict[str, float]:
+    return {key: 0.0 for key in sorted(BEHAVIOR_COMPONENT_SCORE_KEYS)}
+
+
+def _robust_group_score(
+    train_features: pd.DataFrame,
+    score_features: pd.DataFrame,
+    columns: Sequence[str],
+) -> list[float]:
+    clean_columns = [
+        str(column)
+        for column in columns
+        if str(column) in FEATURE_COLUMNS and str(column) in score_features.columns
+    ]
+    if not clean_columns or score_features.empty:
+        return [0.0 for _ in range(len(score_features))]
+    score_matrix = _numeric_matrix(score_features, clean_columns)
+    if train_features.empty:
+        baseline = np.zeros(len(clean_columns), dtype=float)
+        scale = np.ones(len(clean_columns), dtype=float)
+    else:
+        train_matrix = _numeric_matrix(train_features, clean_columns)
+        baseline = np.median(train_matrix, axis=0)
+        mad = np.median(np.abs(train_matrix - baseline), axis=0)
+        std = np.std(train_matrix, axis=0)
+        scale = np.where(mad > 1e-6, mad, np.where(std > 1e-6, std, 1.0))
+    raw = np.mean(np.abs((score_matrix - baseline) / scale), axis=1)
+    return _saturating01(raw)
+
+
+def _slowdown_scores(
+    train_features: pd.DataFrame,
+    score_features: pd.DataFrame,
+) -> list[float]:
+    if score_features.empty or "mean_speed" not in score_features.columns:
+        return [0.0 for _ in range(len(score_features))]
+    score_speed = _numeric_matrix(score_features, ["mean_speed"]).reshape(-1)
+    if train_features.empty or "mean_speed" not in train_features.columns:
+        train_median = float(np.median(score_speed)) if len(score_speed) else 0.0
+        scale = 1.0
+    else:
+        train_speed = _numeric_matrix(train_features, ["mean_speed"]).reshape(-1)
+        train_median = float(np.median(train_speed)) if len(train_speed) else 0.0
+        mad = float(np.median(np.abs(train_speed - train_median))) if len(train_speed) else 0.0
+        std = float(np.std(train_speed)) if len(train_speed) else 0.0
+        scale = mad if mad > 1e-6 else std if std > 1e-6 else 1.0
+    raw = np.maximum((train_median - score_speed) / scale, 0.0)
+    return _saturating01(raw)
+
+
+def _numeric_matrix(feature_df: pd.DataFrame, columns: Sequence[str]) -> np.ndarray:
+    if feature_df.empty:
+        return np.zeros((0, len(columns)), dtype=float)
+    matrix = feature_df.reindex(columns=list(columns), fill_value=0.0)
+    matrix = matrix.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    return matrix.to_numpy(dtype=float)
+
+
+def _saturating01(values: Iterable[float]) -> list[float]:
+    array = np.asarray(list(values), dtype=float)
+    if len(array) == 0:
+        return []
+    array = np.where(np.isfinite(array), array, 0.0)
+    array = np.maximum(array, 0.0)
+    normalized = array / (1.0 + array)
+    return [float(value) for value in np.clip(normalized, 0.0, 1.0)]
 
 
 def _feature_matrix(feature_df: pd.DataFrame) -> pd.DataFrame:

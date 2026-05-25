@@ -52,9 +52,9 @@
 
 ### C. 行为异常检测层
 
-- Individual 分支（route/speed/shape）：☐  
-  现状：论文方案完整，工程聚合层已在展示侧，算法层未完全闭环到统一输出。  
-  下一步：补充分量分数统一打通到 dashboard payload。
+- Individual 分支（route/speed/shape）：✅（基础闭环）
+  现状：`fusiontrack/individual_scoring.py` 已为 nearest 与 ensemble score rows 统一输出 `route_score`、`speed_score`、`speed_slowdown_score`、`jump_score`、`shape_score`、`route_shape_score` 和 `modal_offset_score`；这些字段写入 `component_scores`，dashboard 子模块解释面板可直接读取，metadata 记录 schema 版本和分量对应的 feature columns。
+  下一步：后续可把分量阈值和 top reason 文案进一步从前端规则迁移为后端事件解释输出。
 
 - Group 分支（群体结构与事件）：🟡  
   现状：有群体关系与相关可视化。  
