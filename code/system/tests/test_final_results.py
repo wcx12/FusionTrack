@@ -4,7 +4,7 @@ import csv
 import json
 from pathlib import Path
 
-from fusiontrack.final_dashboard import build_final_dashboard
+from fusiontrack.final_dashboard import _score_decomposition, build_final_dashboard
 from fusiontrack.final_results import load_final_results_dashboard
 
 
@@ -295,6 +295,59 @@ def test_load_final_results_dashboard_builds_leaderboards_type_stats_and_cases(t
     assert cases["false_positive"][0]["sample_id"] == "S2:3"
     assert cases["false_negative"][0]["sample_id"] == "S1:2"
     assert dashboard.tasks["group"].anomaly_type_rows[0]["anomaly_type"] == "population_change"
+
+
+def test_score_decomposition_reads_fused_metadata_sources_and_explicit_components() -> None:
+    row = {
+        "score": 0.62,
+        "event_score": 0.91,
+        "component_scores": {
+            "S_ind": 0.37,
+            "S_grp": 0.82,
+            "S_event": 0.91,
+            "S_fused": 0.62,
+            "individual_speed_score": 0.37,
+            "group_graph_leave": 0.82,
+        },
+        "metadata": {
+            "used_sources": ["individual", "group"],
+            "alpha": 0.55,
+            "individual_raw_score": 2.5,
+            "group_raw_score": 4.0,
+        },
+    }
+
+    decomp = _score_decomposition(row)
+
+    assert decomp["S_ind"] == 0.37
+    assert decomp["S_grp"] == 0.82
+    assert decomp["S_event"] == 0.91
+    assert decomp["S_fused"] == 0.62
+    assert decomp["individual_source"] == 1.0
+    assert decomp["group_source"] == 1.0
+    assert decomp["alpha"] == 0.55
+
+
+def test_score_decomposition_infers_single_branch_source_family() -> None:
+    group_decomp = _score_decomposition(
+        {
+            "source": "fusiontrack_group_hybrid",
+            "score": 0.73,
+            "component_scores": {"graph_leave": 0.41},
+        }
+    )
+    individual_decomp = _score_decomposition(
+        {
+            "source": "fusiontrack_individual:nearest_feature",
+            "score": 0.58,
+            "component_scores": {"route_score": 0.34},
+        }
+    )
+
+    assert group_decomp["S_grp"] == 0.73
+    assert group_decomp["group_source"] == 1.0
+    assert individual_decomp["S_ind"] == 0.58
+    assert individual_decomp["individual_source"] == 1.0
 
 
 def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> None:

@@ -60,9 +60,9 @@
   现状：`fusiontrack/group_scoring.py` 已输出 `event_score`、`event_segments`、`frame_event_scores` 与群体图结构分量；`fusiontrack/group_temporal_profile.py` 已在 `fusiontrack_group_hybrid` score rows 中透传 `graph_leave`、`graph_motion`、`graph_neighbor`、`graph_count`、`graph_dispersion`、`graph_split_merge`、`graph_object_group`、`graph_group_event`，并通过 `metadata.score_sources` 记录 prediction / graph / temporal_profile 三个子分支的原始分数和组件来源。
   下一步：后续把 group top reason 文案和事件段阈值策略进一步固化为后端 explanation schema。
 
-- 个体-群体融合：☐  
-  现状：存在 fused-score 思路，但前端并非强制读取融合分量链。  
-  下一步：统一 `S_ind / S_grp / S_event` 展示与导出。
+- 个体-群体融合：✅（基础闭环）
+  现状：`code/system/fusiontrack/score_fusion.py` 已把 individual/group score rows 融合为统一 JSONL/CSV，输出 `S_ind`、`S_grp`、`S_event`、`S_fused`，并合并 `event_segments` 与 `frame_event_scores`；`final_dashboard.py` 已在 `task_score_decomposition` 中读取顶层 `used_sources`、`metadata.used_sources` 和显式 `component_scores.S_*`，确保网页分数分解条与导出 score JSONL 使用同一条融合解释链。
+  下一步：后续可把融合权重、事件阈值和 top reason 策略提升为统一 explanation schema。
 
 - 事件段生成与平滑：☐  
   现状：未在主展示面板形成完整事件段语义。  

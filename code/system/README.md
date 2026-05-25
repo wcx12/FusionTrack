@@ -149,6 +149,8 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 - `S_event`：来自 individual/group 事件证据的最高事件分数。
 - `S_fused`：最终融合分数。
 
+最终 dashboard 会优先读取这些显式 `S_*` 字段；来源判断同时支持顶层 `used_sources` 和 `metadata.used_sources`，因此 `score_fusion.py` 导出的融合 JSONL 可以直接驱动网页分数分解条。
+
 这样最终网页的分数分解条、事件时间线和导出的 score JSONL 使用的是同一条解释链。
 
 ## 实验分析区

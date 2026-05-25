@@ -541,18 +541,55 @@ def _normalize_weighted_score(row: dict[str, Any], key_prefix: str, fallback_wei
         return max(values)
     metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
     if key_prefix == "individual":
-        return _coerce_float(metadata.get("individual_raw_score"), 0.0)
+        metadata_score = _coerce_float(metadata.get("individual_raw_score"), 0.0)
+        return metadata_score if metadata_score else fallback_weight * _coerce_float(row.get("score"), 0.0)
     if key_prefix == "group":
-        return _coerce_float(metadata.get("group_raw_score"), 0.0)
+        metadata_score = _coerce_float(metadata.get("group_raw_score"), 0.0)
+        return metadata_score if metadata_score else fallback_weight * _coerce_float(row.get("score"), 0.0)
     return fallback_weight * _coerce_float(row.get("score"), 0.0)
+
+
+def _source_tokens(row: dict[str, Any]) -> set[str]:
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    values = [row.get("used_sources"), metadata.get("used_sources"), row.get("source")]
+    tokens: set[str] = set()
+    for value in values:
+        if value in (None, ""):
+            continue
+        if isinstance(value, (list, tuple, set)):
+            parts = value
+        else:
+            text = str(value).replace(",", "|").replace(" ", "|")
+            parts = text.split("|")
+        for part in parts:
+            token = str(part).strip().lower()
+            if token:
+                tokens.add(token)
+                if "individual" in token:
+                    tokens.add("individual")
+                if "group" in token:
+                    tokens.add("group")
+                if "registration" in token:
+                    tokens.add("registration")
+    return tokens
+
+
+def _component_float(components: dict[str, Any], key: str) -> float | None:
+    if key not in components:
+        return None
+    try:
+        value = float(components.get(key, 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
 
 
 def _score_decomposition(row: dict[str, Any]) -> dict[str, float]:
     components = row.get("component_scores") if isinstance(row.get("component_scores"), dict) else {}
-    used_sources = str(row.get("used_sources", ""))
-    has_individual = "individual" in used_sources
-    has_group = "group" in used_sources
-    has_registration = "registration" in used_sources
+    source_tokens = _source_tokens(row)
+    has_individual = "individual" in source_tokens
+    has_group = "group" in source_tokens
+    has_registration = "registration" in source_tokens
     metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
     individual_raw = _coerce_float(metadata.get("individual_raw_score", 0.0), 0.0)
     group_raw = _coerce_float(metadata.get("group_raw_score", 0.0), 0.0)
@@ -560,10 +597,15 @@ def _score_decomposition(row: dict[str, Any]) -> dict[str, float]:
         metadata.get("alpha", 0.65) if isinstance(metadata.get("alpha"), (int, float)) else 0.65,
         0.65,
     )
-    fused = _coerce_float(row.get("score", 0.0), 0.0)
-    ind = 0.0
-    grp = 0.0
-    evt = _coerce_float(row.get("event_score", 0.0), 0.0)
+    fused = _component_float(components, "S_fused")
+    if fused is None:
+        fused = _coerce_float(row.get("score", 0.0), 0.0)
+    explicit_ind = _component_float(components, "S_ind")
+    explicit_grp = _component_float(components, "S_grp")
+    explicit_evt = _component_float(components, "S_event")
+    ind = explicit_ind if explicit_ind is not None else 0.0
+    grp = explicit_grp if explicit_grp is not None else 0.0
+    evt = explicit_evt if explicit_evt is not None else _coerce_float(row.get("event_score", 0.0), 0.0)
 
     if has_registration:
         registration_values = [
@@ -574,16 +616,20 @@ def _score_decomposition(row: dict[str, Any]) -> dict[str, float]:
         evt = max(registration_values or [fused])
 
     if has_individual and has_group:
-        ind = _normalize_weighted_score(row, "individual", fallback_weight=alpha)
-        grp = _normalize_weighted_score(row, "group", fallback_weight=(1 - alpha))
+        if explicit_ind is None:
+            ind = _normalize_weighted_score(row, "individual", fallback_weight=alpha)
+        if explicit_grp is None:
+            grp = _normalize_weighted_score(row, "group", fallback_weight=(1 - alpha))
         if not ind and individual_raw:
             ind = individual_raw
         if not grp and group_raw:
             grp = group_raw
     elif has_individual:
-        ind = _normalize_weighted_score(row, "individual", fallback_weight=1.0)
+        if explicit_ind is None:
+            ind = _normalize_weighted_score(row, "individual", fallback_weight=1.0)
     elif has_group:
-        grp = _normalize_weighted_score(row, "group", fallback_weight=1.0)
+        if explicit_grp is None:
+            grp = _normalize_weighted_score(row, "group", fallback_weight=1.0)
 
     return {
         "S_ind": float(ind),
