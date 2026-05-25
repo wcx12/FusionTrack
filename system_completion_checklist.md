@@ -34,9 +34,9 @@
 
 ### B. 融合与轨迹构建层
 
-- 多模态标准化：🟡  
-  现状：章节有完整思路，工程里未统一成标准服务。  
-  下一步：抽标准化模块，固定输出字段。
+- 多模态标准化：✅（基础闭环）
+  现状：新增 `mtf_ba/observation_standardization.py`，统一把扁平 `observations_<split>.csv` 行转换为 `rgb/thermal/modal_relation/quality` 结构；individual 轨迹导出与 group window 导出已共用该入口，避免两条链路各自解析字段。
+  下一步：继续把标准化质量统计汇总到 protocol manifest 与 dashboard 数据流面板。
 
 - 跨模态关联与跨帧关联：🟡  
   现状：已有实现思路与展示链路，缺乏统一 pipeline 封装。  

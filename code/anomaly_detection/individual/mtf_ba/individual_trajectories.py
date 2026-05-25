@@ -5,6 +5,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from mtf_ba.observation_standardization import (
+    point_from_observation_row,
+    to_float as _to_float,
+    to_int as _to_int,
+)
 from mtf_ba.schemas import ObjectIdentity
 
 try:
@@ -12,60 +17,6 @@ try:
 except ImportError:  # pragma: no cover
     def tqdm(iterable, **_: Any):  # type: ignore[misc]
         return iterable
-
-
-def _to_float(value: str | None) -> float | None:
-    if value is None or value == "":
-        return None
-    return float(value)
-
-
-def _to_int(value: str | None) -> int | None:
-    if value is None or value == "":
-        return None
-    return int(float(value))
-
-
-def _parse_modality(row: dict[str, str], prefix: str) -> dict[str, Any] | None:
-    """
-    Parse one modality state from a flat CSV row.
-
-    `prefix` is typically `"rgb"` or `"thermal"`.
-
-    Returned fields are per-frame observations for that modality only:
-    - bounding box
-    - box center
-    - velocity / speed
-
-    If the modality is not visible in this frame, return None instead of a
-    partially filled structure so downstream code can explicitly reason about
-    modality presence/absence.
-    """
-    cx = _to_float(row.get(f"{prefix}_cx"))
-    cy = _to_float(row.get(f"{prefix}_cy"))
-    if cx is None or cy is None:
-        return None
-
-    return {
-        "file": row.get(f"{prefix}_file") or None,
-        "bbox_xywh": [
-            _to_float(row.get(f"{prefix}_x")),
-            _to_float(row.get(f"{prefix}_y")),
-            _to_float(row.get(f"{prefix}_w")),
-            _to_float(row.get(f"{prefix}_h")),
-        ],
-        "center_xy": [cx, cy],
-        "velocity_px_per_frame": [
-            _to_float(row.get(f"{prefix}_vx_px_per_frame")),
-            _to_float(row.get(f"{prefix}_vy_px_per_frame")),
-        ],
-        "speed_px_per_frame": _to_float(row.get(f"{prefix}_speed_px_per_frame")),
-        "velocity_px_per_second": [
-            _to_float(row.get(f"{prefix}_vx_px_per_second")),
-            _to_float(row.get(f"{prefix}_vy_px_per_second")),
-        ],
-        "speed_px_per_second": _to_float(row.get(f"{prefix}_speed_px_per_second")),
-    }
 
 
 def _count_csv_rows(csv_path: Path) -> int:
@@ -135,27 +86,7 @@ def load_object_trajectories(
             track_id = row["track_id"]
             key = (sequence, track_id)
 
-            point = {
-                "frame_id": _to_int(row.get("frame_id")),
-                "rgb": _parse_modality(row, "rgb"),
-                "thermal": _parse_modality(row, "thermal"),
-                "modal": {
-                    # Thermal-center minus RGB-center displacement. These two
-                    # values preserve direction, unlike offset_distance.
-                    "offset_dx_thermal_minus_rgb": _to_float(
-                        row.get("modal_offset_dx_thermal_minus_rgb")
-                    ),
-                    "offset_dy_thermal_minus_rgb": _to_float(
-                        row.get("modal_offset_dy_thermal_minus_rgb")
-                    ),
-                    # Euclidean distance between RGB and thermal centers for
-                    # the same object at this frame.
-                    "offset_distance": _to_float(row.get("modal_offset_distance")),
-                    # Spatial overlap between RGB and thermal boxes. Higher is
-                    # more consistent across modalities.
-                    "bbox_iou": _to_float(row.get("modal_bbox_iou")),
-                },
-            }
+            point = point_from_observation_row(row, keep_empty_modal_relation=True)
             grouped[key].append(point)
 
             if key not in metadata:

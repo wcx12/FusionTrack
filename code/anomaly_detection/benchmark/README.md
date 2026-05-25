@@ -133,6 +133,84 @@ python code/anomaly_detection/benchmark/runners/run_suite.py \
 
 `suite_manifest.json` 会记录 suite 配置 SHA-256、每个 matrix 的 config/manifest/summary SHA-256、git commit/branch/dirty 状态和 Python 环境。它和 matrix 级 manifest 一起构成实验复现的主要证据链。
 
+### 3.1 多模态观测标准化
+
+轨迹构建的第一层输入是 `observations_<split>.csv`。这份 CSV 仍然保留扁平字段，便于检查和和旧脚本兼容，例如：
+
+```text
+rgb_cx, rgb_cy, rgb_w, rgb_h
+thermal_cx, thermal_cy, thermal_w, thermal_h
+modal_offset_dx_thermal_minus_rgb
+modal_offset_dy_thermal_minus_rgb
+modal_offset_distance
+modal_bbox_iou
+```
+
+为了避免 individual、group 和后续 fusion 代码各自解释这些字段，当前系统新增了统一标准化入口：
+
+```text
+code/anomaly_detection/individual/mtf_ba/observation_standardization.py
+```
+
+核心接口：
+
+| 接口 | 作用 |
+| --- | --- |
+| `standardize_observation_row(row)` | 将一行扁平观测转为结构化字典，包含 `modalities.rgb`、`modalities.thermal`、`modal_relation` 和 `quality`。 |
+| `standardize_observation_rows(rows)` | 批量标准化并按 `sequence / track_id / frame_id` 排序。 |
+| `point_from_observation_row(row)` | 生成 individual 轨迹点使用的 `{frame_id, rgb, thermal, modal}` 结构。 |
+| `parse_modality_state(row, "rgb" or "thermal")` | 解析单个模态，中心点缺失时返回 `None`。 |
+| `parse_modal_relation(row)` | 解析或推断 RGB 与 thermal 的中心偏移、距离和 bbox IoU。 |
+
+标准化后的核心结构示例：
+
+```json
+{
+  "schema_version": 1,
+  "sample_id": "SEQ-A:7",
+  "sequence": "SEQ-A",
+  "track_id": "7",
+  "frame_id": 12,
+  "modalities": {
+    "rgb": {
+      "available": true,
+      "bbox_xywh": [10.0, 20.0, 30.0, 40.0],
+      "center_xy": [25.0, 40.0],
+      "confidence": 0.9,
+      "visibility": 0.8
+    },
+    "thermal": {
+      "available": true,
+      "bbox_xywh": [13.0, 24.0, 30.0, 40.0],
+      "center_xy": [28.0, 44.0],
+      "confidence": 0.7,
+      "visibility": 0.6
+    }
+  },
+  "modal_relation": {
+    "available": true,
+    "offset_dx_thermal_minus_rgb": 3.0,
+    "offset_dy_thermal_minus_rgb": 4.0,
+    "offset_distance": 5.0,
+    "bbox_iou": 0.72
+  },
+  "quality": {
+    "num_available_modalities": 2,
+    "available_modalities": ["rgb", "thermal"],
+    "missing_modalities": [],
+    "has_cross_modal_relation": true
+  }
+}
+```
+
+当前已接入的链路：
+
+1. `mtf_ba.individual_trajectories.load_object_trajectories()` 使用 `point_from_observation_row()` 生成 individual 轨迹点。
+2. `mtf_ba.group_interface.iter_group_windows()` 使用同一套模态与跨模态关系解析函数生成 group window。
+3. 缺失 RGB 或 thermal 时不会丢弃整行，而是在 `quality.missing_modalities` 中显式记录，后续可以按 `require_both_modalities` 或 scorer 自身策略处理。
+
+这个模块完成的是 B 层“多模态标准化”的基础闭环。它不是新的异常检测算法，而是把后续融合、轨迹构建、群体建模和可视化解释都建立在同一份字段语义上。下一步应把 `quality` 统计写入 protocol manifest 和 dashboard 数据流面板，便于展示每个序列的模态覆盖率、缺失模态数量和跨模态偏移分布。
+
 ## 4. 实验协议
 
 ### 4.1 验证集协议

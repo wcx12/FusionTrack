@@ -7,6 +7,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Literal, Protocol
 
+from mtf_ba.observation_standardization import (
+    parse_modal_relation as _parse_modal_relation,
+    parse_modality_state as _parse_modality,
+    to_float as _to_float,
+    to_int as _to_int,
+)
 from mtf_ba.schemas import ScoreRecord, build_sample_id
 
 
@@ -24,64 +30,8 @@ GROUP_FEATURE_NAMES = (
 )
 
 
-def _to_float(value: str | None) -> float | None:
-    if value is None or value == "":
-        return None
-    return float(value)
-
-
-def _to_int(value: str | None) -> int | None:
-    if value is None or value == "":
-        return None
-    return int(float(value))
-
-
 def _track_sort_key(track_id: str) -> tuple[int, int | str]:
     return (0, int(track_id)) if str(track_id).isdigit() else (1, str(track_id))
-
-
-def _parse_modality(row: dict[str, str], prefix: str) -> dict[str, Any] | None:
-    cx = _to_float(row.get(f"{prefix}_cx"))
-    cy = _to_float(row.get(f"{prefix}_cy"))
-    if cx is None or cy is None:
-        return None
-
-    return {
-        "file": row.get(f"{prefix}_file") or None,
-        "bbox_xywh": [
-            _to_float(row.get(f"{prefix}_x")),
-            _to_float(row.get(f"{prefix}_y")),
-            _to_float(row.get(f"{prefix}_w")),
-            _to_float(row.get(f"{prefix}_h")),
-        ],
-        "center_xy": [cx, cy],
-        "velocity_px_per_frame": [
-            _to_float(row.get(f"{prefix}_vx_px_per_frame")),
-            _to_float(row.get(f"{prefix}_vy_px_per_frame")),
-        ],
-        "speed_px_per_frame": _to_float(row.get(f"{prefix}_speed_px_per_frame")),
-        "velocity_px_per_second": [
-            _to_float(row.get(f"{prefix}_vx_px_per_second")),
-            _to_float(row.get(f"{prefix}_vy_px_per_second")),
-        ],
-        "speed_px_per_second": _to_float(row.get(f"{prefix}_speed_px_per_second")),
-    }
-
-
-def _parse_modal_relation(row: dict[str, str]) -> dict[str, float | None] | None:
-    modal = {
-        "offset_dx_thermal_minus_rgb": _to_float(
-            row.get("modal_offset_dx_thermal_minus_rgb")
-        ),
-        "offset_dy_thermal_minus_rgb": _to_float(
-            row.get("modal_offset_dy_thermal_minus_rgb")
-        ),
-        "offset_distance": _to_float(row.get("modal_offset_distance")),
-        "bbox_iou": _to_float(row.get("modal_bbox_iou")),
-    }
-    if all(value is None for value in modal.values()):
-        return None
-    return modal
 
 
 def build_group_window_id(sequence: str, frame_start: int, frame_end: int) -> str:
