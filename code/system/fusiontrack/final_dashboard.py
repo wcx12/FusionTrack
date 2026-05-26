@@ -942,6 +942,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           <label><span data-i18n="timeWindowLabel">时间窗口</span>
             <input id="heatWindow" type="range" min="12" max="120" value="36">
           </label>
+          <label><span data-i18n="eventThresholdLabel">Event threshold</span>
+            <input id="eventThreshold" type="range" min="0" max="100" value="0">
+            <span id="eventThresholdReadout" class="subtle">0.00</span>
+          </label>
           <label><span data-i18n="playSpeedLabel">播放速度</span>
             <input id="playSpeed" type="range" min="20" max="300" step="10" value="100">
             <span id="playSpeedReadout" class="subtle">1.0x</span>
@@ -1126,6 +1130,8 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       const heatControlsPanel = document.querySelector(".heat-controls");
       const heatOpacity = document.getElementById("heatOpacity");
       const heatWindow = document.getElementById("heatWindow");
+      const eventThreshold = document.getElementById("eventThreshold");
+      const eventThresholdReadout = document.getElementById("eventThresholdReadout");
       const playSpeed = document.getElementById("playSpeed");
       const playSpeedReadout = document.getElementById("playSpeedReadout");
       const sequenceStats = document.getElementById("sequenceStats");
@@ -1632,6 +1638,32 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         registration3DNote: "Blue is source, green is reference, red is estimated aligned. This is a lightweight projection preview generated from benchmark error fields.",
         chartNoData: "No frame-level curve data"
       }});
+      Object.assign(translations.zh, {{
+        eventThresholdLabel: "事件阈值",
+        windowEventTitle: "当前窗口事件证据",
+        windowEventEmpty: "当前时间窗口没有命中超过阈值的事件证据。",
+        windowEventRange: "窗口范围",
+        windowEventPeak: "峰值事件分数",
+        windowEventReason: "主导原因",
+        windowEventFrames: "命中帧数",
+        windowEventComponents: "分量证据",
+        windowEventSource: "证据来源",
+        windowEventSourceModel: "逐帧模型输出",
+        windowEventSourceSegment: "事件段/协议段回退"
+      }});
+      Object.assign(translations.en, {{
+        eventThresholdLabel: "Event threshold",
+        windowEventTitle: "Current-window event evidence",
+        windowEventEmpty: "No event evidence exceeds the threshold in the current time window.",
+        windowEventRange: "Window range",
+        windowEventPeak: "Peak event score",
+        windowEventReason: "Dominant reason",
+        windowEventFrames: "Hit frames",
+        windowEventComponents: "Component evidence",
+        windowEventSource: "Evidence source",
+        windowEventSourceModel: "Frame-level model output",
+        windowEventSourceSegment: "Event/protocol segment fallback"
+      }});
       const backgroundCache = new Map();
       const backgroundFailures = new Set();
       const state = {{
@@ -1647,6 +1679,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         layer: "both",
         heatOpacity: 0.64,
         heatWindow: 36,
+        eventThreshold: 0.0,
         playSpeed: 1.0,
         selectedSampleId: "",
         image: null,
@@ -1836,6 +1869,172 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }}
         const compRows = (track.task_score_components || {{}})[state.task] || {{}};
         return compRows[state.method] || Object.values(compRows || {{}})[0] || {{}};
+      }}
+
+      function frameEventScoresForWindow(row, frame = state.frame, window = state.heatWindow, threshold = state.eventThreshold) {{
+        const rawRows = Array.isArray(row?.frame_event_scores) ? row.frame_event_scores : [];
+        const end = Number.isFinite(Number(frame)) ? Number(frame) : 0;
+        const span = Math.max(0, Number(window) || 0);
+        const start = end - span;
+        const floor = Number(threshold) || 0;
+        return rawRows
+          .map(item => {{
+            const frameValue = Number(item.frame ?? item.frame_id);
+            const score = Number(item.score || 0);
+            const componentScores = Object.fromEntries(
+              Object.entries(item.component_scores || {{}})
+                .map(([key, value]) => [key, Number(value)])
+                .filter(([, value]) => Number.isFinite(value))
+            );
+            return {{
+              frame: frameValue,
+              score,
+              dominant_reason: String(item.dominant_reason || item.reason || "event"),
+              component_scores: componentScores,
+              source: item.source ? String(item.source) : ""
+            }};
+          }})
+          .filter(item => Number.isFinite(item.frame) && Number.isFinite(item.score))
+          .filter(item => item.frame >= start && item.frame <= end && item.score > floor)
+          .sort((a, b) => b.score - a.score || a.frame - b.frame);
+      }}
+
+      function windowEventSummary(row, frame = state.frame, window = state.heatWindow, threshold = state.eventThreshold) {{
+        const rawRows = Array.isArray(row?.frame_event_scores) ? row.frame_event_scores : [];
+        const end = Number.isFinite(Number(frame)) ? Number(frame) : 0;
+        const span = Math.max(0, Number(window) || 0);
+        const start = end - span;
+        const rows = frameEventScoresForWindow(row, end, span, threshold);
+        if (!rows.length) {{
+          return {{
+            hasFrameScores: rawRows.length > 0,
+            rows: [],
+            rangeStart: start,
+            rangeEnd: end,
+            componentScores: {{}}
+          }};
+        }}
+        const peak = rows.reduce((best, item) => item.score > best.score ? item : best, rows[0]);
+        const componentScores = {{}};
+        rows.forEach(item => {{
+          Object.entries(item.component_scores || {{}}).forEach(([key, value]) => {{
+            componentScores[key] = Math.max(Number(componentScores[key] || 0), Number(value || 0));
+          }});
+        }});
+        return {{
+          hasFrameScores: true,
+          rows,
+          rangeStart: start,
+          rangeEnd: end,
+          peakScore: peak.score,
+          dominantReason: peak.dominant_reason,
+          peakFrame: peak.frame,
+          componentScores
+        }};
+      }}
+
+      function windowSegmentSummary(track, row, frame = state.frame, window = state.heatWindow) {{
+        const end = Number.isFinite(Number(frame)) ? Number(frame) : 0;
+        const span = Math.max(0, Number(window) || 0);
+        const start = end - span;
+        const rowSegments = Array.isArray(row?.event_segments) ? row.event_segments : [];
+        const taskSegments = (((track || {{}}).task_segments || {{}})[state.task] || []).filter(item => Number(item.label || 0) === 1);
+        const sourceSegments = rowSegments.length ? rowSegments : taskSegments;
+        const rows = sourceSegments
+          .map(item => {{
+            const frameStart = Number(item.frame_start ?? item.start ?? 0);
+            const frameEnd = Number(item.frame_end ?? item.end ?? frameStart);
+            const score = Number(item.score ?? item.event_score ?? 1);
+            return {{
+              frame_start: frameStart,
+              frame_end: frameEnd,
+              score,
+              dominant_reason: String(item.dominant_reason || item.reason || item.anomaly_type || item.label || "event"),
+              component_scores: Object.fromEntries(
+                Object.entries(item.component_scores || {{}})
+                  .map(([key, value]) => [key, Number(value)])
+                  .filter(([, value]) => Number.isFinite(value))
+              )
+            }};
+          }})
+          .filter(item => Number.isFinite(item.frame_start) && Number.isFinite(item.frame_end))
+          .filter(item => item.frame_end >= start && item.frame_start <= end)
+          .sort((a, b) => b.score - a.score || a.frame_start - b.frame_start);
+        if (!rows.length) {{
+          return {{
+            hasSegmentScores: sourceSegments.length > 0,
+            rows: [],
+            rangeStart: start,
+            rangeEnd: end,
+            componentScores: {{}}
+          }};
+        }}
+        const peak = rows.reduce((best, item) => item.score > best.score ? item : best, rows[0]);
+        const componentScores = {{}};
+        rows.forEach(item => {{
+          Object.entries(item.component_scores || {{}}).forEach(([key, value]) => {{
+            componentScores[key] = Math.max(Number(componentScores[key] || 0), Number(value || 0));
+          }});
+        }});
+        return {{
+          hasSegmentScores: true,
+          rows,
+          rangeStart: start,
+          rangeEnd: end,
+          peakScore: peak.score,
+          dominantReason: peak.dominant_reason,
+          peakFrame: `${{peak.frame_start}}-${{peak.frame_end}}`,
+          componentScores,
+          fallback: true
+        }};
+      }}
+
+      function renderWindowEventEvidence(track) {{
+        const row = selectedTrackScoreComponents(track);
+        let summary = windowEventSummary(row);
+        let sourceLabel = t("windowEventSourceModel");
+        if (!summary.hasFrameScores) {{
+          const segmentSummary = windowSegmentSummary(track, row);
+          if (segmentSummary.hasSegmentScores || segmentSummary.rows.length) {{
+            summary = segmentSummary;
+            sourceLabel = t("windowEventSourceSegment");
+          }}
+        }}
+        if (!summary.hasFrameScores && !summary.hasSegmentScores && state.task !== "group") {{
+          return "";
+        }}
+        if (!summary.rows.length) {{
+          return `
+            <div class="event-card window-event-card">
+              <strong>${{t("windowEventTitle")}}</strong>
+              <div class="subtle">${{t("windowEventRange")}}: ${{summary.rangeStart}}-${{summary.rangeEnd}}</div>
+              <div class="subtle">${{t("windowEventSource")}}: ${{sourceLabel}}</div>
+              <div class="subtle">${{t("windowEventEmpty")}}</div>
+            </div>
+          `;
+        }}
+        const components = Object.entries(summary.componentScores || {{}})
+          .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+          .slice(0, 5);
+        const maxComponent = Math.max(1e-6, ...components.map(([, value]) => Number(value || 0)));
+        const componentRows = components.length ? components.map(([key, value]) => `
+          <div class="decomp-row">
+            <span>${{esc(key)}}</span>
+            <span class="decomp-track"><span class="decomp-fill" style="width: ${{Math.max(2, Math.min(100, Math.round((Number(value || 0) / maxComponent) * 100)))}}%;"></span></span>
+            <strong>${{fmt(value)}}</strong>
+          </div>
+        `).join("") : `<div class="subtle">${{t("windowEventComponents")}}: -</div>`;
+        return `
+          <div class="event-card window-event-card">
+            <strong>${{t("windowEventTitle")}}</strong>
+            <div>${{t("windowEventRange")}}: ${{summary.rangeStart}}-${{summary.rangeEnd}}</div>
+            <div>${{t("windowEventSource")}}: <strong>${{sourceLabel}}</strong></div>
+            <div>${{t("windowEventPeak")}}: <strong>${{fmt(summary.peakScore)}}</strong> @ ${{t("frame")}} ${{summary.peakFrame}}</div>
+            <div>${{t("windowEventReason")}}: <strong>${{esc(summary.dominantReason || "event")}}</strong></div>
+            <div>${{t("windowEventFrames")}}: ${{summary.rows.length}}</div>
+            <div class="decomp-bar">${{componentRows}}</div>
+          </div>
+        `;
       }}
 
       function renderMethodFlow(track) {{
@@ -2644,6 +2843,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         const label = trackLabel(track);
         const stats = trajectoryStats(track);
         const groupStats = groupFrameStats(data, track);
+        const windowEventEvidence = renderWindowEventEvidence(track);
         explanationPanel.innerHTML = `
           <div><strong>${{t("selectedTrack")}}</strong> ${{esc(track.sequence)}} / ${{esc(track.track_id)}} <span class="badge ${{trackLabelValue(track) === 1 ? "our" : "baseline"}}">${{trackLabelValue(track) === 1 ? t("syntheticLabel") : t("normalLabel")}}</span></div>
           <div class="explain-metrics">
@@ -2655,6 +2855,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
             <div class="explain-metric"><span>${{t("displacementLabel")}}</span><strong>${{fmt(stats.displacement)}}</strong></div>
           </div>
           <div class="explain-reason">${{esc(explanationReason(track, stats, groupStats))}}</div>
+          ${{windowEventEvidence}}
         `;
         if (isRegistrationTask()) {{
           renderRegistrationEvidence(track);
@@ -3540,6 +3741,17 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         localStorage.setItem("fusiontrack.finalDashboard.playSpeed", String(speed));
       }}
 
+      function updateEventThresholdDisplay() {{
+        const threshold = clamp(Number(state.eventThreshold) || 0, 0, 1);
+        state.eventThreshold = threshold;
+        if (eventThreshold) {{
+          eventThreshold.value = String(Math.round(threshold * 100));
+        }}
+        if (eventThresholdReadout) {{
+          eventThresholdReadout.textContent = threshold.toFixed(2);
+        }}
+      }}
+
       function startPlayback() {{
         if (!currentPlayback()) {{
           return;
@@ -3656,6 +3868,11 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         state.heatWindow = Number(heatWindow.value);
         drawPlayback();
       }});
+      eventThreshold.addEventListener("input", () => {{
+        state.eventThreshold = Number(eventThreshold.value || 0) / 100;
+        updateEventThresholdDisplay();
+        drawPlayback();
+      }});
       playSpeed.addEventListener("input", () => {{
         state.playSpeed = Number(playSpeed.value || 100) / 100;
         updatePlaySpeedDisplay();
@@ -3710,6 +3927,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       }});
       applyLanguage(state.language);
       updatePlaySpeedDisplay();
+      updateEventThresholdDisplay();
       setAnalysisPanel("leaderboard");
       renderMethodView();
     }})();

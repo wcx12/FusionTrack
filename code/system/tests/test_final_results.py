@@ -569,6 +569,14 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "drawHeatmap" in html
     assert "heatOpacity" in html
     assert "heatWindow" in html
+    assert "eventThreshold" in html
+    assert "eventThresholdReadout" in html
+    assert "frameEventScoresForWindow" in html
+    assert "windowEventSummary" in html
+    assert "windowSegmentSummary" in html
+    assert "renderWindowEventEvidence" in html
+    assert "windowEventTitle" in html
+    assert "windowEventSourceSegment" in html
     assert "eventSegmentsFromFrameScores" in html
     assert "Heat + Tracks" in html
     assert "renderMethodView" in html
