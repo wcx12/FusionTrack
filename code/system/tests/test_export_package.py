@@ -18,6 +18,21 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
     summary_path = work_root / "pipeline_summary_final_dashboard.json"
     manifest_path = work_root / "pipeline_manifest_final_dashboard_all.json"
     dataset_manifest_path = work_root / "dataset_manifest_all.json"
+    suite_dir = tmp_path / "suite"
+    suite_dir.mkdir()
+    suite_manifest_path = suite_dir / "suite_manifest.json"
+    aggregate_summary_path = suite_dir / "aggregate_summary.csv"
+    aggregate_summary_path.write_text("matrix,method,auroc\nindividual,fusiontrack,0.91\n", encoding="utf-8")
+    suite_manifest_path.write_text(
+        json.dumps(
+            {
+                "suite_name": "paper_suite",
+                "aggregate_summary_csv": str(aggregate_summary_path),
+                "matrices": [],
+            }
+        ),
+        encoding="utf-8",
+    )
     summary = {
         "mode": "final_results_dashboard",
         "work_root": str(work_root),
@@ -25,6 +40,12 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
         "summary_path": str(summary_path),
         "manifest_path": str(manifest_path),
         "dataset_manifest_path": str(dataset_manifest_path),
+        "suite_manifest_path": str(suite_manifest_path),
+        "suite_manifest": {
+            "suite_name": "paper_suite",
+            "aggregate_summary_csv": str(aggregate_summary_path),
+            "matrices": [],
+        },
         "dataset_manifest": {"status": "ok", "dataset_fingerprint": "abc123"},
         "dashboard": {
             "report_html": str(report_dir / "index.html"),
@@ -60,6 +81,8 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
         assert "summary/pipeline_summary.json" in names
         assert "summary/pipeline_manifest.json" in names
         assert "artifacts/work_root/dataset_manifest_all.json" in names
+        assert "artifacts/suite_root/suite_manifest.json" in names
+        assert "artifacts/suite_root/aggregate_summary.csv" in names
         assert "export_manifest.json" in names
         assert not any(name.startswith("artifacts/work_root/pipeline_summary") for name in names)
         dataset_manifest_text = archive.read("artifacts/work_root/dataset_manifest_all.json").decode("utf-8")

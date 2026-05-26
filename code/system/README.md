@@ -226,9 +226,24 @@ manifest 记录：
 - 数据集名称、数据集状态、split 列表和 `dataset_fingerprint`。
 - `dataset_manifest_<split>.json` 的公开路径提示。
 - 最终结果目录、individual/group 标签文件、score 搜索目录数量、融合轨迹文件和 registration manifest。
+- 如果构建命令传入 `--suite-manifest`，还会展示评测套件名称、suite manifest、aggregate summary、矩阵数量和总 run 数。
 - 构建参数，例如 `top_sequences`、`top_k` 和 `case_limit`。
 
 该模块只发布脱敏后的路径提示：如果输入是本机绝对路径，网页数据里只保留文件名或目录名；如果输入本来就是相对路径，则保留相对路径。这样公开部署到 GitHub Pages 时不会泄露本机目录，同时仍能说明结果来源。
+
+当需要把 `run_suite.py` 的批量评测结果纳入最终交付链路时，在最终网页生成命令中追加：
+
+```bash
+python code/system/run_fusiontrack.py \
+  --final-results-root <final_results_root> \
+  --individual-label-file <individual_labels.jsonl> \
+  --group-label-file <group_labels.jsonl> \
+  --fused-jsonl <merged_fused.jsonl> \
+  --suite-manifest <suite_output_dir>/suite_manifest.json \
+  --export-package <output.zip>
+```
+
+这样 `pipeline_summary_final_dashboard.json`、`pipeline_manifest_final_dashboard_all.json`、网页的 provenance 数据和导出 zip 都会保留 suite 评测来源；导出包会把 suite manifest 及其引用的 aggregate summary、matrix summary/manifest 一起归档。
 
 ## 验证建议
 

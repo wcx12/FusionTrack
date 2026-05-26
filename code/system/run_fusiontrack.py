@@ -59,6 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--final-results-root", type=Path, help="Directory with final_*_summary files.")
     parser.add_argument("--individual-label-file", type=Path, help="Individual labels JSONL for final dashboard.")
     parser.add_argument("--group-label-file", type=Path, help="Group labels JSONL for final dashboard.")
+    parser.add_argument("--suite-manifest", type=Path, help="Optional run_suite.py suite_manifest.json to link into the final dashboard and export package.")
     parser.add_argument(
         "--score-search-root",
         type=Path,
@@ -112,6 +113,7 @@ def main() -> None:
             registration_manifest=registration_manifest,
             registration_fused_jsonl=registration_fused_jsonl,
             fused_jsonl=args.fused_jsonl,
+            suite_manifest=args.suite_manifest,
             top_sequences=args.top_sequences,
             top_k=args.top_k,
             case_limit=args.case_limit,

@@ -74,7 +74,7 @@ def _build_public_provenance(provenance: dict[str, Any]) -> dict[str, Any]:
         "top_k": provenance.get("top_k"),
         "case_limit": provenance.get("case_limit"),
     }
-    return {
+    public = {
         "mode": str(provenance.get("mode") or "final_results_dashboard"),
         "generated_at_utc": provenance.get("generated_at_utc"),
         "dataset": {
@@ -95,6 +95,46 @@ def _build_public_provenance(provenance: dict[str, Any]) -> dict[str, Any]:
             "registration_fused_jsonl": _public_path_hint(provenance.get("registration_fused_jsonl")),
         },
         "parameters": {key: value for key, value in parameters.items() if value is not None},
+    }
+    suite = _build_public_suite_provenance(
+        suite_manifest=provenance.get("suite_manifest"),
+        suite_manifest_path=provenance.get("suite_manifest_path"),
+    )
+    if suite:
+        public["suite"] = suite
+    return public
+
+
+def _build_public_suite_provenance(
+    suite_manifest: Any,
+    suite_manifest_path: Any = None,
+) -> dict[str, Any]:
+    if not isinstance(suite_manifest, dict):
+        return {}
+    matrices = suite_manifest.get("matrices")
+    if not isinstance(matrices, list):
+        matrices = []
+    public_matrices = []
+    for matrix in matrices:
+        if not isinstance(matrix, dict):
+            continue
+        public_matrices.append(
+            {
+                "name": matrix.get("name"),
+                "split": matrix.get("split"),
+                "num_runs": int(matrix.get("num_runs") or 0),
+                "summary_csv": _public_path_hint(matrix.get("summary_csv")),
+                "manifest_json": _public_path_hint(matrix.get("manifest_json")),
+            }
+        )
+    return {
+        "name": suite_manifest.get("suite_name"),
+        "generated_at_utc": suite_manifest.get("generated_at_utc"),
+        "manifest": _public_path_hint(suite_manifest_path),
+        "aggregate_summary_csv": _public_path_hint(suite_manifest.get("aggregate_summary_csv")),
+        "matrix_count": len(public_matrices),
+        "run_count": sum(int(matrix.get("num_runs") or 0) for matrix in public_matrices),
+        "matrices": public_matrices,
     }
 
 
@@ -1642,6 +1682,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         provenanceFusedJsonl: "融合轨迹",
         provenanceRegistration: "配准 manifest",
         provenanceParameters: "构建参数",
+        provenanceSuite: "评测套件",
+        provenanceSuiteAggregate: "套件汇总表",
+        provenanceSuiteMatrices: "矩阵 / run 数",
         provenanceMissing: "未提供",
         groupEventTitle: "群体事件聚合",
         groupEventTracks: "涉及轨迹",
@@ -1715,6 +1758,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         provenanceFusedJsonl: "Fused trajectories",
         provenanceRegistration: "Registration manifest",
         provenanceParameters: "Build parameters",
+        provenanceSuite: "Evaluation suite",
+        provenanceSuiteAggregate: "Suite aggregate table",
+        provenanceSuiteMatrices: "Matrices / runs",
         provenanceMissing: "Not provided",
         groupEventTitle: "Group event aggregation",
         groupEventTracks: "Tracks",
@@ -3052,6 +3098,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         const dataset = provenance.dataset || {{}};
         const inputs = provenance.inputs || {{}};
         const parameters = provenance.parameters || {{}};
+        const suite = provenance.suite || null;
         const missing = t("provenanceMissing");
         const datasetText = [dataset.name, Array.isArray(dataset.splits) ? dataset.splits.join("/") : ""]
           .filter(Boolean)
@@ -3079,6 +3126,13 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           [t("provenanceRegistration"), inputs.registration_manifest || missing],
           [t("provenanceParameters"), parameterText],
         ];
+        if (suite) {{
+          items.push(
+            [t("provenanceSuite"), [suite.name, suite.manifest].filter(Boolean).join(" / ") || missing],
+            [t("provenanceSuiteAggregate"), suite.aggregate_summary_csv || missing],
+            [t("provenanceSuiteMatrices"), `${{Number(suite.matrix_count || 0)}} / ${{Number(suite.run_count || 0)}}`],
+          );
+        }}
         return `
           <div id="provenancePanel" class="provenance-panel">
             <h3>${{t("provenanceTitle")}}</h3>

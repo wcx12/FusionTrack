@@ -167,6 +167,9 @@ def _package_roots(summary: dict[str, Any]) -> dict[str, Path]:
             roots.setdefault("report_root", Path(str(report_html)).resolve().parent)
         elif assets_dir:
             roots.setdefault("report_root", Path(str(assets_dir)).resolve().parent)
+    suite_manifest_path = summary.get("suite_manifest_path")
+    if suite_manifest_path:
+        roots.setdefault("suite_root", Path(str(suite_manifest_path)).resolve().parent)
     return roots
 
 
