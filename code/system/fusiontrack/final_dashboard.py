@@ -23,11 +23,14 @@ def build_final_dashboard(
     fused_jsonl: str | Path | None = None,
     data_root: str | Path | None = None,
     top_sequences: int = 5,
+    provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     output_dir = Path(output_dir)
     assets_dir = output_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
     dashboard_data = _json_safe(dashboard.to_public_dict())
+    if provenance is not None:
+        dashboard_data["provenance"] = _json_safe(_build_public_provenance(provenance))
     playback_payloads = {}
     if fused_jsonl is not None:
         playback_payloads = _json_safe(_build_playback_payloads(
@@ -55,6 +58,56 @@ def build_final_dashboard(
         "num_methods": sum(len(task.methods) for task in dashboard.tasks.values()),
         "playback_sequences": list(playback_payloads),
     }
+
+
+def _build_public_provenance(provenance: dict[str, Any]) -> dict[str, Any]:
+    dataset_manifest = provenance.get("dataset_manifest")
+    if not isinstance(dataset_manifest, dict):
+        dataset_manifest = {}
+    splits = dataset_manifest.get("splits")
+    split_names = sorted(str(name) for name in splits) if isinstance(splits, dict) else []
+    score_roots = provenance.get("score_search_roots")
+    if not isinstance(score_roots, list):
+        score_roots = []
+    parameters = {
+        "top_sequences": provenance.get("top_sequences"),
+        "top_k": provenance.get("top_k"),
+        "case_limit": provenance.get("case_limit"),
+    }
+    return {
+        "mode": str(provenance.get("mode") or "final_results_dashboard"),
+        "generated_at_utc": provenance.get("generated_at_utc"),
+        "dataset": {
+            "name": dataset_manifest.get("dataset_name"),
+            "status": dataset_manifest.get("status"),
+            "fingerprint": dataset_manifest.get("dataset_fingerprint"),
+            "splits": split_names,
+            "manifest": _public_path_hint(provenance.get("dataset_manifest_path")),
+        },
+        "inputs": {
+            "final_results_root": _public_path_hint(provenance.get("final_results_root")),
+            "individual_label_file": _public_path_hint(provenance.get("individual_label_file")),
+            "group_label_file": _public_path_hint(provenance.get("group_label_file")),
+            "score_search_root_count": len(score_roots),
+            "score_search_roots": [_public_path_hint(path) for path in score_roots],
+            "fused_jsonl": _public_path_hint(provenance.get("fused_jsonl")),
+            "registration_manifest": _public_path_hint(provenance.get("registration_manifest")),
+            "registration_fused_jsonl": _public_path_hint(provenance.get("registration_fused_jsonl")),
+        },
+        "parameters": {key: value for key, value in parameters.items() if value is not None},
+    }
+
+
+def _public_path_hint(value: Any) -> str | None:
+    if value is None:
+        return None
+    raw = str(value)
+    if not raw:
+        return None
+    path = Path(raw)
+    if path.is_absolute():
+        return path.name
+    return raw.replace("\\", "/")
 
 
 def _build_playback_payloads(
@@ -828,6 +881,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .data-flow-card {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 10px; }}
     .data-flow-card span {{ display: block; color: #64748b; font-size: 12px; }}
     .data-flow-card strong {{ display: block; margin-top: 3px; font-size: 18px; font-variant-numeric: tabular-nums; }}
+    .provenance-panel {{ grid-column: 1 / -1; border: 1px solid #dbe4ee; border-radius: 8px; background: #ffffff; padding: 12px; }}
+    .provenance-panel h3 {{ margin: 0 0 10px; font-size: 15px; }}
+    .provenance-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }}
+    .provenance-item {{ border: 1px solid #edf2f7; border-radius: 7px; background: #f8fafc; padding: 9px; min-width: 0; }}
+    .provenance-item span {{ display: block; color: #64748b; font-size: 12px; }}
+    .provenance-item strong {{ display: block; margin-top: 3px; overflow-wrap: anywhere; color: #0f172a; font-size: 13px; }}
     .status-pill {{ display: inline-flex; align-items: center; min-height: 24px; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 800; background: #e2e8f0; color: #334155; }}
     .status-pill.ok {{ background: #dcfce7; color: #166534; }}
     .status-pill.partial {{ background: #fef3c7; color: #92400e; }}
@@ -1570,6 +1629,20 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         dataFlowMissing: "缺失",
         dataFlowNoTracks: "无轨迹",
         dataFlowNoBackground: "无背景帧",
+        provenanceTitle: "运行来源审计",
+        provenanceMode: "运行模式",
+        provenanceGeneratedAt: "生成时间",
+        provenanceDataset: "数据集",
+        provenanceDatasetStatus: "数据状态",
+        provenanceDatasetFingerprint: "数据指纹",
+        provenanceDatasetManifest: "数据 manifest",
+        provenanceFinalResults: "最终结果目录",
+        provenanceLabelFiles: "标签文件",
+        provenanceScoreRoots: "分数搜索目录",
+        provenanceFusedJsonl: "融合轨迹",
+        provenanceRegistration: "配准 manifest",
+        provenanceParameters: "构建参数",
+        provenanceMissing: "未提供",
         groupEventTitle: "群体事件聚合",
         groupEventTracks: "涉及轨迹",
         groupEventDuration: "持续帧",
@@ -1629,6 +1702,20 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         dataFlowMissing: "Missing",
         dataFlowNoTracks: "No tracks",
         dataFlowNoBackground: "No background frames",
+        provenanceTitle: "Run Provenance Audit",
+        provenanceMode: "Run mode",
+        provenanceGeneratedAt: "Generated at",
+        provenanceDataset: "Dataset",
+        provenanceDatasetStatus: "Dataset status",
+        provenanceDatasetFingerprint: "Dataset fingerprint",
+        provenanceDatasetManifest: "Dataset manifest",
+        provenanceFinalResults: "Final results root",
+        provenanceLabelFiles: "Label files",
+        provenanceScoreRoots: "Score search roots",
+        provenanceFusedJsonl: "Fused trajectories",
+        provenanceRegistration: "Registration manifest",
+        provenanceParameters: "Build parameters",
+        provenanceMissing: "Not provided",
         groupEventTitle: "Group event aggregation",
         groupEventTracks: "Tracks",
         groupEventDuration: "Duration",
@@ -2960,6 +3047,53 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         ].map(([label, value]) => `<div class="card"><div>${{label}}</div><div class="value">${{value}}</div></div>`).join("");
       }}
 
+      function renderProvenanceAudit() {{
+        const provenance = dashboard.provenance || {{}};
+        const dataset = provenance.dataset || {{}};
+        const inputs = provenance.inputs || {{}};
+        const parameters = provenance.parameters || {{}};
+        const missing = t("provenanceMissing");
+        const datasetText = [dataset.name, Array.isArray(dataset.splits) ? dataset.splits.join("/") : ""]
+          .filter(Boolean)
+          .join(" / ") || missing;
+        const labelsText = [inputs.individual_label_file, inputs.group_label_file]
+          .filter(Boolean)
+          .join(" / ") || missing;
+        const roots = Array.isArray(inputs.score_search_roots) ? inputs.score_search_roots.filter(Boolean) : [];
+        const rootCount = Number(inputs.score_search_root_count || roots.length || 0);
+        const rootsText = roots.length ? `${{rootCount}}: ${{roots.map(item => esc(item)).join(", ")}}` : String(rootCount);
+        const parameterText = Object.keys(parameters).length
+          ? Object.entries(parameters).map(([key, value]) => `${{key}}=${{value}}`).join(", ")
+          : missing;
+        const items = [
+          [t("provenanceMode"), provenance.mode || missing],
+          [t("provenanceGeneratedAt"), provenance.generated_at_utc || missing],
+          [t("provenanceDataset"), datasetText],
+          [t("provenanceDatasetStatus"), dataset.status || missing],
+          [t("provenanceDatasetFingerprint"), dataset.fingerprint || missing],
+          [t("provenanceDatasetManifest"), dataset.manifest || missing],
+          [t("provenanceFinalResults"), inputs.final_results_root || missing],
+          [t("provenanceLabelFiles"), labelsText],
+          [t("provenanceScoreRoots"), rootsText],
+          [t("provenanceFusedJsonl"), inputs.fused_jsonl || missing],
+          [t("provenanceRegistration"), inputs.registration_manifest || missing],
+          [t("provenanceParameters"), parameterText],
+        ];
+        return `
+          <div id="provenancePanel" class="provenance-panel">
+            <h3>${{t("provenanceTitle")}}</h3>
+            <div class="provenance-grid">
+              ${{items.map(([label, value]) => `
+                <div class="provenance-item">
+                  <span>${{label}}</span>
+                  <strong>${{esc(value)}}</strong>
+                </div>
+              `).join("")}}
+            </div>
+          </div>
+        `;
+      }}
+
       function renderDataFlowAudit() {{
         const sequenceNames = sequences();
         const allTracks = sequenceNames.flatMap(name => playbackData[name]?.tracks || []);
@@ -3030,6 +3164,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           `;
         }}).join("");
         dataFlowPanel.innerHTML = `
+          ${{renderProvenanceAudit()}}
           ${{cards.map(([label, value]) => `<div class="data-flow-card"><span>${{label}}</span><strong>${{value}}</strong></div>`).join("")}}
           <div class="table-scroll" style="grid-column: 1 / -1;">
             <table class="leaderboard">

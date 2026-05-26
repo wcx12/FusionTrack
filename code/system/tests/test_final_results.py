@@ -439,13 +439,41 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
         fused_jsonl=fused_jsonl,
         data_root=tmp_path / "data",
         top_sequences=1,
+        provenance={
+            "mode": "final_results_dashboard",
+            "generated_at_utc": "2026-05-26T00:00:00+00:00",
+            "dataset_manifest": {
+                "dataset_name": "VT-Tiny-MOT",
+                "status": "ok",
+                "dataset_fingerprint": "fingerprint-for-test",
+                "splits": {"test": {"requested_split": "test"}},
+            },
+            "dataset_manifest_path": tmp_path / "work" / "dataset_manifest_all.json",
+            "final_results_root": final_root,
+            "individual_label_file": individual_labels,
+            "group_label_file": group_labels,
+            "score_search_roots": [score_root, tmp_path / "official_scores"],
+            "fused_jsonl": fused_jsonl,
+            "registration_manifest": tmp_path / "registration" / "manifest.json",
+            "top_sequences": 1,
+            "top_k": 2,
+            "case_limit": 3,
+        },
     )
 
     assert summary["num_tasks"] == 2
     assert summary["num_methods"] == 3
     assert summary["playback_sequences"] == ["S1", "G1"]
     html = (tmp_path / "dashboard" / "index.html").read_text(encoding="utf-8")
+    dashboard_payload = json.loads((tmp_path / "dashboard" / "assets" / "final_dashboard_data.json").read_text(encoding="utf-8"))
     playback_data = json.loads((tmp_path / "dashboard" / "assets" / "final_playback_data.json").read_text(encoding="utf-8"))
+    provenance = dashboard_payload["provenance"]
+    assert provenance["dataset"]["fingerprint"] == "fingerprint-for-test"
+    assert provenance["dataset"]["status"] == "ok"
+    assert provenance["inputs"]["score_search_root_count"] == 2
+    assert provenance["inputs"]["final_results_root"] == "final"
+    assert provenance["inputs"]["registration_manifest"] == "manifest.json"
+    assert str(tmp_path) not in json.dumps(provenance)
     assert "{dashboard_json}" not in html
     assert "{playback_json}" not in html
     assert '"tasks"' in html
@@ -525,6 +553,10 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "renderMethodStatus" in html
     assert "renderTrackInsights" in html
     assert "renderDataFlowAudit" in html
+    assert "renderProvenanceAudit" in html
+    assert "provenancePanel" in html
+    assert "provenanceDatasetFingerprint" in html
+    assert "fingerprint-for-test" in html
     assert "modality_audit" in html
     assert "序列数据审计" in html
     assert "dataFlowRgbCoverage" in html

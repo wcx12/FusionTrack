@@ -402,6 +402,22 @@ def build_final_results_report(
         fused_jsonl=dashboard_fused_jsonl,
         data_root=paths.data_root,
         top_sequences=top_sequences,
+        provenance={
+            "mode": "final_results_dashboard",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "dataset_manifest": dataset_manifest,
+            "dataset_manifest_path": dataset_manifest_path,
+            "final_results_root": final_results_root,
+            "individual_label_file": individual_label_file,
+            "group_label_file": group_label_file,
+            "score_search_roots": score_search_roots,
+            "fused_jsonl": dashboard_fused_jsonl,
+            "registration_manifest": registration_manifest,
+            "registration_fused_jsonl": registration_fused_jsonl,
+            "top_sequences": top_sequences,
+            "top_k": top_k,
+            "case_limit": case_limit,
+        },
     )
     if sync_remote_report:
         _sync_remote_report(

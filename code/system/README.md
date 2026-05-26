@@ -219,6 +219,17 @@ manifest 记录：
 
 导出包会自动包含 dataset manifest，并把本机绝对路径脱敏为 `${work_root}`、`${data_root}` 或 `${external}` 占位符。
 
+## 运行来源审计
+
+最终 dashboard 的“数据流审计”页顶部会展示一组运行来源信息，用来回答“当前网页到底由哪一版数据、哪一批标签、哪一批分数和哪些构建参数生成”：
+
+- 数据集名称、数据集状态、split 列表和 `dataset_fingerprint`。
+- `dataset_manifest_<split>.json` 的公开路径提示。
+- 最终结果目录、individual/group 标签文件、score 搜索目录数量、融合轨迹文件和 registration manifest。
+- 构建参数，例如 `top_sequences`、`top_k` 和 `case_limit`。
+
+该模块只发布脱敏后的路径提示：如果输入是本机绝对路径，网页数据里只保留文件名或目录名；如果输入本来就是相对路径，则保留相对路径。这样公开部署到 GitHub Pages 时不会泄露本机目录，同时仍能说明结果来源。
+
 ## 验证建议
 
 修改网页后至少运行：
