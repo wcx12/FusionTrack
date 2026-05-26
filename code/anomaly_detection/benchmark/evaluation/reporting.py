@@ -7,7 +7,7 @@ from typing import Any, Iterable, Sequence
 
 from evaluation.io import load_label_rows, load_score_rows
 from evaluation.metrics import alignment_report, align_scores_with_labels, evaluate_binary_scores
-from evaluation.schema import validate_label_rows, validate_score_rows
+from evaluation.schema import schema_diagnostics, validate_label_rows, validate_score_rows
 
 
 def evaluate_score_file(
@@ -41,6 +41,11 @@ def evaluate_score_file(
     )
     metrics = evaluate_binary_scores(y_true, y_score, k=k)
     metrics.update(report)
+    metrics["schema_diagnostics"] = schema_diagnostics(
+        label_rows,
+        score_rows,
+        key_fields=key_fields,
+    )
 
     if output_json is not None:
         output_json.parent.mkdir(parents=True, exist_ok=True)

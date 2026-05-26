@@ -9,7 +9,7 @@ from evaluation.metrics import (
     precision_recall_at_k,
 )
 from evaluation.reporting import evaluate_score_file, summarize_metric_files
-from evaluation.schema import validate_label_rows, validate_score_rows
+from evaluation.schema import schema_diagnostics, validate_label_rows, validate_score_rows
 
 __all__ = [
     "align_scores_with_labels",
@@ -21,6 +21,7 @@ __all__ = [
     "load_label_rows",
     "load_score_rows",
     "precision_recall_at_k",
+    "schema_diagnostics",
     "summarize_metric_files",
     "validate_label_rows",
     "validate_score_rows",

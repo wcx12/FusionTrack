@@ -155,6 +155,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "key_fields": list(key_fields),
                 "require_unique_keys": require_unique_keys,
                 "require_score_key_match": require_score_key_match,
+                "schema_diagnostics": metrics.get("schema_diagnostics", {}),
                 "method_profile": method_registry.profile_for(
                     str(experiment.get("method_registry_name", name)),
                     task=_registry_task(task),

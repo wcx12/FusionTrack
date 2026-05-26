@@ -48,6 +48,13 @@ def test_evaluate_score_file_writes_json_metrics(tmp_path: Path) -> None:
     assert metrics["num_duplicate_score_keys"] == 0
     assert metrics["num_missing_score_keys"] == 0
     assert metrics["num_extra_score_keys"] == 0
+    assert metrics["schema_diagnostics"]["status"] == "ok"
+    assert metrics["schema_diagnostics"]["key_fields"] == ["sample_id"]
+    assert metrics["schema_diagnostics"]["label"]["num_rows"] == 3
+    assert metrics["schema_diagnostics"]["score"]["field_coverage"]["score"] == {
+        "present": 3,
+        "missing": 0,
+    }
 
 
 def test_summarize_metric_files_preserves_metadata_and_writes_csv(tmp_path: Path) -> None:

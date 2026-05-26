@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from evaluation.schema import validate_label_rows, validate_score_rows
+from evaluation.schema import schema_diagnostics, validate_label_rows, validate_score_rows
 
 
 def test_validate_score_rows_rejects_missing_and_non_finite_scores() -> None:
@@ -45,3 +45,41 @@ def test_schema_validation_uses_task_key_fields_and_duplicate_policy() -> None:
             [{"sample_id": "seq:0", "score": 0.5}],
             key_fields=("sample_id", "window_id"),
         )
+
+
+def test_schema_diagnostics_reports_field_coverage_and_alignment_warnings() -> None:
+    labels = [
+        {"sample_id": "a", "label": 1, "frame_start": 1, "frame_end": 5},
+        {"sample_id": "b", "label": 0},
+    ]
+    scores = [
+        {"sample_id": "a", "score": 0.7, "frame_start": 1},
+        {"sample_id": "a", "score": 0.9, "source": "rerank"},
+        {"sample_id": "extra", "score": 0.2},
+    ]
+
+    diagnostics = schema_diagnostics(labels, scores, key_fields=("sample_id",))
+
+    assert diagnostics["schema_diagnostics_version"] == 1
+    assert diagnostics["key_fields"] == ["sample_id"]
+    assert diagnostics["label"]["num_rows"] == 2
+    assert diagnostics["score"]["num_rows"] == 3
+    assert diagnostics["score"]["num_duplicate_keys"] == 1
+    assert diagnostics["label"]["field_coverage"]["frame_start"] == {
+        "present": 1,
+        "missing": 1,
+    }
+    assert diagnostics["score"]["field_coverage"]["source"] == {
+        "present": 1,
+        "missing": 2,
+    }
+    assert diagnostics["alignment"]["num_missing_score_keys"] == 1
+    assert diagnostics["alignment"]["num_extra_score_keys"] == 1
+    assert diagnostics["status"] == "warning"
+    assert diagnostics["warnings"] == [
+        "missing_score_keys",
+        "extra_score_keys",
+        "duplicate_score_keys",
+        "partial_label_field_coverage",
+        "partial_score_field_coverage",
+    ]

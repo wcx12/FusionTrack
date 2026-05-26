@@ -532,6 +532,72 @@ def test_run_benchmark_matrix_can_require_exact_score_key_match(tmp_path: Path) 
     assert "Score keys do not exactly match label keys" in result.stderr
 
 
+def test_run_benchmark_matrix_records_schema_diagnostics(tmp_path: Path) -> None:
+    label_path = tmp_path / "labels.jsonl"
+    score_path = tmp_path / "scores.jsonl"
+    config_path = tmp_path / "matrix.json"
+    output_dir = tmp_path / "matrix_out"
+    repo_root = Path(__file__).resolve().parents[4]
+    script = Path("code/anomaly_detection/benchmark/runners/run_benchmark_matrix.py")
+
+    write_jsonl(
+        label_path,
+        [
+            {"sample_id": "a", "label": 1, "frame_start": 1, "frame_end": 2},
+            {"sample_id": "b", "label": 0},
+        ],
+    )
+    write_jsonl(
+        score_path,
+        [
+            {"sample_id": "a", "score": 0.4, "frame_start": 1},
+            {"sample_id": "a", "score": 0.9, "source": "rerank"},
+            {"sample_id": "extra", "score": 0.1},
+        ],
+    )
+    config_path.write_text(
+        json.dumps(
+            {
+                "split": "val",
+                "seed": 13,
+                "label_file": str(label_path),
+                "experiments": [
+                    {
+                        "name": "existing",
+                        "task": "existing_scores",
+                        "score_file": str(score_path),
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--config-json",
+            str(config_path),
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    metrics = json.loads((output_dir / "metrics" / "existing.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+
+    assert metrics["schema_diagnostics"]["status"] == "warning"
+    assert "missing_score_keys" in metrics["schema_diagnostics"]["warnings"]
+    assert manifest["runs"][0]["schema_diagnostics"]["score"]["num_duplicate_keys"] == 1
+    assert manifest["runs"][0]["schema_diagnostics"]["alignment"]["num_extra_score_keys"] == 1
+
+
 def test_run_benchmark_matrix_help_works_as_direct_script() -> None:
     repo_root = Path(__file__).resolve().parents[4]
     script = Path("code/anomaly_detection/benchmark/runners/run_benchmark_matrix.py")
