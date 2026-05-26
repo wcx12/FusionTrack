@@ -514,6 +514,8 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "算法接入" in html
     assert "sequencesForTask" in html
     assert "compareSequencesForTask" in html
+    assert "Number(label.num_windows || 0) > 0" not in html
+    assert "const hasLabel = Number(label.label || 0) === 1;" in html
     assert "trackScores" in html
     assert "trackScoresForTask" in html
     assert "trackLabelValue" in html

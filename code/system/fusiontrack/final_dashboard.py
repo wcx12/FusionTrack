@@ -1727,7 +1727,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           const scores = ((track.task_scores || {{}})[taskName]) || {{}};
           const label = ((track.task_labels || {{}})[taskName]) || {{}};
           const hasScore = Object.values(scores).some(value => Number(value || 0) !== 0);
-          const hasLabel = Number(label.num_windows || 0) > 0 || Number(label.label || 0) === 1;
+          const hasLabel = Number(label.label || 0) === 1;
           return hasScore || hasLabel;
         }});
       }}
