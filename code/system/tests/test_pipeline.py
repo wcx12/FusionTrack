@@ -6,7 +6,7 @@ import re
 
 from fusiontrack.config import FusionTrackPaths
 from fusiontrack.pipeline import build_experiment_report, build_extraction_command, build_final_results_report
-from test_final_results import _build_small_final_result_tree, _write_jsonl
+from test_final_results import _build_small_final_result_tree, _write_csv, _write_jsonl
 
 
 def test_extraction_command_uses_relative_server_paths() -> None:
@@ -190,3 +190,80 @@ def test_build_final_results_report_links_suite_manifest(tmp_path: Path) -> None
     assert suite["aggregate_summary_csv"] == "aggregate_summary.csv"
     assert suite["matrices"][0]["summary_csv"] == "summary.csv"
     assert str(tmp_path) not in json.dumps(suite)
+
+
+def test_build_final_results_report_links_holdout_manifest(tmp_path: Path) -> None:
+    paths = FusionTrackPaths.defaults(data_root=tmp_path / "data", work_root=tmp_path / "runs")
+    final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
+    fused_jsonl = tmp_path / "fused.jsonl"
+    _write_jsonl(
+        fused_jsonl,
+        [
+            {
+                "sample_id": "S1:1",
+                "sequence": "S1",
+                "track_id": "1",
+                "category_name": "plane",
+                "points": [{"frame_id": 1, "fused": {"center_xy": [1, 2], "confidence": 0.9}}],
+            }
+        ],
+    )
+    holdout_dir = tmp_path / "holdout"
+    _write_csv(
+        holdout_dir / "aggregate.csv",
+        [
+            {
+                "level": "group",
+                "method": "fusiontrack_group_hybrid",
+                "task": "fusiontrack_group_hybrid",
+                "num_runs": 3,
+                "seeds": "42,43,44",
+                "auroc_mean": 0.79,
+                "auroc_std": 0.01,
+            }
+        ],
+    )
+    (holdout_dir / "best_by_metric.json").write_text(
+        '{"auroc":{"level":"group","method":"fusiontrack_group_hybrid","task":"fusiontrack_group_hybrid","num_runs":3,"auroc_mean":0.79}}',
+        encoding="utf-8",
+    )
+    holdout_manifest = holdout_dir / "manifest.json"
+    holdout_manifest.write_text(
+        json.dumps(
+            {
+                "aggregate_csv": "/root/autodl-tmp/fusiontrack_holdout/aggregate.csv",
+                "all_runs_csv": "/root/autodl-tmp/fusiontrack_holdout/all_runs.csv",
+                "best_by_metric_json": "/root/autodl-tmp/fusiontrack_holdout/best_by_metric.json",
+                "split_name": "test",
+                "train_source_split": "train",
+                "eval_source_split": "test",
+                "levels": ["individual", "group"],
+                "seeds": [42, 43, 44],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = build_final_results_report(
+        paths=paths,
+        final_results_root=final_root,
+        individual_label_file=individual_labels,
+        group_label_file=group_labels,
+        score_search_roots=[score_root],
+        fused_jsonl=fused_jsonl,
+        holdout_manifest=holdout_manifest,
+        top_sequences=1,
+        top_k=2,
+        case_limit=3,
+        sync_remote_report=False,
+    )
+
+    assert summary["holdout_manifest_path"] == str(holdout_manifest)
+    assert summary["holdout_manifest"]["seeds"] == [42, 43, 44]
+    dashboard_data = json.loads(
+        (paths.work_root / "final_dashboard" / "assets" / "final_dashboard_data.json").read_text(encoding="utf-8")
+    )
+    holdout = dashboard_data["provenance"]["holdout"]
+    assert holdout["aggregate_csv"] == "aggregate.csv"
+    assert holdout["top_methods"][0]["method"] == "fusiontrack_group_hybrid"
+    assert str(tmp_path) not in json.dumps(holdout)

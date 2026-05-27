@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import csv
 import json
 import math
 from collections import defaultdict
@@ -102,6 +103,12 @@ def _build_public_provenance(provenance: dict[str, Any]) -> dict[str, Any]:
     )
     if suite:
         public["suite"] = suite
+    holdout = _build_public_holdout_provenance(
+        holdout_manifest=provenance.get("holdout_manifest"),
+        holdout_manifest_path=provenance.get("holdout_manifest_path"),
+    )
+    if holdout:
+        public["holdout"] = holdout
     return public
 
 
@@ -138,6 +145,121 @@ def _build_public_suite_provenance(
     }
 
 
+def _build_public_holdout_provenance(
+    holdout_manifest: Any,
+    holdout_manifest_path: Any = None,
+) -> dict[str, Any]:
+    if not isinstance(holdout_manifest, dict):
+        return {}
+    manifest_path = Path(holdout_manifest_path) if holdout_manifest_path is not None else None
+    aggregate_path = _resolve_manifest_artifact(holdout_manifest.get("aggregate_csv"), manifest_path)
+    best_by_metric_path = _resolve_manifest_artifact(holdout_manifest.get("best_by_metric_json"), manifest_path)
+    return {
+        "manifest": _public_path_hint(holdout_manifest_path),
+        "aggregate_csv": _public_path_hint(holdout_manifest.get("aggregate_csv")),
+        "all_runs_csv": _public_path_hint(holdout_manifest.get("all_runs_csv")),
+        "best_by_metric_json": _public_path_hint(holdout_manifest.get("best_by_metric_json")),
+        "split_name": holdout_manifest.get("split_name"),
+        "train_source_split": holdout_manifest.get("train_source_split"),
+        "eval_source_split": holdout_manifest.get("eval_source_split"),
+        "levels": _string_list(holdout_manifest.get("levels")),
+        "seeds": _int_list(holdout_manifest.get("seeds")),
+        "source_summary_count": len(holdout_manifest.get("source_summary_csvs") or []),
+        "top_methods": _load_holdout_top_methods(aggregate_path),
+        "best_by_metric": _load_holdout_best_by_metric(best_by_metric_path),
+    }
+
+
+def _resolve_manifest_artifact(value: Any, manifest_path: Path | None) -> Path | None:
+    if value is None:
+        return None
+    candidate = Path(str(value))
+    if candidate.exists():
+        return candidate
+    if manifest_path is None:
+        return None
+    manifest_dir = manifest_path.parent
+    fallback = manifest_dir / candidate.name
+    if fallback.exists():
+        return fallback
+    if not candidate.is_absolute():
+        relative = manifest_dir / candidate
+        if relative.exists():
+            return relative
+    return None
+
+
+def _string_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if value is None:
+        return []
+    return [part.strip() for part in str(value).split(",") if part.strip()]
+
+
+def _int_list(value: Any) -> list[int]:
+    result = []
+    for item in _string_list(value):
+        try:
+            result.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def _public_holdout_row(row: dict[str, Any]) -> dict[str, Any]:
+    public: dict[str, Any] = {
+        "level": row.get("level"),
+        "method": row.get("method"),
+        "task": row.get("task"),
+        "num_runs": int(float(row.get("num_runs") or 0)),
+        "seeds": _string_list(row.get("seeds")),
+    }
+    for metric in ("auroc", "auprc", "f1", "precision_at_k", "recall_at_k"):
+        for suffix in ("mean", "std"):
+            key = f"{metric}_{suffix}"
+            value = _float_or_none(row.get(key))
+            if value is not None:
+                public[key] = value
+    for key in ("num_label_rows_mean", "num_score_rows_mean", "num_missing_score_keys_mean", "num_extra_score_keys_mean"):
+        value = _float_or_none(row.get(key))
+        if value is not None:
+            public[key] = value
+    return public
+
+
+def _load_holdout_top_methods(aggregate_path: Path | None, limit: int = 12) -> list[dict[str, Any]]:
+    if aggregate_path is None or not aggregate_path.exists():
+        return []
+    with aggregate_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = [_public_holdout_row(row) for row in csv.DictReader(handle)]
+    rows.sort(key=lambda row: float(row.get("auroc_mean") or float("-inf")), reverse=True)
+    return rows[:limit]
+
+
+def _load_holdout_best_by_metric(best_by_metric_path: Path | None) -> dict[str, dict[str, Any]]:
+    if best_by_metric_path is None or not best_by_metric_path.exists():
+        return {}
+    payload = json.loads(best_by_metric_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return {}
+    result: dict[str, dict[str, Any]] = {}
+    for metric, row in payload.items():
+        if isinstance(row, dict):
+            result[str(metric)] = _public_holdout_row(row)
+    return result
+
+
 def _public_path_hint(value: Any) -> str | None:
     if value is None:
         return None
@@ -145,7 +267,7 @@ def _public_path_hint(value: Any) -> str | None:
     if not raw:
         return None
     path = Path(raw)
-    if path.is_absolute():
+    if path.is_absolute() or raw.startswith("/"):
         return path.name
     return raw.replace("\\", "/")
 
@@ -927,6 +1049,8 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .data-flow-card strong {{ display: block; margin-top: 3px; font-size: 18px; font-variant-numeric: tabular-nums; }}
     .provenance-panel {{ grid-column: 1 / -1; border: 1px solid #dbe4ee; border-radius: 8px; background: #ffffff; padding: 12px; }}
     .provenance-panel h3 {{ margin: 0 0 10px; font-size: 15px; }}
+    .provenance-subsection {{ margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0; }}
+    .provenance-subsection h4 {{ margin: 0 0 10px; font-size: 14px; }}
     .provenance-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }}
     .provenance-item {{ border: 1px solid #edf2f7; border-radius: 7px; background: #f8fafc; padding: 9px; min-width: 0; }}
     .provenance-item span {{ display: block; color: #64748b; font-size: 12px; }}
@@ -1719,6 +1843,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         provenanceSuite: "评测套件",
         provenanceSuiteAggregate: "套件汇总表",
         provenanceSuiteMatrices: "矩阵 / run 数",
+        provenanceHoldout: "Holdout 多 seed 汇总",
+        provenanceHoldoutProtocol: "协议",
+        provenanceHoldoutArtifacts: "结果文件",
+        provenanceHoldoutRuns: "seed / 层级 / 来源表",
+        holdoutTopMethods: "Holdout Top 方法",
+        holdoutBestMetrics: "Best by metric",
         provenanceMissing: "未提供",
         groupEventTitle: "群体事件聚合",
         groupEventTracks: "涉及轨迹",
@@ -1795,6 +1925,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         provenanceSuite: "Evaluation suite",
         provenanceSuiteAggregate: "Suite aggregate table",
         provenanceSuiteMatrices: "Matrices / runs",
+        provenanceHoldout: "Holdout multiseed summary",
+        provenanceHoldoutProtocol: "Protocol",
+        provenanceHoldoutArtifacts: "Result artifacts",
+        provenanceHoldoutRuns: "Seeds / levels / source tables",
+        holdoutTopMethods: "Holdout top methods",
+        holdoutBestMetrics: "Best by metric",
         provenanceMissing: "Not provided",
         groupEventTitle: "Group event aggregation",
         groupEventTracks: "Tracks",
@@ -1906,6 +2042,14 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
 
       function taskData() {{ return dashboard.tasks[state.task]; }}
       function fmt(value) {{ return Number(value || 0).toFixed(3); }}
+      function meanStd(row, metric) {{
+        const mean = Number(row?.[`${{metric}}_mean`]);
+        if (!Number.isFinite(mean)) {{
+          return "-";
+        }}
+        const std = Number(row?.[`${{metric}}_std`]);
+        return Number.isFinite(std) ? `${{fmt(mean)}} +/- ${{fmt(std)}}` : fmt(mean);
+      }}
       function pct(value) {{ return `${{Math.round(Number(value || 0) * 100)}}%`; }}
       function finiteNumber(value, fallback = 0) {{
         const number = Number(value);
@@ -3167,12 +3311,77 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         ].map(([label, value]) => `<div class="card"><div>${{label}}</div><div class="value">${{value}}</div></div>`).join("");
       }}
 
+      function renderHoldoutPanel(holdout, missing) {{
+        if (!holdout) {{
+          return "";
+        }}
+        const protocolText = [
+          holdout.split_name ? `split=${{holdout.split_name}}` : "",
+          holdout.train_source_split ? `train=${{holdout.train_source_split}}` : "",
+          holdout.eval_source_split ? `eval=${{holdout.eval_source_split}}` : ""
+        ].filter(Boolean).join(", ") || missing;
+        const artifactText = [
+          holdout.manifest,
+          holdout.aggregate_csv,
+          holdout.best_by_metric_json
+        ].filter(Boolean).join(" / ") || missing;
+        const runText = [
+          Array.isArray(holdout.seeds) && holdout.seeds.length ? holdout.seeds.join(",") : "",
+          Array.isArray(holdout.levels) && holdout.levels.length ? holdout.levels.join("/") : "",
+          Number(holdout.source_summary_count || 0)
+        ].filter(Boolean).join(" / ") || missing;
+        const topRows = Array.isArray(holdout.top_methods) ? holdout.top_methods.slice(0, 8) : [];
+        const bestRows = Object.entries(holdout.best_by_metric || {{}});
+        return `
+          <div id="holdoutPanel" class="provenance-subsection">
+            <h4>${{t("provenanceHoldout")}}</h4>
+            <div class="provenance-grid">
+              <div class="provenance-item"><span>${{t("provenanceHoldoutProtocol")}}</span><strong>${{esc(protocolText)}}</strong></div>
+              <div class="provenance-item"><span>${{t("provenanceHoldoutArtifacts")}}</span><strong>${{esc(artifactText)}}</strong></div>
+              <div class="provenance-item"><span>${{t("provenanceHoldoutRuns")}}</span><strong>${{esc(runText)}}</strong></div>
+            </div>
+            ${{topRows.length ? `
+              <h4>${{t("holdoutTopMethods")}}</h4>
+              <div class="table-scroll">
+                <table class="leaderboard">
+                  <thead><tr><th>${{t("methodHeader")}}</th><th>${{t("task")}}</th><th>AUROC</th><th>AUPRC</th><th>F1</th><th>runs</th></tr></thead>
+                  <tbody>
+                    ${{topRows.map(row => `
+                      <tr>
+                        <td><strong>${{esc(row.method)}}</strong><br><span class="subtle">${{esc(row.level || "")}}</span></td>
+                        <td>${{esc(row.task || "")}}</td>
+                        <td class="metric">${{meanStd(row, "auroc")}}</td>
+                        <td class="metric">${{meanStd(row, "auprc")}}</td>
+                        <td class="metric">${{meanStd(row, "f1")}}</td>
+                        <td class="metric">${{Number(row.num_runs || 0)}}</td>
+                      </tr>
+                    `).join("")}}
+                  </tbody>
+                </table>
+              </div>
+            ` : ""}}
+            ${{bestRows.length ? `
+              <h4>${{t("holdoutBestMetrics")}}</h4>
+              <div class="provenance-grid">
+                ${{bestRows.map(([metric, row]) => `
+                  <div class="provenance-item">
+                    <span>${{esc(metric)}}</span>
+                    <strong>${{esc(row.method || "")}} / ${{meanStd(row, metric)}}</strong>
+                  </div>
+                `).join("")}}
+              </div>
+            ` : ""}}
+          </div>
+        `;
+      }}
+
       function renderProvenanceAudit() {{
         const provenance = dashboard.provenance || {{}};
         const dataset = provenance.dataset || {{}};
         const inputs = provenance.inputs || {{}};
         const parameters = provenance.parameters || {{}};
         const suite = provenance.suite || null;
+        const holdout = provenance.holdout || null;
         const missing = t("provenanceMissing");
         const datasetText = [dataset.name, Array.isArray(dataset.splits) ? dataset.splits.join("/") : ""]
           .filter(Boolean)
@@ -3218,6 +3427,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
                 </div>
               `).join("")}}
             </div>
+            ${{renderHoldoutPanel(holdout, missing)}}
           </div>
         `;
       }}

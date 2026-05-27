@@ -732,6 +732,109 @@ def test_final_dashboard_background_frames_include_fallback_source(tmp_path: Pat
     assert "backgroundLoadFailed" in html
 
 
+def test_final_dashboard_publishes_holdout_multiseed_provenance(tmp_path: Path) -> None:
+    final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
+    dashboard = load_final_results_dashboard(
+        final_results_root=final_root,
+        individual_label_file=individual_labels,
+        group_label_file=group_labels,
+        score_search_roots=[score_root],
+        top_k=2,
+        case_limit=3,
+    )
+    holdout_dir = tmp_path / "holdout"
+    aggregate_csv = holdout_dir / "aggregate.csv"
+    best_by_metric_json = holdout_dir / "best_by_metric.json"
+    manifest_path = holdout_dir / "manifest.json"
+    _write_csv(
+        aggregate_csv,
+        [
+            {
+                "level": "individual",
+                "method": "individual_lof",
+                "task": "individual_classical",
+                "num_runs": 3,
+                "seeds": "42,43,44",
+                "auroc_mean": 0.61,
+                "auroc_std": 0.02,
+                "auprc_mean": 0.19,
+                "auprc_std": 0.04,
+                "f1_mean": 0.23,
+                "f1_std": 0.03,
+            },
+            {
+                "level": "group",
+                "method": "fusiontrack_group_hybrid",
+                "task": "fusiontrack_group_hybrid",
+                "num_runs": 3,
+                "seeds": "42,43,44",
+                "auroc_mean": 0.79,
+                "auroc_std": 0.01,
+                "auprc_mean": 0.09,
+                "auprc_std": 0.02,
+                "f1_mean": 0.16,
+                "f1_std": 0.02,
+            },
+        ],
+    )
+    best_by_metric_json.parent.mkdir(parents=True, exist_ok=True)
+    best_by_metric_json.write_text(
+        json.dumps(
+            {
+                "auroc": {
+                    "level": "group",
+                    "method": "fusiontrack_group_hybrid",
+                    "task": "fusiontrack_group_hybrid",
+                    "num_runs": 3,
+                    "auroc_mean": 0.79,
+                    "auroc_std": 0.01,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = {
+        "aggregate_csv": "/root/autodl-tmp/fusiontrack_holdout/aggregate.csv",
+        "all_runs_csv": "/root/autodl-tmp/fusiontrack_holdout/all_runs.csv",
+        "best_by_metric_json": "/root/autodl-tmp/fusiontrack_holdout/best_by_metric.json",
+        "split_name": "test",
+        "train_source_split": "train",
+        "eval_source_split": "test",
+        "levels": ["individual", "group"],
+        "seeds": [42, 43, 44],
+    }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    build_final_dashboard(
+        dashboard=dashboard,
+        output_dir=tmp_path / "dashboard",
+        top_sequences=1,
+        provenance={
+            "mode": "final_results_dashboard",
+            "dataset_manifest": {"dataset_name": "VT-Tiny-MOT", "status": "ok", "splits": {}},
+            "holdout_manifest": manifest,
+            "holdout_manifest_path": manifest_path,
+        },
+    )
+
+    dashboard_payload = json.loads(
+        (tmp_path / "dashboard" / "assets" / "final_dashboard_data.json").read_text(encoding="utf-8")
+    )
+    holdout = dashboard_payload["provenance"]["holdout"]
+    assert holdout["seeds"] == [42, 43, 44]
+    assert holdout["levels"] == ["individual", "group"]
+    assert holdout["split_name"] == "test"
+    assert holdout["aggregate_csv"] == "aggregate.csv"
+    assert holdout["best_by_metric_json"] == "best_by_metric.json"
+    assert holdout["top_methods"][0]["method"] == "fusiontrack_group_hybrid"
+    assert holdout["best_by_metric"]["auroc"]["method"] == "fusiontrack_group_hybrid"
+    assert str(tmp_path) not in json.dumps(holdout)
+    html = (tmp_path / "dashboard" / "index.html").read_text(encoding="utf-8")
+    assert "holdoutPanel" in html
+    assert "provenanceHoldout" in html
+    assert "fusiontrack_group_hybrid" in html
+
+
 def test_final_dashboard_includes_registration_playback_without_labels(tmp_path: Path) -> None:
     final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
     registration_root = tmp_path / "registration_work"
