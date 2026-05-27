@@ -1,0 +1,48 @@
+name: System CI
+
+on:
+  push:
+    paths:
+      - "code/system/**"
+      - "code/anomaly_detection/benchmark/configs/method_registry.json"
+      - ".github/workflows/system-ci.yml"
+  pull_request:
+    paths:
+      - "code/system/**"
+      - "code/anomaly_detection/benchmark/configs/method_registry.json"
+      - ".github/workflows/system-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  system-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest numpy matplotlib
+
+      - name: Compile system modules
+        run: |
+          python -m py_compile \
+            code/system/fusiontrack/final_dashboard.py \
+            code/system/fusiontrack/final_results.py \
+            code/system/fusiontrack/method_registry.py \
+            code/system/fusiontrack/dataset_manifest.py
+
+      - name: Validate method registry
+        run: |
+          python -c "import sys; sys.path.insert(0, 'code/system'); from fusiontrack.method_registry import validate_method_registry; result = validate_method_registry(); print(result); raise SystemExit(0 if result.get('status') == 'ok' else 1)"
+
+      - name: Run system tests
+        run: |
+          python -c "import collections, collections.abc; collections.Callable = collections.abc.Callable; import pytest, sys; sys.exit(pytest.main(['code/system/tests', '-q']))"

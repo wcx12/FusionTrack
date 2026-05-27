@@ -256,6 +256,12 @@ python -m py_compile code/system/fusiontrack/final_results.py code/system/fusion
 python -c "import collections, collections.abc; collections.Callable = collections.abc.Callable; import pytest, sys; sys.exit(pytest.main(['code/system/tests/test_dataset_manifest.py', 'code/system/tests/test_method_registry.py', 'code/system/tests/test_final_results.py', 'code/system/tests/test_pipeline.py', '-q']))"
 ```
 
+仓库还提供了 `.github/workflows/system-ci.yml`，当 `code/system/**`、中心方法注册表或该 workflow 自身变更时，会在 GitHub Actions 中自动执行：
+
+- Python 编译检查。
+- `method_registry.json` 注册表校验。
+- `code/system/tests` 系统测试。
+
 生成网页后建议用浏览器或 Playwright 截图验证：
 
 - `Individual` 默认四画面对比有原视频背景。
