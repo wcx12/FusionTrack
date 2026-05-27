@@ -123,7 +123,7 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 - 估计对齐结果 `aligned`。
 - 当前点云对、方法、旋转误差、平移误差、Chamfer、耗时、成功/失败状态和风险分数。
 
-这个视图本质是点云诊断 canvas，不依赖原始视频背景。如果 score row 暂时没有真实 `registration_points`，页面会使用轻量占位点云保证展示层不断裂；后续接入真实 MPS-GAF 或其他学习式配准输出后，应优先使用真实 `source/reference/aligned` 点云替换占位数据。
+这个视图本质是点云诊断 canvas，不依赖原始视频背景。系统适配器会优先读取 score row 中真实的 `registration_points.source/reference/aligned` 点云；如果当前实验结果暂时没有输出真实点云，才会回退到由配准误差确定性生成的轻量预览点云，保证展示层不断裂。
 
 ## 背景资源与媒体类型
 
@@ -383,5 +383,5 @@ python code/system/tools/publish_dashboard_pages.py \
 
 - `Individual` 和 `Group` 的异常标签是规则注入标签，不是数据集原生标注。
 - `Registration` 当前主要是配准诊断模块，不是异常检测 AUROC 任务。
-- 部分配准点云预览仍可能是轻量展示数据，后续应接入真实模型输出的 `source/reference/aligned` 点云。
+- Registration 会优先展示实验 score row 中真实的 `source/reference/aligned` 点云；只有缺少真实点云字段的旧结果会使用轻量预览点云。
 - 当前网页是静态页面，没有后端在线推理接口；重新跑实验后需要重新生成并部署页面。

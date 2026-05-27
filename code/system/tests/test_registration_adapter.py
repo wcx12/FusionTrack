@@ -36,6 +36,11 @@ def _build_registration_summary() -> dict:
                 "translation_error": 0.06,
                 "chamfer_distance": 0.7,
                 "success": True,
+                "registration_points": {
+                    "source": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+                    "reference": [[0.1, 0.0, 0.0], [1.1, 0.0, 0.0]],
+                    "aligned": [[0.08, 0.0, 0.0], [1.08, 0.0, 0.0]],
+                },
             },
             {
                 "batch_idx": 0,
@@ -65,6 +70,14 @@ def test_build_registration_experiment_bundle(tmp_path: Path) -> None:
     assert bundle["num_scores"] == 2
     assert Path(bundle["manifest_path"]).exists()
     assert Path(bundle["fused_jsonl"]).exists()
+    score_file = tmp_path / next(path for path in bundle["score_files"] if Path(path).name.startswith("icp_"))
+    row = json.loads(score_file.read_text(encoding="utf-8").splitlines()[0])
+    assert row["registration_points"] == {
+        "source": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+        "reference": [[0.1, 0.0, 0.0], [1.1, 0.0, 0.0]],
+        "aligned": [[0.08, 0.0, 0.0], [1.08, 0.0, 0.0]],
+    }
+    assert row["metadata"]["registration_point_source"] == "benchmark_row"
 
 
 def test_run_registration_experiment_chain(tmp_path: Path) -> None:

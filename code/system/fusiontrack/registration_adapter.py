@@ -84,6 +84,64 @@ def _registration_point_preview(seed_text: str, row: dict[str, Any]) -> dict[str
     return {"source": source, "reference": reference, "aligned": aligned}
 
 
+def _coerce_point_cloud(value: Any, max_points: int = 256) -> list[list[float]]:
+    if not isinstance(value, list):
+        return []
+    points: list[list[float]] = []
+    for item in value:
+        xyz: Any = item
+        if isinstance(item, dict):
+            xyz = [item.get("x"), item.get("y"), item.get("z")]
+        if not isinstance(xyz, (list, tuple)) or len(xyz) < 3:
+            continue
+        try:
+            point = [round(float(xyz[0]), 6), round(float(xyz[1]), 6), round(float(xyz[2]), 6)]
+        except (TypeError, ValueError):
+            continue
+        if all(math.isfinite(value) for value in point):
+            points.append(point)
+        if len(points) >= max_points:
+            break
+    return points
+
+
+def _first_point_cloud(payload: dict[str, Any], keys: tuple[str, ...]) -> list[list[float]]:
+    for key in keys:
+        points = _coerce_point_cloud(payload.get(key))
+        if points:
+            return points
+    return []
+
+
+def _registration_points_from_row(row: dict[str, Any]) -> tuple[dict[str, list[list[float]]] | None, str]:
+    nested = row.get("registration_points")
+    if isinstance(nested, dict):
+        source = _first_point_cloud(nested, ("source", "source_points", "points_src", "src", "source_cloud"))
+        reference = _first_point_cloud(
+            nested,
+            ("reference", "reference_points", "points_ref", "target", "target_points", "ref", "reference_cloud"),
+        )
+        aligned = _first_point_cloud(
+            nested,
+            ("aligned", "aligned_points", "pred_points", "transformed_source", "transformed_source_points"),
+        )
+        if source and reference and aligned:
+            return {"source": source, "reference": reference, "aligned": aligned}, "benchmark_row"
+
+    source = _first_point_cloud(row, ("source_points", "points_src", "src_points", "source_cloud"))
+    reference = _first_point_cloud(
+        row,
+        ("reference_points", "points_ref", "ref_points", "target_points", "target_cloud"),
+    )
+    aligned = _first_point_cloud(
+        row,
+        ("aligned_points", "pred_points", "transformed_source_points", "aligned_cloud"),
+    )
+    if source and reference and aligned:
+        return {"source": source, "reference": reference, "aligned": aligned}, "benchmark_row"
+    return None, "synthetic_preview"
+
+
 def _iter_rows_by_method(payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     by_method: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in payload.get("pair_results", []):
@@ -199,6 +257,9 @@ def build_registration_experiment_bundle(
                 sequence = str(row.get("sequence", f"batch_{int(row.get('batch_idx', 0)):04d}"))
                 track_id = str(row.get("group_ref_idx", index))
                 sample_id = _build_sample_key(method, row)
+                registration_points, point_source = _registration_points_from_row(row)
+                if registration_points is None:
+                    registration_points = _registration_point_preview(sample_id, row)
                 sample_row = {
                     "sample_id": sample_id,
                     "sequence": sequence,
@@ -215,12 +276,13 @@ def build_registration_experiment_bundle(
                     "success": bool(row.get("success", False)),
                     "skipped": bool(row.get("skipped", False)),
                     "component_scores": _registration_component_scores(row, score),
-                    "registration_points": _registration_point_preview(sample_id, row),
+                    "registration_points": registration_points,
                     "metadata": {
                         "method": method,
                         "group_ref_idx": int(row.get("group_ref_idx", 0)),
                         "batch_idx": int(row.get("batch_idx", 0)),
                         "sample_idx": int(row.get("sample_idx", 0)),
+                        "registration_point_source": point_source,
                         "error": str(row.get("error", "")),
                     },
                 }
