@@ -670,6 +670,12 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "demoPipelineSummary" in html
     assert "demoResultSummary" in html
     assert "demoEvidenceSummary" in html
+    assert "systemCoveragePanel" in html
+    assert "renderSystemCoverage" in html
+    assert "moduleCoverageTitle" in html
+    assert "moduleStatusDone" in html
+    assert "moduleRegistration" in html
+    assert "moduleVisualization" in html
     assert "audit-only" in html
     assert "applyPresentationMode" in html
     assert "renderDemoSummary" in html

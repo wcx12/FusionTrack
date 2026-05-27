@@ -1144,6 +1144,11 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .demo-top-list {{ display: grid; gap: 7px; margin-top: 10px; }}
     .demo-top-row {{ display: grid; grid-template-columns: 32px 1fr auto; gap: 8px; align-items: center; border: 1px solid #e1e7ef; border-radius: 7px; background: #fff; padding: 8px 10px; }}
     .demo-top-rank {{ font-weight: 800; color: #0f766e; }}
+    .module-coverage {{ display: grid; gap: 7px; margin-top: 10px; }}
+    .module-row {{ display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; border: 1px solid #dbe4ee; border-radius: 7px; background: #fff; padding: 8px 10px; }}
+    .module-row strong {{ color: #0f172a; }}
+    .module-row span:first-child {{ color: #334155; font-size: 13px; }}
+    .module-row .status-pill {{ white-space: nowrap; }}
     .demo-mode .audit-only {{ display: none; }}
     .provenance-panel {{ grid-column: 1 / -1; border: 1px solid #dbe4ee; border-radius: 8px; background: #ffffff; padding: 12px; }}
     .provenance-panel h3 {{ margin: 0 0 10px; font-size: 15px; }}
@@ -1238,6 +1243,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       <div class="panel demo-card">
         <h2 data-i18n="demoPipelineTitle">System flow</h2>
         <div id="demoPipelineSummary"></div>
+        <div id="systemCoveragePanel" class="module-coverage"></div>
       </div>
       <div class="panel demo-card">
         <h2 data-i18n="demoResultTitle">Result snapshot</h2>
@@ -1434,6 +1440,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       const demoPipelineSummary = document.getElementById("demoPipelineSummary");
       const demoResultSummary = document.getElementById("demoResultSummary");
       const demoEvidenceSummary = document.getElementById("demoEvidenceSummary");
+      const systemCoveragePanel = document.getElementById("systemCoveragePanel");
       const individualProtocol = document.getElementById("individualProtocol");
       const groupProtocol = document.getElementById("groupProtocol");
       const registrationProtocol = document.getElementById("registrationProtocol");
@@ -2118,7 +2125,17 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         demoHoldout: "Holdout 证据",
         demoPlaybackMode: "默认展示",
         demoPlaybackModeText: "原视频 / 热力 / 轨迹 / 热力+轨迹",
-        demoMissing: "未提供"
+        demoMissing: "未提供",
+        moduleCoverageTitle: "论文流程覆盖",
+        moduleDataset: "数据输入与多模态质量",
+        moduleRegistration: "RGB/Thermal 配准与点云配准证据",
+        moduleIndividual: "个体异常检测",
+        moduleGroup: "群体异常检测",
+        moduleFusionEval: "融合评分与指标评估",
+        moduleVisualization: "动态可视化与公开展示",
+        moduleStatusDone: "已接入",
+        moduleStatusPartial: "占位/待强化",
+        moduleStatusMissing: "未接入"
       }});
       Object.assign(translations.en, {{
         eventThresholdLabel: "Event threshold",
@@ -2155,7 +2172,17 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         demoHoldout: "Holdout evidence",
         demoPlaybackMode: "Default view",
         demoPlaybackModeText: "Original / heatmap / tracks / heat+tracks",
-        demoMissing: "Not provided"
+        demoMissing: "Not provided",
+        moduleCoverageTitle: "Thesis Flow Coverage",
+        moduleDataset: "Data input and multimodal quality",
+        moduleRegistration: "RGB/Thermal registration and point-cloud evidence",
+        moduleIndividual: "Individual anomaly detection",
+        moduleGroup: "Group anomaly detection",
+        moduleFusionEval: "Score fusion and metric evaluation",
+        moduleVisualization: "Dynamic visualization and public demo",
+        moduleStatusDone: "Integrated",
+        moduleStatusPartial: "Placeholder / needs upgrade",
+        moduleStatusMissing: "Missing"
       }});
       const backgroundCache = new Map();
       const backgroundFailures = new Set();
@@ -3515,6 +3542,40 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         localStorage.setItem("fusiontrack.finalDashboard.presentationMode", state.presentationMode);
       }}
 
+      function moduleCoverageStatus(done, partial = false) {{
+        if (done) {{
+          return {{ label: t("moduleStatusDone"), cls: "ok" }};
+        }}
+        if (partial) {{
+          return {{ label: t("moduleStatusPartial"), cls: "partial" }};
+        }}
+        return {{ label: t("moduleStatusMissing"), cls: "missing" }};
+      }}
+
+      function renderSystemCoverage() {{
+        const tasks = dashboard.tasks || {{}};
+        const provenance = dashboard.provenance || {{}};
+        const dataset = provenance.dataset || {{}};
+        const sequenceCount = sequences().length;
+        const coverageRows = [
+          [t("moduleDataset"), moduleCoverageStatus(dataset.status === "ok" || !!dataset.quality)],
+          [t("moduleRegistration"), moduleCoverageStatus(!!tasks.registration, !!provenance.inputs?.registration_manifest)],
+          [t("moduleIndividual"), moduleCoverageStatus(!!tasks.individual && Object.keys(tasks.individual.methods || {{}}).length > 0)],
+          [t("moduleGroup"), moduleCoverageStatus(!!tasks.group && Object.keys(tasks.group.methods || {{}}).length > 0)],
+          [t("moduleFusionEval"), moduleCoverageStatus(Object.values(tasks).some(task => (task.leaderboard || []).length > 0))],
+          [t("moduleVisualization"), moduleCoverageStatus(sequenceCount > 0)],
+        ];
+        systemCoveragePanel.innerHTML = `
+          <strong>${{t("moduleCoverageTitle")}}</strong>
+          ${{coverageRows.map(([label, status]) => `
+            <div class="module-row">
+              <span>${{esc(label)}}</span>
+              <span class="status-pill ${{status.cls}}">${{esc(status.label)}}</span>
+            </div>
+          `).join("")}}
+        `;
+      }}
+
       function renderDemoSummary() {{
         const task = taskData() || {{}};
         const current = (task.methods || {{}})[state.method] || {{ metrics: {{}} }};
@@ -3585,6 +3646,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
             <div class="subtle">${{isRegistrationTask() ? t("registrationPlaybackNote") : t("demoPlaybackModeText")}}</div>
           </div>
         `;
+        renderSystemCoverage();
       }}
 
       function renderHoldoutPanel(holdout, missing) {{
