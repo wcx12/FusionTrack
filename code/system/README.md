@@ -249,6 +249,23 @@ manifest 记录：
 
 导出包会自动包含 dataset manifest，并把本机绝对路径脱敏为 `${work_root}`、`${data_root}` 或 `${external}` 占位符。
 
+## Strict Key Policy 治理
+
+最终结果看板会在每个任务的公共 payload 中写入 `key_policy`，用于说明标签和分数行如何对齐：
+
+- `Individual`：严格键为 `sample_id`，表示单条轨迹级样本。
+- `Group`：严格键为 `sample_id + window_id`，表示群体窗口级样本；为了兼容历史 score row，页面也会标注 `sample_id` 作为旧结果回退字段。
+- `Registration`：严格键为 `sample_id`，表示一个点云配准 pair。
+
+这些策略会同时出现在：
+
+- `assets/final_dashboard_data.json` 的 `tasks.<task>.key_policy`。
+- 审计版页面的数据流审计表。
+- 当前视图 JSON 导出的 `key_policy`。
+- 当前序列 JSON 导出的 `task_key_policies`。
+
+这样答辩或复现实验时可以直接说明：指标评估、标签覆盖、分数覆盖和前端展示并不是随意按文件行号对齐，而是有明确的任务级 key policy。后续如果新增真实标注或新的 group window preset，应优先保持该 key policy 不变；如必须改变，应同步更新评估配置、score row、dashboard payload 和文档。
+
 ## 运行来源审计
 
 最终 dashboard 的“数据流审计”页顶部会展示一组运行来源信息，用来回答“当前网页到底由哪一版数据、哪一批标签、哪一批分数和哪些构建参数生成”：

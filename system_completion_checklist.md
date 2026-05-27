@@ -21,8 +21,8 @@
   下一步：后续扩展真实数据集 preset 时继续补充字段级提示信息。
 
 - strict key 管理：✅（基础闭环）
-  现状：`run_evaluation.py` 和 matrix 配置均支持任务级 `key_fields`；主协议 individual 使用 `sample_id`，group 使用 `sample_id + window_id`，并支持唯一键和 score/label 完全匹配检查。
-  下一步：后续把 key policy 也展示到 dashboard/export 的治理说明中。
+  现状：`run_evaluation.py` 和 matrix 配置均支持任务级 `key_fields`；主协议 individual 使用 `sample_id`，group 使用 `sample_id + window_id`，并支持唯一键和 score/label 完全匹配检查。最终 dashboard 已在 task payload、数据流审计表、当前视图 JSON 和当前序列 JSON 中展示 `key_policy`。
+  下一步：后续接入真实标签或新 group window preset 时，需要保持评估配置、score row、dashboard payload 和文档中的 key policy 一致。
 
 - 合成异常协议治理：✅（主协议闭环）
   现状：异常注入脚本已输出 manifest v2，validation/holdout 协议生成器会自动生成 `dataset_manifest.json` 并传入注入 manifest，记录参数、文件 hash、label 分布、重放命令和 dataset fingerprint；`run_fusiontrack.py` 支持 `--protocol-manifest` / `protocol_manifests`，最终 dashboard provenance 会展示协议任务、标签分布、异常类型和数据指纹，导出包会归档对应 manifest。
@@ -261,3 +261,11 @@
 - 单画面模式会导出当前选中的图层；Registration 任务会导出点云配准 canvas。
 - 前端新增 `buildPlaybackPngCanvas()` 与 `handlePlaybackPngExport()`，复用当前播放状态、任务、方法、序列和帧号生成文件名。
 - 扩展 `test_final_results.py`，覆盖 PNG 导出按钮和核心函数已写入最终 HTML。
+
+## 2026-05-28 更新：任务级 strict key policy 展示
+
+- `TaskDashboard.to_public_dict()` 现在会为每个任务写出 `key_policy`。
+- Individual 任务标注为 `sample_id` 轨迹级键；Group 任务标注为 `sample_id + window_id` 群体窗口级键，并保留 `sample_id` 作为历史结果兼容字段；Registration 标注为配准 pair 的 `sample_id`。
+- 最终 dashboard 的数据流审计页新增 `keyPolicyPanel`，集中展示每个任务的主键字段、兼容字段、对齐粒度和严格对齐状态。
+- 当前视图 JSON 导出新增 `key_policy`，当前序列 JSON 导出新增 `task_key_policies`，方便把具体展示案例和任务级 key policy 一起归档。
+- 扩展 `test_final_results.py`，覆盖 key policy payload、导出字段和前端审计函数已写入 HTML。

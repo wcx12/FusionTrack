@@ -569,6 +569,9 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
         "frame_end": 20,
         "visualized_tracks": 2,
     }
+    assert dashboard_payload["tasks"]["individual"]["key_policy"]["key_fields"] == ["sample_id"]
+    assert dashboard_payload["tasks"]["group"]["key_policy"]["key_fields"] == ["sample_id", "window_id"]
+    assert dashboard_payload["tasks"]["group"]["key_policy"]["fallback_key_fields"] == ["sample_id"]
     assert playback_data["S1"]["stats_by_task"]["group"]["sequence_sample_count"] == 0
     assert playback_data["S1"]["modality_audit"]["point_count"] == 4
     assert playback_data["S1"]["modality_audit"]["rgb_point_count"] == 1
@@ -644,6 +647,10 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "renderTrackInsights" in html
     assert "explanationSchemaReason" in html
     assert "renderDataFlowAudit" in html
+    assert "renderKeyPolicyAudit" in html
+    assert "keyPolicyPanel" in html
+    assert "task_key_policies" in html
+    assert "key_policy: task.key_policy" in html
     assert "renderProvenanceAudit" in html
     assert "datasetQualityPanel" in html
     assert "provenanceDatasetQuality" in html

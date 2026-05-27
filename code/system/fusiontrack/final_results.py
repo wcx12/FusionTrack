@@ -50,6 +50,7 @@ class TaskDashboard:
     anomaly_type_rows: list[dict[str, Any]]
     case_rows: dict[str, dict[str, list[dict[str, Any]]]]
     top_k: int
+    key_policy: dict[str, Any] = field(default_factory=dict)
 
     @property
     def labels_by_sample(self) -> dict[str, dict[str, Any]]:
@@ -65,6 +66,7 @@ class TaskDashboard:
             "leaderboard": self.leaderboard,
             "anomaly_type_rows": self.anomaly_type_rows,
             "case_rows": self.case_rows,
+            "key_policy": self.key_policy or _task_key_policy(self.task),
         }
 
 
@@ -162,7 +164,7 @@ def _load_task_dashboard(
             {
                 "num_score_rows": int(float(row.get("num_score_rows", len(score_rows)) or len(score_rows))),
                 "num_missing_score_keys": int(float(row.get("num_missing_score_keys", 0) or 0)),
-                "schema_diagnostics": _schema_diagnostics_from_summary_row(row, score_rows, labels),
+                "schema_diagnostics": _schema_diagnostics_from_summary_row(task, row, score_rows, labels),
             }
         )
         methods[method_name] = MethodProfile(
@@ -189,6 +191,7 @@ def _load_task_dashboard(
         anomaly_type_rows=anomaly_type_rows,
         case_rows=case_rows,
         top_k=top_k,
+        key_policy=_task_key_policy(task),
     )
 
 
@@ -282,6 +285,7 @@ def _load_registration_task_dashboard(
         anomaly_type_rows=anomaly_type_rows,
         case_rows=case_rows,
         top_k=top_k,
+        key_policy=_task_key_policy(task_name),
     )
 
 
@@ -547,6 +551,7 @@ def _load_summary_rows(final_results_root: Path, task: str) -> list[dict[str, An
 
 
 def _schema_diagnostics_from_summary_row(
+    task: str,
     row: dict[str, Any],
     score_rows: list[dict[str, Any]],
     labels: list[dict[str, Any]],
@@ -567,10 +572,12 @@ def _schema_diagnostics_from_summary_row(
         warnings.append("duplicate_label_keys")
     if duplicate_scores:
         warnings.append("duplicate_score_keys")
+    key_policy = _task_key_policy(task)
     return {
         "schema_diagnostics_version": 1,
         "status": "warning" if warnings else "ok",
-        "key_fields": ["sample_id"],
+        "key_fields": key_policy["key_fields"],
+        "fallback_key_fields": key_policy.get("fallback_key_fields", []),
         "label": {
             "num_rows": _coerce_int(row.get("num_label_rows"), len(labels)),
             "num_unique_keys": _coerce_int(row.get("num_unique_label_keys"), len(labels)),
@@ -586,6 +593,36 @@ def _schema_diagnostics_from_summary_row(
             "num_extra_score_keys": extra,
         },
         "warnings": warnings,
+    }
+
+
+def _task_key_policy(task: str) -> dict[str, Any]:
+    task_name = str(task or "").lower()
+    if task_name == "group":
+        return {
+            "task": "group",
+            "key_fields": ["sample_id", "window_id"],
+            "fallback_key_fields": ["sample_id"],
+            "scope": "group_window",
+            "strict": True,
+            "description": "Group strict protocol aligns labels and scores by sample_id + window_id; sample_id is kept as a legacy fallback for older score rows.",
+        }
+    if task_name == "registration":
+        return {
+            "task": "registration",
+            "key_fields": ["sample_id"],
+            "fallback_key_fields": [],
+            "scope": "registration_pair",
+            "strict": True,
+            "description": "Registration diagnostics align each score row by point-cloud pair sample_id.",
+        }
+    return {
+        "task": "individual",
+        "key_fields": ["sample_id"],
+        "fallback_key_fields": [],
+        "scope": "individual_track",
+        "strict": True,
+        "description": "Individual strict protocol aligns each trajectory label and score row by sample_id.",
     }
 
 

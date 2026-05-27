@@ -2085,6 +2085,14 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         dataFlowMissing: "缺失",
         dataFlowNoTracks: "无轨迹",
         dataFlowNoBackground: "无背景帧",
+        keyPolicyTitle: "任务键策略",
+        keyPolicyFields: "主键字段",
+        keyPolicyFallback: "兼容字段",
+        keyPolicyScope: "粒度",
+        keyPolicyStrict: "严格对齐",
+        keyPolicyDescription: "说明",
+        keyPolicyStrictYes: "是",
+        keyPolicyStrictNo: "否",
         provenanceTitle: "运行来源审计",
         provenanceMode: "运行模式",
         provenanceGeneratedAt: "生成时间",
@@ -2171,6 +2179,14 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         dataFlowMissing: "Missing",
         dataFlowNoTracks: "No tracks",
         dataFlowNoBackground: "No background frames",
+        keyPolicyTitle: "Task Key Policy",
+        keyPolicyFields: "Key fields",
+        keyPolicyFallback: "Fallback fields",
+        keyPolicyScope: "Scope",
+        keyPolicyStrict: "Strict alignment",
+        keyPolicyDescription: "Description",
+        keyPolicyStrictYes: "Yes",
+        keyPolicyStrictNo: "No",
         provenanceTitle: "Run Provenance Audit",
         provenanceMode: "Run mode",
         provenanceGeneratedAt: "Generated at",
@@ -2657,6 +2673,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
             play_speed: state.playSpeed
           }},
           method_metrics: method.metrics || {{}},
+          key_policy: task.key_policy || {{}},
           leaderboard_row: leaderboardRow,
           case_rows: currentCaseRows(),
           sequence_stats: currentSequenceStats(data),
@@ -2672,6 +2689,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           exported_at_utc: new Date().toISOString(),
           task: state.task,
           method: state.method,
+          task_key_policies: Object.fromEntries(
+            Object.entries(dashboard.tasks || {{}}).map(([name, task]) => [name, task.key_policy || {{}}])
+          ),
           sequence: data.sequence || state.sequence || "",
           frame_range: data.frame_range || [],
           media: data.media || {{}},
@@ -4289,6 +4309,35 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         `;
       }}
 
+      function renderKeyPolicyAudit() {{
+        const rows = Object.entries(dashboard.tasks || {{}}).map(([taskName, task]) => {{
+          const policy = task.key_policy || {{}};
+          const label = taskName === "registration" ? t("taskRegistration") : taskName === "group" ? t("taskGroup") : t("taskIndividual");
+          const keyFields = Array.isArray(policy.key_fields) ? policy.key_fields.join(" + ") : "";
+          const fallbackFields = Array.isArray(policy.fallback_key_fields) && policy.fallback_key_fields.length
+            ? policy.fallback_key_fields.join(" + ")
+            : "-";
+          return `
+            <tr>
+              <td><strong>${{esc(label)}}</strong></td>
+              <td>${{esc(keyFields || "-")}}</td>
+              <td>${{esc(fallbackFields)}}</td>
+              <td>${{esc(policy.scope || "-")}}</td>
+              <td>${{policy.strict ? t("keyPolicyStrictYes") : t("keyPolicyStrictNo")}}</td>
+              <td>${{esc(policy.description || "-")}}</td>
+            </tr>
+          `;
+        }}).join("");
+        return `
+          <div id="keyPolicyPanel" class="table-scroll" style="grid-column: 1 / -1;">
+            <table class="leaderboard">
+              <thead><tr><th>${{t("keyPolicyTitle")}}</th><th>${{t("keyPolicyFields")}}</th><th>${{t("keyPolicyFallback")}}</th><th>${{t("keyPolicyScope")}}</th><th>${{t("keyPolicyStrict")}}</th><th>${{t("keyPolicyDescription")}}</th></tr></thead>
+              <tbody>${{rows}}</tbody>
+            </table>
+          </div>
+        `;
+      }}
+
       function renderDataFlowAudit() {{
         const sequenceNames = sequences();
         const allTracks = sequenceNames.flatMap(name => playbackData[name]?.tracks || []);
@@ -4361,6 +4410,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         dataFlowPanel.innerHTML = `
           ${{renderProvenanceAudit()}}
           ${{cards.map(([label, value]) => `<div class="data-flow-card"><span>${{label}}</span><strong>${{value}}</strong></div>`).join("")}}
+          ${{renderKeyPolicyAudit()}}
           <div class="table-scroll" style="grid-column: 1 / -1;">
             <table class="leaderboard">
               <thead><tr><th>${{t("dataFlowSequenceAudit")}}</th><th class="metric">${{t("dataFlowTracks")}}</th><th class="metric">${{t("dataFlowPoints")}}</th><th class="metric">${{t("dataFlowRgbCoverage")}}</th><th class="metric">${{t("dataFlowThermalCoverage")}}</th><th class="metric">${{t("dataFlowMissingModalities")}}</th><th class="metric">${{t("dataFlowBackgrounds")}}</th><th class="metric">${{t("dataFlowAvgOffset")}}</th><th>${{t("dataFlowBackgroundStatus")}}</th></tr></thead>
