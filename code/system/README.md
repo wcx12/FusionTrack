@@ -284,6 +284,31 @@ python -c "import collections, collections.abc; collections.Callable = collectio
 python code/system/tools/build_sample_dashboard.py --output-dir runs/sample_dashboard_ci
 ```
 
+## GitHub Pages 发布与版本归档
+
+生成最终 dashboard 后，可以用发布工具把静态网页同步到 GitHub Pages 工作树。命令建议只写相对路径，避免把本机绝对路径带入脚本、服务器命令或公开清单：
+
+```bash
+python code/system/tools/publish_dashboard_pages.py \
+  --source-dir runs/final_results_dashboard/final_dashboard \
+  --pages-dir ../FusionTrack-gh-pages \
+  --run-id 20260528_final_dashboard
+```
+
+该工具会执行三件事：
+
+- 更新 Pages 根目录的 `index.html` 与完整 `assets/`，保证公开首页访问的是最新 dashboard。
+- 同步保留 `CNAME` 等根目录已有文件，只替换 dashboard 相关静态资源。
+- 将同一版页面归档到 `history/<run_id>/`，便于答辩或论文归档时回看不同实验批次。
+
+发布后会在 Pages 根目录写入 `publish_manifest.json`。该清单只记录相对公开路径、`run_id`、资产数量和发布时间，不写入本机绝对路径。常见检查点如下：
+
+- `index.html` 存在。
+- `assets/final_dashboard_data.json` 和 `assets/final_playback_data.json` 存在。
+- `assets/background_*.jpg` 等背景资源随页面一起发布。
+- `history/<run_id>/index.html` 与 `history/<run_id>/assets/` 存在。
+- `publish_manifest.json` 中没有 `D:/...`、`C:\...` 或服务器绝对路径。
+
 生成网页后建议用浏览器或 Playwright 截图验证：
 
 - `Individual` 默认四画面对比有原视频背景。

@@ -219,3 +219,12 @@
 - 每个 matrix 保留自己的 `manifest.json`、`summary.csv`、scores 和 metrics。
 - suite 层新增 `suite_manifest.json` 和 `aggregate_summary.csv`，用于统一记录多任务评测输出路径、hash、运行数量、git 状态和 Python 环境。
 - 该更新推进了 D 层中的“多任务多方法批量评测”和“实验可追溯”；后续还需要把 suite 输出直接接入最终 dashboard/export。
+
+## 2026-05-28 更新：GitHub Pages 发布工具与 run_id 归档
+
+- 新增 `code/system/tools/publish_dashboard_pages.py`，可把已生成的 dashboard 目录发布到 GitHub Pages 工作树。
+- 发布工具会更新 Pages 根目录的 `index.html` 与 `assets/`，同时保留 `CNAME` 等非 dashboard 文件。
+- 支持 `--run-id`，同一版 dashboard 会归档到 `history/<run_id>/`，便于答辩演示、论文记录和结果回溯。
+- 发布清单 `publish_manifest.json` 只记录公开相对路径、资产数量、发布时间和 `run_id`，不会写入本机绝对路径。
+- 新增 `test_publish_dashboard_pages.py`，覆盖根目录更新、旧资产清理、版本归档、非 dashboard 文件保留和绝对路径脱敏。
+- 该更新把 F 层中的“GitHub 可访问页面”和“版本发布”推进到可重复执行状态；后续如果需要完全自动化，可在 GitHub Actions 或本地发布脚本中继续调用该工具。
