@@ -1113,6 +1113,14 @@ def _score_decomposition(row: dict[str, Any]) -> dict[str, float]:
 
 
 def _score_component_payload(method_rows: dict[str, Any]) -> dict[str, Any]:
+    metadata = method_rows.get("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    registration_point_source = (
+        method_rows.get("registration_point_source")
+        or metadata.get("registration_point_source")
+        or ""
+    )
     frame_event_scores = normalize_frame_event_scores(method_rows.get("frame_event_scores", []))
     raw_event_segments = method_rows.get("event_segments", [])
     event_segments = [
@@ -1145,13 +1153,14 @@ def _score_component_payload(method_rows: dict[str, Any]) -> dict[str, Any]:
         "frame_event_scores": frame_event_scores,
         "component_scores": method_rows.get("component_scores", {}),
         "explanation_schema": explanation_schema,
-        "metadata": method_rows.get("metadata", {}),
+        "metadata": metadata,
         "rotation_error_deg": method_rows.get("rotation_error_deg"),
         "translation_error": method_rows.get("translation_error"),
         "chamfer_distance": method_rows.get("chamfer_distance"),
         "runtime_sec": method_rows.get("runtime_sec"),
         "success": method_rows.get("success"),
         "skipped": method_rows.get("skipped"),
+        "registration_point_source": str(registration_point_source),
         "registration_points": method_rows.get("registration_points"),
     }
 
@@ -2046,6 +2055,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         registrationSourceCloud: "\u6e90\u70b9\u4e91",
         registrationReferenceCloud: "\u53c2\u8003\u70b9\u4e91",
         registrationAlignedCloud: "\u5bf9\u9f50\u7ed3\u679c",
+        registrationPointSource: "\u70b9\u4e91\u6765\u6e90",
+        registrationPointSourceBenchmark: "\u771f\u5b9e benchmark \u70b9\u4e91",
+        registrationPointSourceSynthetic: "\u8f7b\u91cf\u9884\u89c8\u70b9\u4e91",
+        registrationPointSourceUnknown: "\u672a\u6807\u6ce8",
+        registration3DNoteBenchmark: "\u5f53\u524d\u6837\u672c\u4f7f\u7528\u5b9e\u9a8c\u7ed3\u679c\u4e2d\u7684 source/reference/aligned \u70b9\u4e91\u3002",
+        registration3DNoteSynthetic: "\u5f53\u524d\u6837\u672c\u7f3a\u5c11\u771f\u5b9e\u70b9\u4e91\uff0c\u4f7f\u7528\u7531\u914d\u51c6\u8bef\u5dee\u751f\u6210\u7684\u8f7b\u91cf\u9884\u89c8\u3002",
         registrationNoPointCloud: "\u5f53\u524d\u6837\u672c\u6682\u65e0\u70b9\u4e91\u5750\u6807\uff0c\u6b63\u5728\u5c55\u793a\u8f7b\u91cf\u8bca\u65ad\u5360\u4f4d\u56fe\u3002",
         sequenceNoVideoBackground: "\u5f53\u524d\u5e8f\u5217\u6ca1\u6709\u627e\u5230\u53ef\u7528\u7684\u539f\u59cb RGB \u80cc\u666f\u5e27\uff0c\u53ea\u80fd\u5c55\u793a\u8f68\u8ff9\u3001\u70ed\u529b\u548c\u7ed3\u6784\u5316\u8bc1\u636e\u3002",
         sequenceNoVideoBackgroundShort: "\u5f53\u524d\u5e8f\u5217\u65e0\u539f\u59cb\u80cc\u666f\u5e27",
@@ -2226,7 +2241,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         groupEventCenter: "事件中心",
         noGroupEvents: "当前序列没有可聚合的群体事件。",
         registration3DTitle: "配准 3D 投影诊断",
-        registration3DNote: "蓝色为 source，绿色为 reference，红色为 estimated aligned；当前是由 benchmark 误差生成的轻量投影预览。",
+        registration3DNote: "蓝色为 source，绿色为 reference，红色为 estimated aligned；点云来源会在配准证据中标注。",
         chartNoData: "暂无逐帧曲线数据"
       }});
       Object.assign(translations.en, {{
@@ -2256,6 +2271,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         registrationSourceCloud: "Source cloud",
         registrationReferenceCloud: "Reference cloud",
         registrationAlignedCloud: "Aligned result",
+        registrationPointSource: "Point source",
+        registrationPointSourceBenchmark: "Real benchmark point cloud",
+        registrationPointSourceSynthetic: "Lightweight preview point cloud",
+        registrationPointSourceUnknown: "Unmarked",
+        registration3DNoteBenchmark: "This sample uses source/reference/aligned point clouds from the experiment result.",
+        registration3DNoteSynthetic: "This sample has no real point cloud fields; the view falls back to an error-driven lightweight preview.",
         registrationNoPointCloud: "No point-cloud coordinates are available for this sample; showing a lightweight diagnostic placeholder.",
         view_registration: "Point-cloud registration view",
         dataFlowSequences: "Playable sequences",
@@ -2334,7 +2355,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         groupEventCenter: "Event center",
         noGroupEvents: "No aggregatable group events in this sequence.",
         registration3DTitle: "Registration 3D projection",
-        registration3DNote: "Blue is source, green is reference, red is estimated aligned. This is a lightweight projection preview generated from benchmark error fields.",
+        registration3DNote: "Blue is source, green is reference, red is estimated aligned. The point-cloud source is shown in the registration evidence.",
         chartNoData: "No frame-level curve data"
       }});
       Object.assign(translations.zh, {{
@@ -3253,6 +3274,46 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         return clean.filter((_, index) => index % stride === 0).slice(0, limit);
       }}
 
+      function registrationPointSourceRaw(row) {{
+        return String(row?.registration_point_source || row?.metadata?.registration_point_source || "").trim();
+      }}
+
+      function registrationPointSourceKind(row) {{
+        const raw = registrationPointSourceRaw(row);
+        if (raw === "benchmark_row") {{
+          return "benchmark";
+        }}
+        if (raw === "synthetic_preview") {{
+          return "synthetic";
+        }}
+        return raw ? "raw" : "unknown";
+      }}
+
+      function registrationPointSourceLabel(row) {{
+        const kind = registrationPointSourceKind(row);
+        if (kind === "benchmark") {{
+          return t("registrationPointSourceBenchmark");
+        }}
+        if (kind === "synthetic") {{
+          return t("registrationPointSourceSynthetic");
+        }}
+        if (kind === "raw") {{
+          return esc(registrationPointSourceRaw(row));
+        }}
+        return t("registrationPointSourceUnknown");
+      }}
+
+      function registrationPointSourceNote(row) {{
+        const kind = registrationPointSourceKind(row);
+        if (kind === "benchmark") {{
+          return t("registration3DNoteBenchmark");
+        }}
+        if (kind === "synthetic") {{
+          return t("registration3DNoteSynthetic");
+        }}
+        return t("registration3DNote");
+      }}
+
       function registrationPointGroups(track) {{
         const row = selectedTrackScoreComponents(track);
         const preview = row.registration_points || {{}};
@@ -3328,7 +3389,8 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
               <span><i class="legend-dot" style="background:#16a34a"></i>reference</span>
               <span><i class="legend-dot" style="background:#dc2626"></i>aligned</span>
             </div>
-            <div class="subtle">${{t("registration3DNote")}}</div>
+            <div class="subtle">${{t("registrationPointSource")}}：${{registrationPointSourceLabel(row)}}</div>
+            <div class="subtle">${{registrationPointSourceNote(row)}}</div>
           </div>
         `;
       }}
@@ -5084,6 +5146,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         const metrics = [
           [t("registrationSelectedPair"), `${{esc(track.sequence)}} / ${{esc(track.track_id)}}`],
           [t("registrationMethod"), esc(state.method)],
+          [t("registrationPointSource"), registrationPointSourceLabel(row)],
           [t("registrationMetricRotation"), metricValue(row, "rotation_error_deg") === null ? "-" : `${{fmt(metricValue(row, "rotation_error_deg"))}} deg`],
           [t("registrationMetricTranslation"), metricValue(row, "translation_error") === null ? "-" : fmt(metricValue(row, "translation_error"))],
           [t("registrationMetricChamfer"), metricValue(row, "chamfer_distance") === null ? "-" : fmt(metricValue(row, "chamfer_distance"))],

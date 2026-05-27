@@ -88,13 +88,14 @@ Registration 模块用于展示几何配准能力，不使用 VT-Tiny-MOT 原始
 - aligned 估计对齐结果。
 - 当前点云对编号。
 - 配准方法。
+- 点云来源。
 - 旋转误差。
 - 平移误差。
 - Chamfer 距离。
 - 运行耗时。
 - 成功或失败状态。
 
-如果当前 score row 中已经包含真实 `registration_points.source/reference/aligned`，系统会直接透传并在页面中展示真实点云；如果旧实验结果暂时没有这些字段，页面才会使用轻量占位点云保证展示层不断裂。后续接入真实 MPS-GAF 或其他学习式配准模型时，只需要按该字段结构输出点云即可被 dashboard 读取。
+如果当前 score row 中已经包含真实 `registration_points.source/reference/aligned`，系统会直接透传并在页面中展示真实点云，同时在证据区标注点云来源；如果旧实验结果暂时没有这些字段，页面才会使用轻量占位点云保证展示层不断裂。后续接入真实 MPS-GAF 或其他学习式配准模型时，只需要按该字段结构输出点云即可被 dashboard 读取。
 
 ### 2.7 动态可视化与交互
 

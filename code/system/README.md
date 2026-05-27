@@ -121,9 +121,9 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 - 源点云 `source`。
 - 参考点云 `reference`。
 - 估计对齐结果 `aligned`。
-- 当前点云对、方法、旋转误差、平移误差、Chamfer、耗时、成功/失败状态和风险分数。
+- 当前点云对、方法、点云来源、旋转误差、平移误差、Chamfer、耗时、成功/失败状态和风险分数。
 
-这个视图本质是点云诊断 canvas，不依赖原始视频背景。系统适配器会优先读取 score row 中真实的 `registration_points.source/reference/aligned` 点云；如果当前实验结果暂时没有输出真实点云，才会回退到由配准误差确定性生成的轻量预览点云，保证展示层不断裂。
+这个视图本质是点云诊断 canvas，不依赖原始视频背景。系统适配器会优先读取 score row 中真实的 `registration_points.source/reference/aligned` 点云，并在页面证据区标注点云来源；如果当前实验结果暂时没有输出真实点云，才会回退到由配准误差确定性生成的轻量预览点云，保证展示层不断裂。
 
 ## 背景资源与媒体类型
 

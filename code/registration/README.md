@@ -114,9 +114,9 @@ python code/registration/run_non_learning_baseline_sweep.py \
 - `registration_scores/*.jsonl`：每个方法一份 score rows，包含 `score`、`rotation_error_deg`、`translation_error`、`chamfer_distance`、`runtime_sec`、`success`、`skipped` 和 `component_scores`。
 - `registration_metrics/*.json`：每个方法一份聚合指标，包含成功率、失败数、平均误差、平均耗时等。
 - `registration_artifacts/registration_experiment_manifest.json`：最终 dashboard 的 registration manifest。
-- `registration_points`：每条 score row 附带 source/reference/aligned 三组轻量 3D 投影点，用于最终网页的配准诊断预览。
+- `registration_points`：每条 score row 可附带 source/reference/aligned 三组点云，用于最终网页的配准诊断预览。
 
-这些文件接入后，前端页面的任务下拉会出现 `Registration`。该任务没有人工异常 label，页面会按 score rows 选择序列，并把高误差/失败样本作为配准风险展示。当前 `registration_points` 是由 benchmark 误差确定性生成的轻量预览，用于系统展示闭环；后续学习式 MPS-GAF 输出真实点云后，应直接替换为真实 source/reference/aligned 点云。
+这些文件接入后，前端页面的任务下拉会出现 `Registration`。该任务没有人工异常 label，页面会按 score rows 选择序列，并把高误差/失败样本作为配准风险展示。适配器会优先读取 benchmark row 中真实的 `registration_points.source/reference/aligned` 点云，并在 score row 的 `metadata.registration_point_source` 中标注来源；如果当前实验产物还没有真实点云字段，才会回退到由配准误差确定性生成的轻量预览点云。后续学习式 MPS-GAF 或外部学习式配准基线只要输出同名字段，就能直接进入 dashboard。
 
 Registration 展示层和 Individual/Group 的视频展示层是分开的：Individual/Group 使用 VT-Tiny-MOT 的原始 RGB 背景帧做四画面对比，Registration 使用点云配准动态 canvas 展示 source、reference 和 aligned 三组点云。`batch_****` 这类配准样本没有原始视频背景，这是任务定义差异，不是网页资源缺失。
 

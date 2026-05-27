@@ -970,6 +970,12 @@ def test_final_dashboard_includes_registration_playback_without_labels(tmp_path:
                 "success": True,
                 "skipped": False,
                 "component_scores": {"registration_error_score": 0.41},
+                "registration_points": {
+                    "source": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+                    "reference": [[0.1, 0.0, 0.0], [1.1, 0.0, 0.0]],
+                    "aligned": [[0.08, 0.0, 0.0], [1.08, 0.0, 0.0]],
+                },
+                "metadata": {"registration_point_source": "benchmark_row"},
             },
             {
                 "sample_id": "icp:0:1:0",
@@ -1075,6 +1081,10 @@ def test_final_dashboard_includes_registration_playback_without_labels(tmp_path:
     assert "R1" in summary["playback_sequences"]
     assert playback_data["R1"]["stats_by_task"]["registration"]["sequence_sample_count"] == 2
     assert playback_data["R1"]["tracks"][0]["task_score_components"]["registration"]["icp"]["rotation_error_deg"] is not None
+    assert (
+        playback_data["R1"]["tracks"][0]["task_score_components"]["registration"]["icp"]["registration_point_source"]
+        == "benchmark_row"
+    )
     html = (tmp_path / "registration_dashboard" / "index.html").read_text(encoding="utf-8")
     assert "registrationMetricRotation" in html
     assert "配准任务展示非学习基线" in html
@@ -1096,6 +1106,9 @@ def test_final_dashboard_includes_registration_playback_without_labels(tmp_path:
     assert "registrationCanvas" in html
     assert "drawRegistrationPlayback" in html
     assert "setPlaybackSurfaceForTask" in html
+    assert "registrationPointSource" in html
+    assert "registrationPointSourceBenchmark" in html
+    assert "registrationPointSourceSynthetic" in html
     assert playback_data["R1"]["media"]["kind"] == "registration_point_cloud"
     assert playback_data["R1"]["media"]["has_original_background"] is False
     assert playback_data["R1"]["media"]["explanation_key"] == "registrationNoVideoBackground"
