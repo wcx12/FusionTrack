@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -23,59 +24,117 @@ from fusiontrack.pipeline import (
 from fusiontrack.registration_adapter import build_registration_experiment_bundle
 
 
-def parse_args() -> argparse.Namespace:
+PATH_CONFIG_FIELDS = {
+    "data_root",
+    "work_root",
+    "result_manifest",
+    "registration_benchmark_summary",
+    "registration_manifest",
+    "registration_fused_jsonl",
+    "fused_jsonl",
+    "final_results_root",
+    "individual_label_file",
+    "group_label_file",
+    "suite_manifest",
+    "holdout_manifest",
+    "export_package",
+}
+
+
+def _resolve_config_path(value: object, base_dir: Path) -> Path:
+    path = Path(str(value))
+    return path if path.is_absolute() else (base_dir / path).resolve()
+
+
+def _load_run_config(config_path: Path) -> dict[str, Any]:
+    raw = json.loads(config_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise SystemExit("--run-config must point to a JSON object")
+    base_value = raw.get("base_dir")
+    base_dir = config_path.parent
+    if base_value not in (None, ""):
+        base_dir = _resolve_config_path(base_value, config_path.parent)
+    config: dict[str, Any] = {}
+    for key, value in raw.items():
+        if key == "base_dir":
+            continue
+        normalized_key = "score_search_root" if key in {"score_search_root", "score_search_roots"} else key
+        if normalized_key == "score_search_root":
+            values = value if isinstance(value, list) else [value]
+            config[normalized_key] = [_resolve_config_path(item, base_dir) for item in values]
+        elif normalized_key in PATH_CONFIG_FIELDS and value not in (None, ""):
+            config[normalized_key] = _resolve_config_path(value, base_dir)
+        else:
+            config[normalized_key] = value
+    return config
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument("--run-config", type=Path, help="JSON file with default CLI options.")
+    pre_args, _ = pre_parser.parse_known_args(argv)
+    config_defaults = _load_run_config(pre_args.run_config) if pre_args.run_config else {}
+
     parser = argparse.ArgumentParser(description="Run FusionTrack v1 offline pipeline.")
-    parser.add_argument("--data-root", type=Path, default=Path("data") / "VT-Tiny-MOT")
-    parser.add_argument("--work-root", type=Path, default=Path("runs") / "fusiontrack_v1")
-    parser.add_argument("--split", choices=["train", "test", "val"], default="test")
-    parser.add_argument("--mode", choices=["smoke", "full"], default="smoke")
-    parser.add_argument("--top-sequences", type=int, default=5)
-    parser.add_argument("--force", action="store_true")
-    parser.add_argument("--skip-extraction", action="store_true")
-    parser.add_argument("--device", default="cpu", help="Reserved for full training mode.")
-    parser.add_argument("--result-manifest", type=Path, help="Benchmark result manifest to render.")
-    parser.add_argument("--result-method", help="Method name inside the result manifest.")
+    parser.add_argument("--run-config", type=Path, default=pre_args.run_config, help="JSON file with default CLI options.")
+    parser.add_argument("--data-root", type=Path, default=config_defaults.get("data_root", Path("data") / "VT-Tiny-MOT"))
+    parser.add_argument("--work-root", type=Path, default=config_defaults.get("work_root", Path("runs") / "fusiontrack_v1"))
+    parser.add_argument("--split", choices=["train", "test", "val"], default=config_defaults.get("split", "test"))
+    parser.add_argument("--mode", choices=["smoke", "full"], default=config_defaults.get("mode", "smoke"))
+    parser.add_argument("--top-sequences", type=int, default=config_defaults.get("top_sequences", 5))
+    parser.add_argument("--force", action="store_true", default=bool(config_defaults.get("force", False)))
+    parser.add_argument("--skip-extraction", action="store_true", default=bool(config_defaults.get("skip_extraction", False)))
+    parser.add_argument("--device", default=config_defaults.get("device", "cpu"), help="Reserved for full training mode.")
+    parser.add_argument("--result-manifest", type=Path, default=config_defaults.get("result_manifest"), help="Benchmark result manifest to render.")
+    parser.add_argument("--result-method", default=config_defaults.get("result_method"), help="Method name inside the result manifest.")
     parser.add_argument(
         "--registration-benchmark-summary",
         type=Path,
+        default=config_defaults.get("registration_benchmark_summary"),
         help="Path to non-learning registration baseline summary (run_registration_benchmark.py output).",
     )
     parser.add_argument(
         "--registration-manifest",
         type=Path,
+        default=config_defaults.get("registration_manifest"),
         help="Registration experiment manifest (to add registration task into final dashboard).",
     )
     parser.add_argument(
         "--registration-fused-jsonl",
         type=Path,
+        default=config_defaults.get("registration_fused_jsonl"),
         help="Registration fused trajectories JSONL for final dashboard merging.",
     )
     parser.add_argument(
         "--registration-result-method",
-        default=None,
+        default=config_defaults.get("registration_result_method"),
         help="Method to visualize from registration benchmark summary.",
     )
-    parser.add_argument("--fused-jsonl", type=Path, help="Fused trajectory JSONL used by the result manifest.")
-    parser.add_argument("--final-results-root", type=Path, help="Directory with final_*_summary files.")
-    parser.add_argument("--individual-label-file", type=Path, help="Individual labels JSONL for final dashboard.")
-    parser.add_argument("--group-label-file", type=Path, help="Group labels JSONL for final dashboard.")
-    parser.add_argument("--suite-manifest", type=Path, help="Optional run_suite.py suite_manifest.json to link into the final dashboard and export package.")
-    parser.add_argument("--holdout-manifest", type=Path, help="Optional holdout multiseed manifest.json to link into the final dashboard.")
+    parser.add_argument("--fused-jsonl", type=Path, default=config_defaults.get("fused_jsonl"), help="Fused trajectory JSONL used by the result manifest.")
+    parser.add_argument("--final-results-root", type=Path, default=config_defaults.get("final_results_root"), help="Directory with final_*_summary files.")
+    parser.add_argument("--individual-label-file", type=Path, default=config_defaults.get("individual_label_file"), help="Individual labels JSONL for final dashboard.")
+    parser.add_argument("--group-label-file", type=Path, default=config_defaults.get("group_label_file"), help="Group labels JSONL for final dashboard.")
+    parser.add_argument("--suite-manifest", type=Path, default=config_defaults.get("suite_manifest"), help="Optional run_suite.py suite_manifest.json to link into the final dashboard and export package.")
+    parser.add_argument("--holdout-manifest", type=Path, default=config_defaults.get("holdout_manifest"), help="Optional holdout multiseed manifest.json to link into the final dashboard.")
     parser.add_argument(
         "--score-search-root",
         type=Path,
         action="append",
-        default=[],
+        default=None,
         help="Search root for score files referenced by final summaries. Can be repeated.",
     )
-    parser.add_argument("--top-k", type=int, default=100, help="Top-K used for case and anomaly-type analysis.")
-    parser.add_argument("--case-limit", type=int, default=12, help="Maximum TP/FP/FN cases per method.")
+    parser.add_argument("--top-k", type=int, default=config_defaults.get("top_k", 100), help="Top-K used for case and anomaly-type analysis.")
+    parser.add_argument("--case-limit", type=int, default=config_defaults.get("case_limit", 12), help="Maximum TP/FP/FN cases per method.")
     parser.add_argument(
         "--export-package",
         type=Path,
+        default=config_defaults.get("export_package"),
         help="Optional zip path for a portable dashboard/report export package.",
     )
-    return parser.parse_args()
+    args = parser.parse_args(argv)
+    if args.score_search_root is None:
+        args.score_search_root = list(config_defaults.get("score_search_root", []))
+    return args
 
 
 def main() -> None:

@@ -23,6 +23,21 @@
 - `code/system/fusiontrack/method_registry.py`：读取和校验中心方法注册表。
 - `code/anomaly_detection/benchmark/configs/method_registry.json`：中心方法注册表，是方法归属、角色、方法族、学习类型、来源类型和接入状态的权威来源。
 
+推荐用配置文件固化最终 dashboard 的长命令：
+
+```bash
+python code/system/run_fusiontrack.py --run-config code/system/configs/final_dashboard.local.example.json
+```
+
+`--run-config` 接收 JSON 对象，字段名与 CLI 参数的下划线形式一致，例如 `final_results_root`、`individual_label_file`、`score_search_roots`、`top_sequences`。配置中的相对路径会按 `base_dir` 解析；示例配置使用 `base_dir: "../../.."`，因此所有路径都是仓库根目录相对路径，不需要把本机绝对路径写入配置。临时覆盖某个参数时，可以在配置文件后继续追加 CLI 参数，例如：
+
+```bash
+python code/system/run_fusiontrack.py \
+  --run-config code/system/configs/final_dashboard.local.example.json \
+  --data-root data/VT-Tiny-MOT \
+  --top-sequences 3
+```
+
 常见生成产物：
 
 - `server_artifacts/remote_result/report/index.html`

@@ -1,0 +1,22 @@
+{
+  "base_dir": "../../..",
+  "data_root": "data/VT-Tiny-MOT",
+  "work_root": "runs/final_results_dashboard",
+  "split": "val",
+  "final_results_root": "server_artifacts/final_results_20260521",
+  "individual_label_file": "server_artifacts/fusiontrack_val_results_20260521/fusiontrack_val/protocol/individual_labels_val.jsonl",
+  "group_label_file": "server_artifacts/fusiontrack_val_results_20260521/fusiontrack_val/protocol/group_labels_val.jsonl",
+  "score_search_roots": [
+    "server_artifacts/fusiontrack_val_results_20260521",
+    "server_artifacts/fusiontrack_official_runs_tsad_20260521",
+    "server_artifacts/final_results_20260522/fusiontrack_final_results_20260522_archive/official",
+    "runs/final_results_dashboard"
+  ],
+  "fused_jsonl": "runs/final_results_dashboard/final/merged_final_dashboard_fused.jsonl",
+  "registration_manifest": "runs/final_results_dashboard/registration_artifacts/registration_experiment_manifest.json",
+  "registration_fused_jsonl": "runs/final_results_dashboard/registration_artifacts/registration_fused_trajectories.jsonl",
+  "holdout_manifest": "server_artifacts/final_results_20260522/holdout_multiseed_20260522/fusiontrack_holdout_multiseed_combined_20260522/manifest.json",
+  "top_sequences": 7,
+  "top_k": 100,
+  "case_limit": 12
+}

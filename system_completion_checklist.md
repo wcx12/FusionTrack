@@ -111,9 +111,9 @@
 
 ### F. 部署与交付层
 
-- 一键构建与页面发布：🟡
-  现状：可构建并已发布；本地 `server_artifacts/remote_result/report` 已重新生成，`final_playback_data.json` 的背景引用与回退引用均通过资源存在性检查。
-  下一步：标准化 CLI，固定版本化发布路径，并把 GitHub Pages 的静态资源发布流程固化为可复现命令。
+- 一键构建与页面发布：✅（基础闭环）
+  现状：可构建并已发布；`run_fusiontrack.py` 新增 `--run-config` 配置入口，可用 `code/system/configs/final_dashboard.local.example.json` 固化最终 dashboard 的长命令，配置内路径均可使用相对路径；本地 `server_artifacts/remote_result/report` 已重新生成，`final_playback_data.json` 的背景引用与回退引用均通过资源存在性检查。
+  下一步：把 GitHub Pages 的静态资源发布流程进一步固化为自动化 job，并按 run_id 保留版本历史。
 
 - 中文文档与复现实验说明：🟡  
   现状：README 已较完整，但系统层面清单与流程未集中。  
