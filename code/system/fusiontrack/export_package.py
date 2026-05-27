@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -173,6 +174,13 @@ def _package_roots(summary: dict[str, Any]) -> dict[str, Path]:
     holdout_manifest_path = summary.get("holdout_manifest_path")
     if holdout_manifest_path:
         roots.setdefault("holdout_root", Path(str(holdout_manifest_path)).resolve().parent)
+    protocol_paths = [
+        Path(str(path)).resolve()
+        for path in summary.get("protocol_manifest_paths") or []
+        if path
+    ]
+    if protocol_paths:
+        roots.setdefault("protocol_root", Path(os.path.commonpath([str(path.parent) for path in protocol_paths])))
     return roots
 
 

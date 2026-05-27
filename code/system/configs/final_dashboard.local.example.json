@@ -16,6 +16,9 @@
   "registration_manifest": "runs/final_results_dashboard/registration_artifacts/registration_experiment_manifest.json",
   "registration_fused_jsonl": "runs/final_results_dashboard/registration_artifacts/registration_fused_trajectories.jsonl",
   "holdout_manifest": "server_artifacts/final_results_20260522/holdout_multiseed_20260522/fusiontrack_holdout_multiseed_combined_20260522/manifest.json",
+  "protocol_manifests": [
+    "server_artifacts/final_results_20260522/fusiontrack_final_results_20260522_archive/local/protocol_manifest.json"
+  ],
   "top_sequences": 7,
   "top_k": 100,
   "case_limit": 12

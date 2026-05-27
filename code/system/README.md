@@ -29,7 +29,7 @@
 python code/system/run_fusiontrack.py --run-config code/system/configs/final_dashboard.local.example.json
 ```
 
-`--run-config` 接收 JSON 对象，字段名与 CLI 参数的下划线形式一致，例如 `final_results_root`、`individual_label_file`、`score_search_roots`、`top_sequences`。配置中的相对路径会按 `base_dir` 解析；示例配置使用 `base_dir: "../../.."`，因此所有路径都是仓库根目录相对路径，不需要把本机绝对路径写入配置。临时覆盖某个参数时，可以在配置文件后继续追加 CLI 参数，例如：
+`--run-config` 接收 JSON 对象，字段名与 CLI 参数的下划线形式一致，例如 `final_results_root`、`individual_label_file`、`score_search_roots`、`protocol_manifests`、`top_sequences`。配置中的相对路径会按 `base_dir` 解析；示例配置使用 `base_dir: "../../.."`，因此所有路径都是仓库根目录相对路径，不需要把本机绝对路径写入配置。临时覆盖某个参数时，可以在配置文件后继续追加 CLI 参数，例如：
 
 ```bash
 python code/system/run_fusiontrack.py \
@@ -242,7 +242,9 @@ manifest 记录：
 - 数据集名称、数据集状态、split 列表和 `dataset_fingerprint`。
 - `dataset_manifest_<split>.json` 的公开路径提示。
 - 最终结果目录、individual/group 标签文件、score 搜索目录数量、融合轨迹文件和 registration manifest。
+- 如果构建命令传入 `--protocol-manifest`，会展示 synthetic anomaly injection 协议 manifest、任务、标签分布、异常类型和 dataset fingerprint。
 - 如果构建命令传入 `--suite-manifest`，还会展示评测套件名称、suite manifest、aggregate summary、矩阵数量和总 run 数。
+- 如果构建命令传入 `--holdout-manifest`，还会展示 holdout 多 seed 结果、最佳方法和来源文件。
 - 构建参数，例如 `top_sequences`、`top_k` 和 `case_limit`。
 
 该模块只发布脱敏后的路径提示：如果输入是本机绝对路径，网页数据里只保留文件名或目录名；如果输入本来就是相对路径，则保留相对路径。这样公开部署到 GitHub Pages 时不会泄露本机目录，同时仍能说明结果来源。
@@ -255,11 +257,13 @@ python code/system/run_fusiontrack.py \
   --individual-label-file <individual_labels.jsonl> \
   --group-label-file <group_labels.jsonl> \
   --fused-jsonl <merged_fused.jsonl> \
+  --protocol-manifest <protocol_dir>/protocol_manifest.json \
   --suite-manifest <suite_output_dir>/suite_manifest.json \
+  --holdout-manifest <holdout_output_dir>/manifest.json \
   --export-package <output.zip>
 ```
 
-这样 `pipeline_summary_final_dashboard.json`、`pipeline_manifest_final_dashboard_all.json`、网页的 provenance 数据和导出 zip 都会保留 suite 评测来源；导出包会把 suite manifest 及其引用的 aggregate summary、matrix summary/manifest 一起归档。
+这样 `pipeline_summary_final_dashboard.json`、`pipeline_manifest_final_results_dashboard_all.json`、网页的 provenance 数据和导出 zip 都会保留 protocol、suite 与 holdout 来源；导出包会把 protocol manifest、suite manifest 及其引用的 aggregate summary、matrix summary/manifest、holdout aggregate/all-runs/best-by-metric 一起归档。
 
 ## 验证建议
 

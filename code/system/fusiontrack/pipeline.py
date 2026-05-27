@@ -144,6 +144,21 @@ def _load_holdout_manifest(holdout_manifest: str | Path | None) -> tuple[dict[st
     return payload, holdout_manifest_path
 
 
+def _load_protocol_manifests(protocol_manifests: list[str | Path] | None) -> tuple[list[dict[str, Any]], list[Path]]:
+    payloads: list[dict[str, Any]] = []
+    paths: list[Path] = []
+    for item in protocol_manifests or []:
+        manifest_path = Path(item)
+        if not manifest_path.exists():
+            raise FileNotFoundError(f"Missing protocol manifest: {manifest_path}")
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError(f"Protocol manifest must be a JSON object: {manifest_path}")
+        payloads.append(payload)
+        paths.append(manifest_path)
+    return payloads, paths
+
+
 def _sync_remote_report(source_dir: Path, target_dir: Path) -> None:
     """Mirror generated dashboard outputs to the expected remote-result preview directory."""
     if not source_dir.exists():
@@ -398,6 +413,7 @@ def build_final_results_report(
     fused_jsonl: str | Path | None = None,
     suite_manifest: str | Path | None = None,
     holdout_manifest: str | Path | None = None,
+    protocol_manifests: list[str | Path] | None = None,
     top_sequences: int = 5,
     top_k: int = 100,
     case_limit: int = 12,
@@ -407,6 +423,7 @@ def build_final_results_report(
     dataset_manifest, dataset_manifest_path = _write_dataset_manifest(paths, "all")
     suite_manifest_payload, suite_manifest_path = _load_suite_manifest(suite_manifest)
     holdout_manifest_payload, holdout_manifest_path = _load_holdout_manifest(holdout_manifest)
+    protocol_manifest_payloads, protocol_manifest_paths = _load_protocol_manifests(protocol_manifests)
     manifest_registration = Path(registration_manifest) if registration_manifest is not None else None
     manifest_fused = Path(registration_fused_jsonl) if registration_fused_jsonl is not None else None
     dashboard = load_final_results_dashboard(
@@ -446,6 +463,8 @@ def build_final_results_report(
             "suite_manifest_path": suite_manifest_path,
             "holdout_manifest": holdout_manifest_payload,
             "holdout_manifest_path": holdout_manifest_path,
+            "protocol_manifests": protocol_manifest_payloads,
+            "protocol_manifest_paths": protocol_manifest_paths,
             "top_sequences": top_sequences,
             "top_k": top_k,
             "case_limit": case_limit,
@@ -473,6 +492,8 @@ def build_final_results_report(
         "suite_manifest": suite_manifest_payload,
         "holdout_manifest_path": str(holdout_manifest_path) if holdout_manifest_path is not None else None,
         "holdout_manifest": holdout_manifest_payload,
+        "protocol_manifest_paths": [str(path) for path in protocol_manifest_paths],
+        "protocol_manifests": protocol_manifest_payloads,
         "dashboard": dashboard_summary,
     }
     summary_path = paths.work_root / "pipeline_summary_final_dashboard.json"
@@ -496,6 +517,8 @@ def build_final_results_report(
             "suite_manifest": suite_manifest_payload,
             "holdout_manifest_path": str(holdout_manifest_path) if holdout_manifest_path is not None else None,
             "holdout_manifest": holdout_manifest_payload,
+            "protocol_manifest_paths": [str(path) for path in protocol_manifest_paths],
+            "protocol_manifests": protocol_manifest_payloads,
             "top_sequences": top_sequences,
             "top_k": top_k,
             "case_limit": case_limit,

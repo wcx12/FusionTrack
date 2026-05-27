@@ -53,6 +53,19 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
         ),
         encoding="utf-8",
     )
+    protocol_dir = tmp_path / "protocols"
+    protocol_dir.mkdir()
+    protocol_manifest_path = protocol_dir / "individual_manifest.json"
+    protocol_manifest_path.write_text(
+        json.dumps(
+            {
+                "task": "individual",
+                "dataset_root": str(tmp_path / "data" / "VT-Tiny-MOT"),
+                "label_distribution": {"0": 8, "1": 2},
+            }
+        ),
+        encoding="utf-8",
+    )
     summary = {
         "mode": "final_results_dashboard",
         "work_root": str(work_root),
@@ -73,6 +86,14 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
             "all_runs_csv": "/root/autodl-tmp/fusiontrack_holdout/all_runs.csv",
             "seeds": [42, 43, 44],
         },
+        "protocol_manifest_paths": [str(protocol_manifest_path)],
+        "protocol_manifests": [
+            {
+                "task": "individual",
+                "manifest_path": str(protocol_manifest_path),
+                "dataset_root": str(tmp_path / "data" / "VT-Tiny-MOT"),
+            }
+        ],
         "dataset_manifest": {"status": "ok", "dataset_fingerprint": "abc123"},
         "dashboard": {
             "report_html": str(report_dir / "index.html"),
@@ -114,6 +135,7 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
         assert "artifacts/holdout_root/aggregate.csv" in names
         assert "artifacts/holdout_root/all_runs.csv" in names
         assert "artifacts/holdout_root/best_by_metric.json" in names
+        assert "artifacts/protocol_root/individual_manifest.json" in names
         assert "export_manifest.json" in names
         assert not any(name.startswith("artifacts/work_root/pipeline_summary") for name in names)
         dataset_manifest_text = archive.read("artifacts/work_root/dataset_manifest_all.json").decode("utf-8")
@@ -127,4 +149,7 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
         holdout_manifest_text = archive.read("artifacts/holdout_root/manifest.json").decode("utf-8")
         assert "/root/autodl-tmp" not in holdout_manifest_text
         assert "${external}/aggregate.csv" in holdout_manifest_text
+        protocol_manifest_text = archive.read("artifacts/protocol_root/individual_manifest.json").decode("utf-8")
+        assert str(tmp_path) not in protocol_manifest_text
+        assert "${data_root}" in protocol_manifest_text
         assert manifest["package_format"] == "fusiontrack_analysis_export_v1"

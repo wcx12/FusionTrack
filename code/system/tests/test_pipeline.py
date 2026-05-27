@@ -267,3 +267,84 @@ def test_build_final_results_report_links_holdout_manifest(tmp_path: Path) -> No
     assert holdout["aggregate_csv"] == "aggregate.csv"
     assert holdout["top_methods"][0]["method"] == "fusiontrack_group_hybrid"
     assert str(tmp_path) not in json.dumps(holdout)
+
+
+def test_build_final_results_report_links_protocol_manifests(tmp_path: Path) -> None:
+    paths = FusionTrackPaths.defaults(data_root=tmp_path / "data", work_root=tmp_path / "runs")
+    final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
+    fused_jsonl = tmp_path / "fused.jsonl"
+    _write_jsonl(
+        fused_jsonl,
+        [
+            {
+                "sample_id": "S1:1",
+                "sequence": "S1",
+                "track_id": "1",
+                "category_name": "plane",
+                "points": [{"frame_id": 1, "fused": {"center_xy": [1, 2], "confidence": 0.9}}],
+            }
+        ],
+    )
+    protocol_dir = tmp_path / "protocols"
+    individual_protocol = protocol_dir / "individual_manifest.json"
+    group_protocol = protocol_dir / "group_manifest.json"
+    individual_protocol.parent.mkdir(parents=True)
+    individual_protocol.write_text(
+        json.dumps(
+            {
+                "manifest_schema_version": 2,
+                "task": "individual",
+                "seed": 42,
+                "anomaly_ratio": 0.2,
+                "label_distribution": {"0": 8, "1": 2},
+                "anomaly_types": ["speed_spike", "route_shift"],
+                "dataset_fingerprint": "dataset-abc",
+                "replay_argv": ["prepare_anomaly_data.py", "--task", "individual"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    group_protocol.write_text(
+        json.dumps(
+            {
+                "manifest_schema_version": 2,
+                "task": "group",
+                "seed": 43,
+                "label_distribution": {"normal": 6, "anomaly": 3},
+                "anomaly_type_counts": {"population_change": 2, "split_merge": 1},
+                "dataset_manifest": {"dataset_fingerprint": "dataset-abc"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = build_final_results_report(
+        paths=paths,
+        final_results_root=final_root,
+        individual_label_file=individual_labels,
+        group_label_file=group_labels,
+        score_search_roots=[score_root],
+        fused_jsonl=fused_jsonl,
+        protocol_manifests=[individual_protocol, group_protocol],
+        top_sequences=1,
+        top_k=2,
+        case_limit=3,
+        sync_remote_report=False,
+    )
+
+    assert summary["protocol_manifest_paths"] == [str(individual_protocol), str(group_protocol)]
+    assert summary["protocol_manifests"][0]["task"] == "individual"
+    dashboard_data = json.loads(
+        (paths.work_root / "final_dashboard" / "assets" / "final_dashboard_data.json").read_text(encoding="utf-8")
+    )
+    protocols = dashboard_data["provenance"]["protocols"]
+    assert protocols["count"] == 2
+    assert protocols["tasks"] == ["individual", "group"]
+    assert protocols["manifests"][0]["manifest"] == "individual_manifest.json"
+    assert protocols["manifests"][0]["positive_count"] == 2
+    assert protocols["manifests"][1]["positive_count"] == 3
+    assert protocols["manifests"][1]["anomaly_types"] == ["population_change", "split_merge"]
+    assert str(tmp_path) not in json.dumps(protocols)
+
+    pipeline_manifest = json.loads(Path(summary["manifest_path"]).read_text(encoding="utf-8"))
+    assert pipeline_manifest["protocol_manifest_paths"] == [str(individual_protocol), str(group_protocol)]

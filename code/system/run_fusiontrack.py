@@ -39,6 +39,10 @@ PATH_CONFIG_FIELDS = {
     "holdout_manifest",
     "export_package",
 }
+LIST_PATH_CONFIG_FIELDS = {
+    "score_search_root": {"score_search_root", "score_search_roots"},
+    "protocol_manifest": {"protocol_manifest", "protocol_manifests"},
+}
 
 
 def _resolve_config_path(value: object, base_dir: Path) -> Path:
@@ -58,8 +62,11 @@ def _load_run_config(config_path: Path) -> dict[str, Any]:
     for key, value in raw.items():
         if key == "base_dir":
             continue
-        normalized_key = "score_search_root" if key in {"score_search_root", "score_search_roots"} else key
-        if normalized_key == "score_search_root":
+        normalized_key = next(
+            (target for target, aliases in LIST_PATH_CONFIG_FIELDS.items() if key in aliases),
+            key,
+        )
+        if normalized_key in LIST_PATH_CONFIG_FIELDS:
             values = value if isinstance(value, list) else [value]
             config[normalized_key] = [_resolve_config_path(item, base_dir) for item in values]
         elif normalized_key in PATH_CONFIG_FIELDS and value not in (None, ""):
@@ -117,6 +124,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--suite-manifest", type=Path, default=config_defaults.get("suite_manifest"), help="Optional run_suite.py suite_manifest.json to link into the final dashboard and export package.")
     parser.add_argument("--holdout-manifest", type=Path, default=config_defaults.get("holdout_manifest"), help="Optional holdout multiseed manifest.json to link into the final dashboard.")
     parser.add_argument(
+        "--protocol-manifest",
+        type=Path,
+        action="append",
+        default=None,
+        help="Synthetic anomaly protocol manifest JSON. Can be repeated for individual/group protocols.",
+    )
+    parser.add_argument(
         "--score-search-root",
         type=Path,
         action="append",
@@ -134,6 +148,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if args.score_search_root is None:
         args.score_search_root = list(config_defaults.get("score_search_root", []))
+    if args.protocol_manifest is None:
+        args.protocol_manifest = list(config_defaults.get("protocol_manifest", []))
     return args
 
 
@@ -175,6 +191,7 @@ def main() -> None:
             fused_jsonl=args.fused_jsonl,
             suite_manifest=args.suite_manifest,
             holdout_manifest=args.holdout_manifest,
+            protocol_manifests=args.protocol_manifest,
             top_sequences=args.top_sequences,
             top_k=args.top_k,
             case_limit=args.case_limit,

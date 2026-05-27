@@ -113,6 +113,12 @@ def _build_public_provenance(provenance: dict[str, Any]) -> dict[str, Any]:
     )
     if holdout:
         public["holdout"] = holdout
+    protocols = _build_public_protocol_provenance(
+        protocol_manifests=provenance.get("protocol_manifests"),
+        protocol_manifest_paths=provenance.get("protocol_manifest_paths"),
+    )
+    if protocols:
+        public["protocols"] = protocols
     return public
 
 
@@ -251,6 +257,91 @@ def _build_public_holdout_provenance(
         "top_methods": _load_holdout_top_methods(aggregate_path),
         "best_by_metric": _load_holdout_best_by_metric(best_by_metric_path),
     }
+
+
+def _build_public_protocol_provenance(
+    protocol_manifests: Any,
+    protocol_manifest_paths: Any = None,
+) -> dict[str, Any]:
+    if not isinstance(protocol_manifests, list):
+        return {}
+    paths = protocol_manifest_paths if isinstance(protocol_manifest_paths, list) else []
+    rows: list[dict[str, Any]] = []
+    for index, manifest in enumerate(protocol_manifests):
+        if not isinstance(manifest, dict):
+            continue
+        manifest_path = paths[index] if index < len(paths) else None
+        anomaly_types = _protocol_anomaly_types(manifest)
+        label_distribution = manifest.get("label_distribution")
+        rows.append(
+            {
+                "task": str(manifest.get("task") or manifest.get("level") or f"protocol_{index + 1}"),
+                "schema_version": manifest.get("manifest_schema_version") or manifest.get("schema_version"),
+                "manifest": _public_path_hint(manifest_path),
+                "seed": manifest.get("seed"),
+                "anomaly_ratio": _float_or_none(manifest.get("anomaly_ratio")),
+                "total_labels": _protocol_total_labels(label_distribution),
+                "positive_count": _protocol_positive_count(label_distribution),
+                "anomaly_types": anomaly_types,
+                "anomaly_type_count": len(anomaly_types),
+                "dataset_fingerprint": _protocol_dataset_fingerprint(manifest),
+                "label_file": _public_path_hint(
+                    manifest.get("label_file")
+                    or manifest.get("output_label_file")
+                    or manifest.get("labels_jsonl")
+                    or manifest.get("label_jsonl")
+                ),
+            }
+        )
+    if not rows:
+        return {}
+    return {
+        "count": len(rows),
+        "tasks": [row["task"] for row in rows],
+        "positive_count": sum(_int_or_zero(row.get("positive_count")) for row in rows),
+        "total_labels": sum(_int_or_zero(row.get("total_labels")) for row in rows),
+        "manifests": rows,
+    }
+
+
+def _protocol_anomaly_types(manifest: dict[str, Any]) -> list[str]:
+    for key in ("anomaly_types", "anomaly_type_names", "selected_anomaly_types"):
+        value = manifest.get(key)
+        if isinstance(value, list):
+            return [str(item) for item in value]
+    counts = manifest.get("anomaly_type_counts")
+    if isinstance(counts, dict):
+        return [str(key) for key in counts.keys()]
+    return []
+
+
+def _protocol_total_labels(label_distribution: Any) -> int:
+    if not isinstance(label_distribution, dict):
+        return 0
+    return sum(_int_or_zero(value) for value in label_distribution.values())
+
+
+def _protocol_positive_count(label_distribution: Any) -> int:
+    if not isinstance(label_distribution, dict):
+        return 0
+    positive_keys = {"1", "true", "positive", "anomaly", "anomalous", "abnormal"}
+    return sum(
+        _int_or_zero(value)
+        for key, value in label_distribution.items()
+        if str(key).strip().lower() in positive_keys
+    )
+
+
+def _protocol_dataset_fingerprint(manifest: dict[str, Any]) -> str | None:
+    value = manifest.get("dataset_fingerprint")
+    if value:
+        return str(value)
+    dataset_manifest = manifest.get("dataset_manifest")
+    if isinstance(dataset_manifest, dict):
+        nested = dataset_manifest.get("dataset_fingerprint")
+        if nested:
+            return str(nested)
+    return None
 
 
 def _resolve_manifest_artifact(value: Any, manifest_path: Path | None) -> Path | None:
@@ -1993,6 +2084,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         provenanceSuite: "评测套件",
         provenanceSuiteAggregate: "套件汇总表",
         provenanceSuiteMatrices: "矩阵 / run 数",
+        provenanceProtocols: "异常协议 manifest",
+        provenanceProtocolLabels: "协议标签数",
+        provenanceProtocolTypes: "异常类型",
+        provenanceProtocolFingerprint: "数据指纹",
         provenanceHoldout: "Holdout 多 seed 汇总",
         provenanceHoldoutProtocol: "协议",
         provenanceHoldoutArtifacts: "结果文件",
@@ -2083,6 +2178,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         provenanceSuite: "Evaluation suite",
         provenanceSuiteAggregate: "Suite aggregate table",
         provenanceSuiteMatrices: "Matrices / runs",
+        provenanceProtocols: "Anomaly protocol manifests",
+        provenanceProtocolLabels: "Protocol labels",
+        provenanceProtocolTypes: "Anomaly types",
+        provenanceProtocolFingerprint: "Dataset fingerprint",
         provenanceHoldout: "Holdout multiseed summary",
         provenanceHoldoutProtocol: "Protocol",
         provenanceHoldoutArtifacts: "Result artifacts",
@@ -3959,6 +4058,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         const parameters = provenance.parameters || {{}};
         const suite = provenance.suite || null;
         const holdout = provenance.holdout || null;
+        const protocols = provenance.protocols || null;
         const missing = t("provenanceMissing");
         const datasetText = [dataset.name, Array.isArray(dataset.splits) ? dataset.splits.join("/") : ""]
           .filter(Boolean)
@@ -3993,6 +4093,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
             [t("provenanceSuiteMatrices"), `${{Number(suite.matrix_count || 0)}} / ${{Number(suite.run_count || 0)}}`],
           );
         }}
+        if (protocols) {{
+          items.push(
+            [t("provenanceProtocols"), `${{Number(protocols.count || 0)}}: ${{(protocols.tasks || []).join(", ") || missing}}`],
+            [t("provenanceProtocolLabels"), `${{Number(protocols.positive_count || 0)}} / ${{Number(protocols.total_labels || 0)}}`],
+          );
+        }}
         return `
           <div id="provenancePanel" class="provenance-panel">
             <h3>${{t("provenanceTitle")}}</h3>
@@ -4004,8 +4110,37 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
                 </div>
               `).join("")}}
             </div>
+            ${{renderProtocolProvenancePanel(protocols, missing)}}
             ${{renderDatasetQualityPanel(dataset.quality, missing)}}
             ${{renderHoldoutPanel(holdout, missing)}}
+          </div>
+        `;
+      }}
+
+      function renderProtocolProvenancePanel(protocols, missing) {{
+        const rows = protocols && Array.isArray(protocols.manifests) ? protocols.manifests : [];
+        if (!rows.length) {{
+          return "";
+        }}
+        return `
+          <div id="protocolProvenancePanel" class="provenance-subsection">
+            <h4>${{t("provenanceProtocols")}}</h4>
+            <div class="table-scroll">
+              <table class="leaderboard">
+                <thead><tr><th>${{t("task")}}</th><th>Manifest</th><th class="metric">${{t("provenanceProtocolLabels")}}</th><th>${{t("provenanceProtocolTypes")}}</th><th>${{t("provenanceProtocolFingerprint")}}</th></tr></thead>
+                <tbody>
+                  ${{rows.map(row => `
+                    <tr>
+                      <td><strong>${{esc(row.task || missing)}}</strong></td>
+                      <td>${{esc(row.manifest || missing)}}</td>
+                      <td class="metric">${{Number(row.positive_count || 0)}} / ${{Number(row.total_labels || 0)}}</td>
+                      <td>${{esc((row.anomaly_types || []).join(", ") || missing)}}</td>
+                      <td>${{esc(row.dataset_fingerprint || missing)}}</td>
+                    </tr>
+                  `).join("")}}
+                </tbody>
+              </table>
+            </div>
           </div>
         `;
       }}

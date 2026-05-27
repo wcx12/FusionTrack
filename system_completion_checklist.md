@@ -25,8 +25,8 @@
   下一步：后续把 key policy 也展示到 dashboard/export 的治理说明中。
 
 - 合成异常协议治理：✅（主协议闭环）
-  现状：异常注入脚本已输出 manifest v2，validation/holdout 协议生成器会自动生成 `dataset_manifest.json` 并传入注入 manifest，记录参数、文件 hash、label 分布、重放命令和 dataset fingerprint。
-  下一步：把协议 manifest 汇总到最终 dashboard/export 的解释层。
+  现状：异常注入脚本已输出 manifest v2，validation/holdout 协议生成器会自动生成 `dataset_manifest.json` 并传入注入 manifest，记录参数、文件 hash、label 分布、重放命令和 dataset fingerprint；`run_fusiontrack.py` 支持 `--protocol-manifest` / `protocol_manifests`，最终 dashboard provenance 会展示协议任务、标签分布、异常类型和数据指纹，导出包会归档对应 manifest。
+  下一步：后续可继续把每类异常的注入参数细节扩展为更细粒度的前端解释表。
 
 - 真实标签并行接口：✅（基础入口）
   现状：新增 `prepare_real_labels.py` 和 `dataset_adapters/real_labels.py`，可把外部真实标注 CSV/JSONL 归一化到统一 label schema，支持 individual 的 `sample_id` 与 group 的 `sample_id + window_id`。
@@ -83,8 +83,8 @@
   下一步：后续把 suite runner 接到最终 dashboard 构建命令，形成实验到展示的一键链路。
 
 - 实验可追溯（seed/epoch/commit/config）：✅（基础闭环）
-  现状：matrix、suite、holdout multiseed 和 official runner 均输出 manifest，记录 config hash、输入/输出 hash、git、Python 环境与运行配置。
-  下一步：把同一套追溯信息继续汇总到最终 dashboard/export 的说明层。
+  现状：matrix、suite、holdout multiseed、synthetic protocol 和 official runner 均可输出或接入 manifest，记录 config hash、输入/输出 hash、git、Python 环境与运行配置；最终 dashboard/export 已能汇总 protocol、suite 与 holdout 追溯信息。
+  下一步：后续继续补齐官方 baseline runner 的仓库 commit/license 与环境包版本字段。
 
 ### E. 可视化与交互层
 
@@ -237,3 +237,11 @@
 - 交付清单中的路径会脱敏为相对路径或 `${external}` 占位符，不写入本机绝对路径，便于公开部署和跨机器复现。
 - 新增 `test_build_dashboard_release.py`，覆盖 pipeline 调用参数、导出包参数、Pages 发布、历史归档、交付清单写入和绝对路径脱敏。
 - CI 编译范围同步纳入 `build_sample_dashboard.py`、`publish_dashboard_pages.py` 与 `build_dashboard_release.py`，降低交付脚本损坏后漏检的风险。
+
+## 2026-05-28 更新：异常协议 manifest 接入最终展示与导出包
+
+- `run_fusiontrack.py` 新增 `--protocol-manifest`，配置文件中可使用 `protocol_manifests` 列表，路径仍按 `base_dir` 解析。
+- `build_final_results_report()` 会读取 protocol manifest JSON，并把 `protocol_manifest_paths` 与 `protocol_manifests` 写入 pipeline summary / pipeline manifest。
+- 最终 dashboard 的 provenance 新增 `protocols` 字段，公开展示协议数量、任务列表、总标签数、异常标签数、异常类型、seed、schema version 和 dataset fingerprint。
+- 数据流审计面板新增异常协议 manifest 表，答辩时可以直接说明当前 Individual / Group 异常标签来自哪份 synthetic injection 协议。
+- `build_analysis_export_package()` 会把 protocol manifest 归档到 `artifacts/protocol_root/`，并继续脱敏其中的数据集路径。

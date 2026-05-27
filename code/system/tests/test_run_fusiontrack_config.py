@@ -20,6 +20,7 @@ def test_run_config_resolves_relative_paths_against_base_dir(tmp_path: Path) -> 
                 "group_label_file": "labels/group.jsonl",
                 "fused_jsonl": "runs/final/fused.jsonl",
                 "score_search_roots": ["scores/a", "scores/b"],
+                "protocol_manifests": ["protocols/individual_manifest.json", "protocols/group_manifest.json"],
                 "top_sequences": 7,
                 "top_k": 100,
                 "case_limit": 12,
@@ -37,6 +38,10 @@ def test_run_config_resolves_relative_paths_against_base_dir(tmp_path: Path) -> 
     assert args.group_label_file == tmp_path / "labels" / "group.jsonl"
     assert args.fused_jsonl == tmp_path / "runs" / "final" / "fused.jsonl"
     assert args.score_search_root == [tmp_path / "scores" / "a", tmp_path / "scores" / "b"]
+    assert args.protocol_manifest == [
+        tmp_path / "protocols" / "individual_manifest.json",
+        tmp_path / "protocols" / "group_manifest.json",
+    ]
     assert args.top_sequences == 7
     assert args.top_k == 100
     assert args.case_limit == 12
@@ -49,6 +54,7 @@ def test_run_config_allows_cli_overrides(tmp_path: Path) -> None:
             {
                 "work_root": "runs/from_config",
                 "score_search_roots": ["scores/from_config"],
+                "protocol_manifests": ["protocols/from_config.json"],
                 "top_k": 20,
             }
         ),
@@ -63,6 +69,8 @@ def test_run_config_allows_cli_overrides(tmp_path: Path) -> None:
             str(tmp_path / "runs" / "from_cli"),
             "--score-search-root",
             str(tmp_path / "scores" / "from_cli"),
+            "--protocol-manifest",
+            str(tmp_path / "protocols" / "from_cli.json"),
             "--top-k",
             "5",
         ]
@@ -70,4 +78,5 @@ def test_run_config_allows_cli_overrides(tmp_path: Path) -> None:
 
     assert args.work_root == tmp_path / "runs" / "from_cli"
     assert args.score_search_root == [tmp_path / "scores" / "from_cli"]
+    assert args.protocol_manifest == [tmp_path / "protocols" / "from_cli.json"]
     assert args.top_k == 5
