@@ -7,8 +7,14 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
+from fusiontrack.event_segments import event_segments_from_frame_scores
+from fusiontrack.explanation_schema import build_explanation_schema
+
 
 EPSILON = 1e-6
+EVENT_THRESHOLD = 0.25
+EVENT_MAX_GAP = 2
+EVENT_MIN_LENGTH = 1
 
 
 def _iter_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -92,6 +98,103 @@ def _trajectory_components(trajectory: dict[str, Any]) -> dict[str, float]:
     }
 
 
+def _fused_points(trajectory: dict[str, Any]) -> list[dict[str, Any]]:
+    return sorted(
+        [point for point in trajectory.get("points", []) if point.get("fused")],
+        key=lambda item: item.get("frame_id", 0),
+    )
+
+
+def _safe_center(point: dict[str, Any]) -> tuple[float, float] | None:
+    center = point.get("fused", {}).get("center_xy")
+    if not isinstance(center, (list, tuple)) or len(center) < 2:
+        return None
+    try:
+        return float(center[0]), float(center[1])
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_values(values: list[float]) -> list[float]:
+    if not values:
+        return []
+    max_value = max(values)
+    if max_value <= EPSILON:
+        return [0.0 for _ in values]
+    return [max(0.0, float(value) / max_value) for value in values]
+
+
+def _dominant_component(components: dict[str, float]) -> str:
+    if not components:
+        return "trajectory_event"
+    return max(components.items(), key=lambda item: (float(item[1]), item[0]))[0]
+
+
+def _trajectory_frame_event_scores(
+    trajectory: dict[str, Any],
+    weights: dict[str, float],
+) -> list[dict[str, Any]]:
+    points = _fused_points(trajectory)
+    centers = [_safe_center(point) for point in points]
+    speeds: list[float] = []
+    for prev, curr in zip(centers, centers[1:]):
+        if prev is None or curr is None:
+            speeds.append(0.0)
+        else:
+            speeds.append(math.hypot(curr[0] - prev[0], curr[1] - prev[1]))
+
+    directions: list[float | None] = []
+    for prev, curr in zip(centers, centers[1:]):
+        if prev is None or curr is None:
+            directions.append(None)
+        else:
+            directions.append(math.atan2(curr[1] - prev[1], curr[0] - prev[0]))
+
+    turns_by_point = [0.0 for _ in points]
+    for index in range(2, len(points)):
+        prev_direction = directions[index - 2] if index - 2 < len(directions) else None
+        curr_direction = directions[index - 1] if index - 1 < len(directions) else None
+        if prev_direction is None or curr_direction is None:
+            continue
+        delta = abs(curr_direction - prev_direction)
+        turns_by_point[index] = min(delta, 2 * math.pi - delta) / math.pi
+
+    speed_med = median(speeds) if speeds else 0.0
+    speed_spikes = [0.0]
+    speed_spikes.extend(max(0.0, speed - speed_med) for speed in speeds)
+    speed_scores = _normalize_values(speed_spikes)
+    modal_offsets = [
+        float(point.get("fused", {}).get("component_scores", {}).get("modal_offset_distance", 0.0) or 0.0)
+        for point in points
+    ]
+    modal_scores = _normalize_values(modal_offsets)
+
+    rows: list[dict[str, Any]] = []
+    for index, point in enumerate(points):
+        try:
+            frame = int(point.get("frame_id", index))
+        except (TypeError, ValueError):
+            continue
+        confidence = float(point.get("fused", {}).get("confidence", 0.0) or 0.0)
+        components = {
+            "speed_spike": speed_scores[index] if index < len(speed_scores) else 0.0,
+            "turn_irregularity": turns_by_point[index] if index < len(turns_by_point) else 0.0,
+            "low_confidence_ratio": max(0.0, min(1.0, (0.65 - confidence) / 0.65)),
+            "modal_offset_median": modal_scores[index] if index < len(modal_scores) else 0.0,
+        }
+        score = sum(float(weights[name]) * components[name] for name in weights)
+        rows.append(
+            {
+                "frame": frame,
+                "score": round(float(score), 6),
+                "dominant_reason": _dominant_component(components),
+                "component_scores": {name: round(float(value), 6) for name, value in components.items()},
+                "source": "individual_simple_frame",
+            }
+        )
+    return rows
+
+
 def score_fused_trajectories_simple(
     fused_jsonl: str | Path,
     output_jsonl: str | Path,
@@ -138,6 +241,21 @@ def score_fused_trajectories_simple(
         }
         score = sum(weights[name] * component_scores[name] for name in component_names)
         trajectory = by_sample[sample_id]
+        frame_event_scores = _trajectory_frame_event_scores(trajectory, weights)
+        event_score = max((float(row["score"]) for row in frame_event_scores), default=0.0)
+        event_segments = event_segments_from_frame_scores(
+            frame_event_scores,
+            threshold=EVENT_THRESHOLD,
+            max_gap=EVENT_MAX_GAP,
+            min_length=EVENT_MIN_LENGTH,
+        )
+        explanation_row = {
+            "score": float(score),
+            "event_score": float(event_score),
+            "component_scores": component_scores,
+            "frame_event_scores": frame_event_scores,
+            "event_segments": event_segments,
+        }
         records.append(
             {
                 "sample_id": sample_id,
@@ -147,7 +265,16 @@ def score_fused_trajectories_simple(
                 "category_name": trajectory.get("category_name"),
                 "source": "individual_simple",
                 "score": float(score),
+                "event_score": float(event_score),
                 "component_scores": component_scores,
+                "frame_event_scores": frame_event_scores,
+                "event_segments": event_segments,
+                "explanation_schema": build_explanation_schema(
+                    explanation_row,
+                    threshold=EVENT_THRESHOLD,
+                    max_gap=EVENT_MAX_GAP,
+                    min_length=EVENT_MIN_LENGTH,
+                ),
                 "metadata": {
                     "detector": "simple_fused_trajectory",
                     "raw_components": raw_components[sample_id],
@@ -168,6 +295,7 @@ def score_fused_trajectories_simple(
             "category_id",
             "category_name",
             "score",
+            "event_score",
             *component_names,
         ]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -181,6 +309,7 @@ def score_fused_trajectories_simple(
                     "category_id": record["category_id"],
                     "category_name": record["category_name"],
                     "score": record["score"],
+                    "event_score": record["event_score"],
                     **record["component_scores"],
                 }
             )

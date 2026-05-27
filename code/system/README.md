@@ -177,7 +177,7 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 
 `explanation_schema.py` 会在后端统一确定解释主因：优先使用峰值事件段的 `dominant_reason`，没有事件证据时回退到分数分量中贡献最大的组件。该 schema 同时记录事件阈值、最大合并间隔、最小事件长度等策略字段，因此前端解释面板不再需要自行猜测 top reason，只负责把后端解释结构渲染出来。
 
-当前群体图打分方法已经输出 `frame_event_scores` 和 `event_segments`；后续 individual route/speed/shape 分支也应采用相同字段接入，并尽量直接输出或复用统一的 `explanation_schema`。
+当前轻量 individual 检测器和群体图打分方法都会输出 `frame_event_scores`、`event_segments` 和 `explanation_schema`。其中 individual 分支会把 speed spike、turn irregularity、low confidence、modal offset 等分量转成逐帧事件证据；后续更强的 route/speed/shape 学习模型也应继续沿用相同字段，保证前端解释面板和事件时间线不需要改接口。
 
 融合分数 row 也会保留这些事件字段，并在 `component_scores` 中补充：
 
