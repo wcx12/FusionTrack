@@ -870,6 +870,11 @@ def test_final_dashboard_includes_registration_playback_without_labels(tmp_path:
     assert "syncPlaybackModeForData" in html
     assert "canvasPlaceholderText" in html
     assert "playbackMediaKind" in html
+    assert "mediaStatusStrip" in html
+    assert "sequenceOptionLabel" in html
+    assert "mediaStatusOriginalBackground" in html
+    assert "mediaStatusRegistrationBackground" in html
+    assert "sequenceOptionPointCloud" in html
     assert "mediaKindRegistration" in html
     assert "registrationPlaybackView" in html
     assert "registrationCanvas" in html

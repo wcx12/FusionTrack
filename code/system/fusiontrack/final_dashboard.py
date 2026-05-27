@@ -844,6 +844,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .sequence-stat {{ border: 1px solid #e1e7ef; border-radius: 7px; padding: 8px 10px; background: white; }}
     .sequence-stat span {{ display: block; color: #64748b; font-size: 12px; }}
     .sequence-stat strong {{ display: block; margin-top: 3px; font-size: 17px; }}
+    .media-status-strip {{ border: 1px solid #bfdbfe; border-radius: 7px; background: #eff6ff; color: #1e3a8a; padding: 9px 11px; font-size: 13px; line-height: 1.45; }}
+    .media-status-strip.registration {{ border-color: #c4b5fd; background: #f5f3ff; color: #5b21b6; }}
+    .media-status-strip.missing {{ border-color: #fed7aa; background: #fff7ed; color: #9a3412; }}
+    .media-status-strip[hidden] {{ display: none; }}
     .background-notice {{ border: 1px solid #fed7aa; border-radius: 7px; background: #fff7ed; color: #9a3412; padding: 9px 11px; font-size: 13px; line-height: 1.5; }}
     .background-notice[hidden] {{ display: none; }}
     #frameBadge {{ color: #475569; font-size: 13px; font-variant-numeric: tabular-nums; }}
@@ -1051,6 +1055,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           </label>
         </div>
         <div id="sequenceStats" class="sequence-stats"></div>
+        <div id="mediaStatusStrip" class="media-status-strip" role="status"></div>
         <div id="backgroundNotice" class="background-notice" role="status" hidden></div>
       </div>
       <div id="comparisonView" class="comparison-grid">
@@ -1234,6 +1239,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       const playSpeed = document.getElementById("playSpeed");
       const playSpeedReadout = document.getElementById("playSpeedReadout");
       const sequenceStats = document.getElementById("sequenceStats");
+      const mediaStatusStrip = document.getElementById("mediaStatusStrip");
       const backgroundNotice = document.getElementById("backgroundNotice");
       const viewModeButtons = Array.from(document.querySelectorAll(".view-mode-button"));
       const layerButtons = Array.from(document.querySelectorAll(".layer-button"));
@@ -1411,6 +1417,15 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           mediaKindVideo: "Original video background",
           mediaKindRegistration: "Point-cloud registration playback",
           mediaKindTrackOnly: "Track-only playback",
+          mediaStatusOriginalBackground: "Current playback source: original video background",
+          mediaStatusRegistrationBackground: "Current playback source: point-cloud registration diagnostic; original video frames are not used.",
+          mediaStatusMissingBackground: "Current playback source: trajectory data without original video frames.",
+          mediaStatusFramesSuffix: "sampled background frames",
+          sequenceOptionVideo: "video",
+          sequenceOptionPointCloud: "point cloud",
+          sequenceOptionTrackOnly: "track only",
+          sequenceOptionFrames: "frames",
+          sequenceOptionNoBackground: "no video background",
           comparisonRequiresBackground: "Four-panel comparison requires original video background frames.",
           playbackPrefix: "Playback",
           visibleTracks: "visible tracks",
@@ -1561,6 +1576,15 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         mediaKindVideo: "\u539f\u59cb\u89c6\u9891\u80cc\u666f\u56de\u653e",
         mediaKindRegistration: "\u70b9\u4e91\u914d\u51c6\u56de\u653e",
         mediaKindTrackOnly: "\u65e0\u80cc\u666f\u8f68\u8ff9\u56de\u653e",
+        mediaStatusOriginalBackground: "当前播放源：原始视频背景",
+        mediaStatusRegistrationBackground: "当前播放源：点云配准诊断，不使用原始视频帧。",
+        mediaStatusMissingBackground: "当前播放源：轨迹数据，未找到原始视频帧。",
+        mediaStatusFramesSuffix: "张采样背景帧",
+        sequenceOptionVideo: "视频",
+        sequenceOptionPointCloud: "点云配准",
+        sequenceOptionTrackOnly: "轨迹",
+        sequenceOptionFrames: "背景帧",
+        sequenceOptionNoBackground: "无视频背景",
         comparisonRequiresBackground: "\u56db\u753b\u9762\u5bf9\u6bd4\u9700\u8981\u539f\u59cb\u89c6\u9891\u80cc\u666f\u5e27\u3002",
         playbackPrefix: "可视化",
         visibleTracks: "条轨迹",
@@ -3123,7 +3147,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         playToggle.disabled = false;
         frameSlider.disabled = false;
         sequenceSelector.innerHTML = names.map(sequence =>
-          `<option value="${{esc(sequence)}}"${{sequence === state.sequence ? " selected" : ""}}>${{esc(sequence)}}</option>`
+          `<option value="${{esc(sequence)}}"${{sequence === state.sequence ? " selected" : ""}}>${{esc(sequenceOptionLabel(sequence))}}</option>`
         ).join("");
       }}
 
@@ -3438,7 +3462,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         return Boolean(data && (data.background || (data.background_frames || []).length));
       }}
 
-      function playbackMediaKind(data) {{
+      function mediaKindForSequence(data) {{
         const media = (data && data.media) || {{}};
         if (media.kind) {{
           return media.kind;
@@ -3447,6 +3471,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           return "original_video_background";
         }}
         return isRegistrationTask() ? "registration_point_cloud" : "track_only_missing_background";
+      }}
+
+      function playbackMediaKind(data) {{
+        return mediaKindForSequence(data);
       }}
 
       function playbackMediaLabel(data) {{
@@ -3471,6 +3499,46 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
 
       function playbackUsesOriginalVideo(data) {{
         return playbackMediaKind(data) === "original_video_background" && hasVideoBackground(data) && !isRegistrationTask();
+      }}
+
+      function sequenceOptionLabel(sequence) {{
+        const data = playbackData[sequence] || {{}};
+        const frameCount = (data.background_frames || []).length;
+        const kind = mediaKindForSequence(data);
+        if (kind === "original_video_background" && hasVideoBackground(data)) {{
+          const count = frameCount || (data.background ? 1 : 0);
+          return `${{sequence}} · ${{t("sequenceOptionVideo")}} · ${{count}} ${{t("sequenceOptionFrames")}}`;
+        }}
+        if (kind === "registration_point_cloud") {{
+          return `${{sequence}} · ${{t("sequenceOptionPointCloud")}} · ${{t("sequenceOptionNoBackground")}}`;
+        }}
+        return `${{sequence}} · ${{t("sequenceOptionTrackOnly")}} · ${{t("sequenceOptionNoBackground")}}`;
+      }}
+
+      function updateMediaStatus(data) {{
+        if (!mediaStatusStrip) {{
+          return;
+        }}
+        if (!data) {{
+          mediaStatusStrip.hidden = true;
+          mediaStatusStrip.textContent = "";
+          return;
+        }}
+        const kind = playbackMediaKind(data);
+        mediaStatusStrip.hidden = false;
+        mediaStatusStrip.className = "media-status-strip";
+        if (kind === "registration_point_cloud") {{
+          mediaStatusStrip.classList.add("registration");
+          mediaStatusStrip.textContent = t("mediaStatusRegistrationBackground");
+          return;
+        }}
+        if (playbackUsesOriginalVideo(data)) {{
+          const frameCount = (data.background_frames || []).length || (data.background ? 1 : 0);
+          mediaStatusStrip.textContent = `${{t("mediaStatusOriginalBackground")}} · ${{frameCount}} ${{t("mediaStatusFramesSuffix")}}`;
+          return;
+        }}
+        mediaStatusStrip.classList.add("missing");
+        mediaStatusStrip.textContent = t("mediaStatusMissingBackground");
       }}
 
       function canvasPlaceholderText(data) {{
@@ -3922,6 +3990,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         const names = sequencesForTask();
         if (!names.length) {{
           playbackReadout.textContent = t("noPlayback");
+          updateMediaStatus(null);
           updateBackgroundNotice(null);
           clearPlaybackCanvases();
           return;
@@ -3937,6 +4006,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         ensureSelectedTrack(data, ranked);
         const speedText = `x${{state.playSpeed.toFixed(1)}}`;
         setPlaybackSurfaceForTask(data);
+        updateMediaStatus(data);
         updateBackgroundNotice(data);
         if (isRegistrationTask()) {{
           state.image = null;
