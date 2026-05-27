@@ -1430,6 +1430,11 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           familyHeader: "Family",
           learningHeader: "Learning",
           statusHeader: "Status",
+          schemaStatusHeader: "Schema",
+          schemaWarningHeader: "Schema warnings",
+          schemaOk: "OK",
+          schemaWarning: "Warning",
+          schemaMissing: "Not provided",
           trackRankTitle: "High-Risk Tracks",
           explainTitle: "Why Anomaly",
           groupInsightTitle: "Group Relations",
@@ -1575,6 +1580,11 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         familyHeader: "方法族",
         learningHeader: "学习类型",
         statusHeader: "状态",
+        schemaStatusHeader: "格式状态",
+        schemaWarningHeader: "格式警告",
+        schemaOk: "完整",
+        schemaWarning: "需检查",
+        schemaMissing: "未提供",
         trackRankTitle: "当前高风险轨迹",
         explainTitle: "为什么判为异常",
         groupInsightTitle: "群体/配准证据",
@@ -2830,6 +2840,42 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         return t("baselineStatus");
       }}
 
+      function methodSchemaDiagnostics(row) {{
+        return (row && row.schema_diagnostics && typeof row.schema_diagnostics === "object")
+          ? row.schema_diagnostics
+          : null;
+      }}
+
+      function schemaStatusLabel(row) {{
+        const diagnostics = methodSchemaDiagnostics(row);
+        if (!diagnostics) {{
+          return t("schemaMissing");
+        }}
+        return diagnostics.status === "ok" ? t("schemaOk") : t("schemaWarning");
+      }}
+
+      function schemaWarningText(row) {{
+        const diagnostics = methodSchemaDiagnostics(row);
+        if (!diagnostics) {{
+          return t("schemaMissing");
+        }}
+        const warnings = Array.isArray(diagnostics.warnings) ? diagnostics.warnings : [];
+        return warnings.length ? warnings.join(", ") : t("schemaOk");
+      }}
+
+      function schemaDiagnosticsSummary(row) {{
+        const diagnostics = methodSchemaDiagnostics(row);
+        if (!diagnostics) {{
+          return t("schemaMissing");
+        }}
+        const alignment = diagnostics.alignment || {{}};
+        const score = diagnostics.score || {{}};
+        const missing = Number(alignment.num_missing_score_keys || 0);
+        const extra = Number(alignment.num_extra_score_keys || 0);
+        const duplicate = Number(score.num_duplicate_keys || 0);
+        return `missing ${{missing}} / extra ${{extra}} / duplicate ${{duplicate}}`;
+      }}
+
       function renderMethodStatus() {{
         const task = taskData();
         const rows = task.leaderboard || [];
@@ -2842,11 +2888,13 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         ].map(([label, value]) => `<div class="method-summary-item"><span>${{label}}</span><strong>${{value}}</strong></div>`).join("");
         if (isRegistrationTask()) {{
           methodStatusTable.innerHTML = `
-            <thead><tr><th>${{t("methodHeader")}}</th><th>${{t("familyHeader")}}</th><th class="metric">${{t("registrationSuccessRate")}}</th><th class="metric">${{t("registrationMetricRotation")}}</th><th class="metric">${{t("registrationMetricTranslation")}}</th><th class="metric">${{t("registrationMetricChamfer")}}</th><th class="metric">${{t("registrationMetricRuntime")}}</th></tr></thead>
+            <thead><tr><th>${{t("methodHeader")}}</th><th>${{t("familyHeader")}}</th><th>${{t("schemaStatusHeader")}}</th><th>${{t("schemaWarningHeader")}}</th><th class="metric">${{t("registrationSuccessRate")}}</th><th class="metric">${{t("registrationMetricRotation")}}</th><th class="metric">${{t("registrationMetricTranslation")}}</th><th class="metric">${{t("registrationMetricChamfer")}}</th><th class="metric">${{t("registrationMetricRuntime")}}</th></tr></thead>
             <tbody>${{rows.map(row => `
               <tr>
                 <td><strong>${{esc(row.method)}}</strong></td>
                 <td>${{esc(row.method_family || "")}}</td>
+                <td>${{schemaStatusLabel(row)}}<div class="subtle">${{schemaDiagnosticsSummary(row)}}</div></td>
+                <td>${{esc(schemaWarningText(row))}}</td>
                 <td class="metric">${{fmt(row.success_rate || row.auroc || 0)}}</td>
                 <td class="metric">${{fmt(row.rotation_error_deg_mean || 0)}}</td>
                 <td class="metric">${{fmt(row.translation_error_mean || 0)}}</td>
@@ -2858,7 +2906,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           return;
         }}
         methodStatusTable.innerHTML = `
-          <thead><tr><th>${{t("methodHeader")}}</th><th>${{t("sourceHeader")}}</th><th>${{t("familyHeader")}}</th><th>${{t("learningHeader")}}</th><th>${{t("statusHeader")}}</th><th class="metric">AUROC</th></tr></thead>
+          <thead><tr><th>${{t("methodHeader")}}</th><th>${{t("sourceHeader")}}</th><th>${{t("familyHeader")}}</th><th>${{t("learningHeader")}}</th><th>${{t("statusHeader")}}</th><th>${{t("schemaStatusHeader")}}</th><th>${{t("schemaWarningHeader")}}</th><th class="metric">AUROC</th></tr></thead>
           <tbody>${{rows.map(row => `
             <tr>
               <td><strong>${{esc(row.method)}}</strong></td>
@@ -2866,6 +2914,8 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
               <td>${{esc(row.method_family || "")}}</td>
               <td>${{esc(row.learning_type || "")}}</td>
               <td>${{methodStatus(row)}} · ${{t("integratedStatus")}}</td>
+              <td>${{schemaStatusLabel(row)}}<div class="subtle">${{schemaDiagnosticsSummary(row)}}</div></td>
+              <td>${{esc(schemaWarningText(row))}}</td>
               <td class="metric">${{fmt(row.auroc)}}</td>
             </tr>
           `).join("")}}</tbody>

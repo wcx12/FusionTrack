@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import csv
 import json
 from dataclasses import dataclass, field
@@ -138,7 +139,7 @@ def _load_task_dashboard(
     case_limit: int,
 ) -> TaskDashboard:
     labels = [_coerce_label_row(row) for row in _load_jsonl(label_file)]
-    summary_rows = _load_csv(final_results_root / f"final_{task}_all_methods_summary.csv")
+    summary_rows = _load_summary_rows(final_results_root, task)
     categorized = {
         row["method"]: row
         for row in _load_csv_optional(final_results_root / f"final_{task}_all_methods_categorized.csv")
@@ -161,6 +162,7 @@ def _load_task_dashboard(
             {
                 "num_score_rows": int(float(row.get("num_score_rows", len(score_rows)) or len(score_rows))),
                 "num_missing_score_keys": int(float(row.get("num_missing_score_keys", 0) or 0)),
+                "schema_diagnostics": _schema_diagnostics_from_summary_row(row, score_rows, labels),
             }
         )
         methods[method_name] = MethodProfile(
@@ -232,6 +234,10 @@ def _load_registration_task_dashboard(
                     metrics_payload = {}
             except json.JSONDecodeError:
                 metrics_payload = {}
+        schema_diagnostics = _coerce_mapping(
+            metrics_payload.get("schema_diagnostics")
+            or run.get("schema_diagnostics")
+        )
 
         methods[method_name] = MethodProfile(
             method=method_name,
@@ -255,6 +261,7 @@ def _load_registration_task_dashboard(
                 "translation_error_mean": _coerce_float(metrics_payload.get("translation_error_mean", 0.0)),
                 "chamfer_distance_mean": _coerce_float(metrics_payload.get("chamfer_distance_mean", 0.0)),
                 "runtime_sec_mean": _coerce_float(metrics_payload.get("runtime_sec_mean", 0.0)),
+                "schema_diagnostics": schema_diagnostics or _registration_schema_diagnostics(score_rows),
             },
             category=_category_with_registry(method_name, task_name, {}),
             score_path=score_file,
@@ -524,6 +531,103 @@ def _load_csv_optional(path: Path) -> list[dict[str, Any]]:
     return _load_csv(path)
 
 
+def _load_summary_rows(final_results_root: Path, task: str) -> list[dict[str, Any]]:
+    json_path = final_results_root / f"final_{task}_all_methods_summary.json"
+    if json_path.exists():
+        payload = json.loads(json_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, list):
+            raise ValueError(f"{json_path} must contain a JSON array")
+        rows: list[dict[str, Any]] = []
+        for index, row in enumerate(payload, start=1):
+            if not isinstance(row, dict):
+                raise ValueError(f"{json_path}:{index} is not a JSON object")
+            rows.append(dict(row))
+        return rows
+    return _load_csv(final_results_root / f"final_{task}_all_methods_summary.csv")
+
+
+def _schema_diagnostics_from_summary_row(
+    row: dict[str, Any],
+    score_rows: list[dict[str, Any]],
+    labels: list[dict[str, Any]],
+) -> dict[str, Any]:
+    diagnostics = _coerce_mapping(row.get("schema_diagnostics"))
+    if diagnostics:
+        return diagnostics
+    missing = _coerce_int(row.get("num_missing_score_keys"), 0)
+    extra = _coerce_int(row.get("num_extra_score_keys"), 0)
+    duplicate_labels = _coerce_int(row.get("num_duplicate_label_keys"), 0)
+    duplicate_scores = _coerce_int(row.get("num_duplicate_score_keys"), 0)
+    warnings = []
+    if missing:
+        warnings.append("missing_score_keys")
+    if extra:
+        warnings.append("extra_score_keys")
+    if duplicate_labels:
+        warnings.append("duplicate_label_keys")
+    if duplicate_scores:
+        warnings.append("duplicate_score_keys")
+    return {
+        "schema_diagnostics_version": 1,
+        "status": "warning" if warnings else "ok",
+        "key_fields": ["sample_id"],
+        "label": {
+            "num_rows": _coerce_int(row.get("num_label_rows"), len(labels)),
+            "num_unique_keys": _coerce_int(row.get("num_unique_label_keys"), len(labels)),
+            "num_duplicate_keys": duplicate_labels,
+        },
+        "score": {
+            "num_rows": _coerce_int(row.get("num_score_rows"), len(score_rows)),
+            "num_unique_keys": _coerce_int(row.get("num_unique_score_keys"), len(score_rows)),
+            "num_duplicate_keys": duplicate_scores,
+        },
+        "alignment": {
+            "num_missing_score_keys": missing,
+            "num_extra_score_keys": extra,
+        },
+        "warnings": warnings,
+    }
+
+
+def _registration_schema_diagnostics(score_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "schema_diagnostics_version": 1,
+        "status": "ok",
+        "key_fields": ["sample_id"],
+        "label": {
+            "num_rows": 0,
+            "num_unique_keys": 0,
+            "num_duplicate_keys": 0,
+        },
+        "score": {
+            "num_rows": len(score_rows),
+            "num_unique_keys": len({str(row.get("sample_id", "")) for row in score_rows}),
+            "num_duplicate_keys": 0,
+        },
+        "alignment": {
+            "num_missing_score_keys": 0,
+            "num_extra_score_keys": 0,
+        },
+        "warnings": [],
+    }
+
+
+def _coerce_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if not isinstance(value, str) or not value.strip():
+        return {}
+    raw = value.strip()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            parsed = ast.literal_eval(raw)
+        except (SyntaxError, ValueError):
+            return {}
+    return dict(parsed) if isinstance(parsed, dict) else {}
+
+
 def _category_with_registry(
     method_name: str,
     task: str,
@@ -579,6 +683,12 @@ def _coerce_float(value: Any) -> float:
     if value in (None, ""):
         return 0.0
     return float(value)
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    if value in (None, ""):
+        return default
+    return int(float(value))
 
 
 def _coerce_optional_int(value: Any) -> int | None:

@@ -317,6 +317,62 @@ def test_load_final_results_dashboard_builds_leaderboards_type_stats_and_cases(t
     assert dashboard.tasks["group"].anomaly_type_rows[0]["anomaly_type"] == "population_change"
 
 
+def test_final_results_dashboard_exposes_schema_diagnostics(tmp_path: Path) -> None:
+    final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
+    summary_csv = final_root / "final_individual_all_methods_summary.csv"
+    with summary_csv.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    rows[0]["schema_diagnostics"] = {
+        "schema_diagnostics_version": 1,
+        "status": "warning",
+        "key_fields": ["sample_id"],
+        "label": {"num_rows": 3, "num_unique_keys": 3, "num_duplicate_keys": 0},
+        "score": {"num_rows": 3, "num_unique_keys": 2, "num_duplicate_keys": 1},
+        "alignment": {"num_missing_score_keys": 1, "num_extra_score_keys": 0},
+        "warnings": ["missing_score_keys", "duplicate_score_keys"],
+    }
+    (final_root / "final_individual_all_methods_summary.json").write_text(
+        json.dumps(rows, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    dashboard = load_final_results_dashboard(
+        final_results_root=final_root,
+        individual_label_file=individual_labels,
+        group_label_file=group_labels,
+        score_search_roots=[score_root],
+        top_k=2,
+        case_limit=3,
+    )
+
+    method = dashboard.tasks["individual"].methods["fusiontrack_individual_nn"]
+    diagnostics = method.metrics["schema_diagnostics"]
+    assert diagnostics["status"] == "warning"
+    assert diagnostics["alignment"]["num_missing_score_keys"] == 1
+    leaderboard_row = next(
+        row for row in dashboard.tasks["individual"].leaderboard
+        if row["method"] == "fusiontrack_individual_nn"
+    )
+    assert leaderboard_row["schema_diagnostics"]["warnings"] == ["missing_score_keys", "duplicate_score_keys"]
+
+    build_final_dashboard(
+        dashboard=dashboard,
+        output_dir=tmp_path / "dashboard",
+        top_sequences=1,
+    )
+
+    dashboard_payload = json.loads(
+        (tmp_path / "dashboard" / "assets" / "final_dashboard_data.json").read_text(encoding="utf-8")
+    )
+    public_metrics = dashboard_payload["tasks"]["individual"]["methods"]["fusiontrack_individual_nn"]["metrics"]
+    assert public_metrics["schema_diagnostics"]["score"]["num_duplicate_keys"] == 1
+    html = (tmp_path / "dashboard" / "index.html").read_text(encoding="utf-8")
+    assert "schemaStatusHeader" in html
+    assert "schemaWarningHeader" in html
+    assert "missing_score_keys" in html
+    assert "schemaDiagnosticsSummary" in html
+
+
 def test_score_decomposition_reads_fused_metadata_sources_and_explicit_components() -> None:
     row = {
         "score": 0.62,
