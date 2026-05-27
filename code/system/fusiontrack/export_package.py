@@ -174,6 +174,9 @@ def _package_roots(summary: dict[str, Any]) -> dict[str, Path]:
     holdout_manifest_path = summary.get("holdout_manifest_path")
     if holdout_manifest_path:
         roots.setdefault("holdout_root", Path(str(holdout_manifest_path)).resolve().parent)
+    fused_pipeline_manifest_path = summary.get("fused_pipeline_manifest_path")
+    if fused_pipeline_manifest_path:
+        roots.setdefault("fused_pipeline_root", Path(str(fused_pipeline_manifest_path)).resolve().parent)
     protocol_paths = [
         Path(str(path)).resolve()
         for path in summary.get("protocol_manifest_paths") or []

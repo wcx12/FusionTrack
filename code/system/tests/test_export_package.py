@@ -66,6 +66,15 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
         ),
         encoding="utf-8",
     )
+    fused_pipeline_dir = tmp_path / "fused_pipeline"
+    fused_pipeline_dir.mkdir()
+    fused_pipeline_manifest_path = fused_pipeline_dir / "fused_track_pipeline_manifest_test.json"
+    fused_pipeline_manifest_payload = {
+        "pipeline": "fused_track_pipeline",
+        "inputs": {"observations_csv": str(tmp_path / "data" / "VT-Tiny-MOT" / "observations_test.csv")},
+        "summary": {"counts": {"fused_trajectories": 3, "filtered_trajectories": 1}},
+    }
+    fused_pipeline_manifest_path.write_text(json.dumps(fused_pipeline_manifest_payload), encoding="utf-8")
     summary = {
         "mode": "final_results_dashboard",
         "work_root": str(work_root),
@@ -94,6 +103,8 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
                 "dataset_root": str(tmp_path / "data" / "VT-Tiny-MOT"),
             }
         ],
+        "fused_pipeline_manifest_path": str(fused_pipeline_manifest_path),
+        "fused_pipeline_manifest": fused_pipeline_manifest_payload,
         "dataset_manifest": {"status": "ok", "dataset_fingerprint": "abc123"},
         "dashboard": {
             "report_html": str(report_dir / "index.html"),
@@ -136,6 +147,7 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
         assert "artifacts/holdout_root/all_runs.csv" in names
         assert "artifacts/holdout_root/best_by_metric.json" in names
         assert "artifacts/protocol_root/individual_manifest.json" in names
+        assert "artifacts/fused_pipeline_root/fused_track_pipeline_manifest_test.json" in names
         assert "export_manifest.json" in names
         assert not any(name.startswith("artifacts/work_root/pipeline_summary") for name in names)
         dataset_manifest_text = archive.read("artifacts/work_root/dataset_manifest_all.json").decode("utf-8")
@@ -152,4 +164,7 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
         protocol_manifest_text = archive.read("artifacts/protocol_root/individual_manifest.json").decode("utf-8")
         assert str(tmp_path) not in protocol_manifest_text
         assert "${data_root}" in protocol_manifest_text
+        fused_pipeline_text = archive.read("artifacts/fused_pipeline_root/fused_track_pipeline_manifest_test.json").decode("utf-8")
+        assert str(tmp_path) not in fused_pipeline_text
+        assert "${data_root}/observations_test.csv" in fused_pipeline_text
         assert manifest["package_format"] == "fusiontrack_analysis_export_v1"

@@ -43,12 +43,12 @@
   下一步：把该 pipeline 作为 protocol 生成器的默认内部路径，减少旧脚本分步调用。
 
 - 噪声抑制与目标持久化策略：✅（基础闭环）
-  现状：`TrackQualityConfig` 已接入 `fused track pipeline`，支持最小轨迹点数、最小可见帧、最大帧间断裂、最小 fused ratio 和是否保留过滤轨迹；每条 fused trajectory 写入 `quality.keep/drop_reasons`，summary/manifest 记录策略参数与过滤原因计数，group windows 会同步移除被过滤目标。
-  下一步：根据真实实验分布在 validation 上固定默认阈值，并把过滤统计展示到 dashboard 数据流面板。
+  现状：`TrackQualityConfig` 已接入 `fused track pipeline`，支持最小轨迹点数、最小可见帧、最大帧间断裂、最小 fused ratio 和是否保留过滤轨迹；每条 fused trajectory 写入 `quality.keep/drop_reasons`，summary/manifest 记录策略参数与过滤原因计数，group windows 会同步移除被过滤目标。最终 dashboard 可通过 `--fused-pipeline-manifest` 展示过滤阈值和 `drop_reason_counts`。
+  下一步：根据真实实验分布在 validation 上固定默认阈值，并在论文实验表中说明最终阈值选择。
 
 - 融合轨迹可追溯输出：✅（基础闭环）
-  现状：`fused track pipeline` 已统一输出目录与文件命名，并写出 `fused_track_pipeline_summary_<split>.json` 和 `fused_track_pipeline_manifest_<split>.json`，记录输入 CSV hash、输出 artifact hash、配置和模态覆盖率。
-  下一步：把 pipeline manifest 汇总到最终 dashboard/export 的数据治理说明层。
+  现状：`fused track pipeline` 已统一输出目录与文件命名，并写出 `fused_track_pipeline_summary_<split>.json` 和 `fused_track_pipeline_manifest_<split>.json`，记录输入 CSV hash、输出 artifact hash、配置和模态覆盖率。`run_fusiontrack.py` 支持 `--fused-pipeline-manifest`，最终 dashboard/export 会汇总该 manifest 的输入、计数、覆盖率、质量过滤和 artifact 信息。
+  下一步：后续可把 protocol 生成器默认切到 fused track pipeline，进一步减少旧脚本分步调用。
 
 ### C. 行为异常检测层
 
@@ -269,3 +269,11 @@
 - 最终 dashboard 的数据流审计页新增 `keyPolicyPanel`，集中展示每个任务的主键字段、兼容字段、对齐粒度和严格对齐状态。
 - 当前视图 JSON 导出新增 `key_policy`，当前序列 JSON 导出新增 `task_key_policies`，方便把具体展示案例和任务级 key policy 一起归档。
 - 扩展 `test_final_results.py`，覆盖 key policy payload、导出字段和前端审计函数已写入 HTML。
+
+## 2026-05-28 更新：fused track pipeline manifest 接入最终展示
+
+- `run_fusiontrack.py` 新增 `--fused-pipeline-manifest`，配置文件也可使用 `fused_pipeline_manifest`。
+- `build_final_results_report()` 会读取 `fused_track_pipeline_manifest_<split>.json`，并写入 pipeline summary、pipeline manifest 和最终 dashboard provenance。
+- 最终 dashboard 的数据流审计页新增 `fusedPipelinePanel`，展示输入 observations、轨迹/窗口计数、模态覆盖、质量过滤、过滤原因和输出 artifact。
+- 导出包现在会把 fused pipeline manifest 按 `fused_pipeline_root` 归档并脱敏路径。
+- 新增 `test_build_final_results_report_links_fused_pipeline_manifest`，覆盖 summary、manifest、dashboard payload、HTML 面板和路径脱敏。

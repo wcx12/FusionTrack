@@ -288,13 +288,24 @@ python code/system/run_fusiontrack.py \
   --individual-label-file <individual_labels.jsonl> \
   --group-label-file <group_labels.jsonl> \
   --fused-jsonl <merged_fused.jsonl> \
+  --fused-pipeline-manifest <fused_track_pipeline_manifest.json> \
   --protocol-manifest <protocol_dir>/protocol_manifest.json \
   --suite-manifest <suite_output_dir>/suite_manifest.json \
   --holdout-manifest <holdout_output_dir>/manifest.json \
   --export-package <output.zip>
 ```
 
-这样 `pipeline_summary_final_dashboard.json`、`pipeline_manifest_final_results_dashboard_all.json`、网页的 provenance 数据和导出 zip 都会保留 protocol、suite 与 holdout 来源；导出包会把 protocol manifest、suite manifest 及其引用的 aggregate summary、matrix summary/manifest、holdout aggregate/all-runs/best-by-metric 一起归档。
+这样 `pipeline_summary_final_dashboard.json`、`pipeline_manifest_final_results_dashboard_all.json`、网页的 provenance 数据和导出 zip 都会保留 fused track pipeline、protocol、suite 与 holdout 来源；导出包会把 fused track pipeline manifest、protocol manifest、suite manifest 及其引用的 aggregate summary、matrix summary/manifest、holdout aggregate/all-runs/best-by-metric 一起归档。
+
+如果传入 `--fused-pipeline-manifest`，最终 dashboard 会在数据流审计中新增轨迹融合 pipeline 面板，展示：
+
+- 输入 observations 文件及 SHA-256。
+- raw / kept / fused / filtered trajectory 计数。
+- group window 数量。
+- fused ratio、paired ratio 等模态覆盖。
+- `TrackQualityConfig` 过滤阈值。
+- `drop_reason_counts` 过滤原因统计。
+- fused trajectories、group windows、summary 等输出 artifact。
 
 ## 验证建议
 

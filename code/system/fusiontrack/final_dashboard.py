@@ -120,6 +120,12 @@ def _build_public_provenance(provenance: dict[str, Any]) -> dict[str, Any]:
     )
     if protocols:
         public["protocols"] = protocols
+    fused_pipeline = _build_public_fused_pipeline_provenance(
+        manifest=provenance.get("fused_pipeline_manifest"),
+        manifest_path=provenance.get("fused_pipeline_manifest_path"),
+    )
+    if fused_pipeline:
+        public["fused_pipeline"] = fused_pipeline
     return public
 
 
@@ -302,6 +308,46 @@ def _build_public_protocol_provenance(
         "positive_count": sum(_int_or_zero(row.get("positive_count")) for row in rows),
         "total_labels": sum(_int_or_zero(row.get("total_labels")) for row in rows),
         "manifests": rows,
+    }
+
+
+def _build_public_fused_pipeline_provenance(manifest: Any, manifest_path: Any = None) -> dict[str, Any]:
+    if not isinstance(manifest, dict):
+        return {}
+    summary = manifest.get("summary")
+    if not isinstance(summary, dict):
+        summary = {}
+    config = manifest.get("config")
+    if not isinstance(config, dict):
+        config = {}
+    inputs = manifest.get("inputs")
+    if not isinstance(inputs, dict):
+        inputs = {}
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, dict):
+        artifacts = {}
+    public_artifacts = {}
+    for name, artifact in artifacts.items():
+        if not isinstance(artifact, dict):
+            continue
+        public_artifacts[str(name)] = {
+            "path": _public_path_hint(artifact.get("path")),
+            "sha256": artifact.get("sha256"),
+        }
+    return {
+        "pipeline": str(manifest.get("pipeline") or "fused_track_pipeline"),
+        "schema_version": manifest.get("manifest_schema_version"),
+        "split": manifest.get("split"),
+        "manifest": _public_path_hint(manifest_path),
+        "inputs": {
+            "observations_csv": _public_path_hint(inputs.get("observations_csv")),
+            "observations_csv_sha256": inputs.get("observations_csv_sha256"),
+        },
+        "counts": summary.get("counts") if isinstance(summary.get("counts"), dict) else {},
+        "modality_coverage": summary.get("modality_coverage") if isinstance(summary.get("modality_coverage"), dict) else {},
+        "trajectory_quality": summary.get("trajectory_quality") if isinstance(summary.get("trajectory_quality"), dict) else {},
+        "quality_config": config.get("quality") if isinstance(config.get("quality"), dict) else {},
+        "artifacts": public_artifacts,
     }
 
 
@@ -2113,6 +2159,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         provenanceProtocolLabels: "协议标签数",
         provenanceProtocolTypes: "异常类型",
         provenanceProtocolFingerprint: "数据指纹",
+        provenanceFusedPipeline: "轨迹融合 pipeline",
+        fusedPipelineInput: "输入 observations",
+        fusedPipelineCounts: "轨迹/窗口统计",
+        fusedPipelineCoverage: "模态覆盖",
+        fusedPipelineQuality: "过滤质量",
+        fusedPipelineArtifacts: "输出产物",
         provenanceHoldout: "Holdout 多 seed 汇总",
         provenanceHoldoutProtocol: "协议",
         provenanceHoldoutArtifacts: "结果文件",
@@ -2215,6 +2267,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         provenanceProtocolLabels: "Protocol labels",
         provenanceProtocolTypes: "Anomaly types",
         provenanceProtocolFingerprint: "Dataset fingerprint",
+        provenanceFusedPipeline: "Fused-track pipeline",
+        fusedPipelineInput: "Input observations",
+        fusedPipelineCounts: "Track/window counts",
+        fusedPipelineCoverage: "Modality coverage",
+        fusedPipelineQuality: "Filtering quality",
+        fusedPipelineArtifacts: "Output artifacts",
         provenanceHoldout: "Holdout multiseed summary",
         provenanceHoldoutProtocol: "Protocol",
         provenanceHoldoutArtifacts: "Result artifacts",
@@ -4215,6 +4273,48 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         `;
       }}
 
+      function renderFusedPipelinePanel(fusedPipeline, missing) {{
+        if (!fusedPipeline || !Object.keys(fusedPipeline).length) {{
+          return "";
+        }}
+        const counts = fusedPipeline.counts || {{}};
+        const coverage = fusedPipeline.modality_coverage || {{}};
+        const quality = fusedPipeline.trajectory_quality || {{}};
+        const qualityConfig = fusedPipeline.quality_config || {{}};
+        const artifacts = fusedPipeline.artifacts || {{}};
+        const dropReasons = Object.entries(quality.drop_reason_counts || {{}})
+          .map(([reason, count]) => `${{reason}}=${{count}}`)
+          .join(", ") || "0";
+        const artifactText = Object.entries(artifacts)
+          .map(([name, artifact]) => `${{name}}:${{artifact.path || missing}}`)
+          .join(", ") || missing;
+        const cards = [
+          [t("fusedPipelineInput"), (fusedPipeline.inputs || {{}}).observations_csv || missing],
+          [t("fusedPipelineCounts"), `${{Number(counts.fused_trajectories || 0)}} / ${{Number(counts.filtered_trajectories || 0)}} / ${{Number(counts.group_windows || 0)}}`],
+          [t("fusedPipelineCoverage"), `${{pct(coverage.fused_ratio || 0)}} fused, ${{pct(coverage.paired_ratio || 0)}} paired`],
+          [t("fusedPipelineQuality"), `${{Number(quality.kept_trajectories || 0)}} kept, ${{Number(quality.filtered_trajectories || 0)}} filtered`],
+          [t("keyPolicyDescription"), dropReasons],
+          [t("fusedPipelineArtifacts"), artifactText],
+        ];
+        const configText = Object.keys(qualityConfig).length
+          ? Object.entries(qualityConfig).map(([key, value]) => `${{key}}=${{value}}`).join(", ")
+          : missing;
+        return `
+          <div id="fusedPipelinePanel" class="provenance-subsection">
+            <h4>${{t("provenanceFusedPipeline")}}</h4>
+            <div class="data-flow-grid">
+              ${{cards.map(([label, value]) => `<div class="data-flow-card"><span>${{label}}</span><strong>${{esc(value)}}</strong></div>`).join("")}}
+            </div>
+            <div class="provenance-grid" style="margin-top: 10px;">
+              <div class="provenance-item"><span>Pipeline</span><strong>${{esc(fusedPipeline.pipeline || missing)}} / ${{esc(fusedPipeline.split || missing)}}</strong></div>
+              <div class="provenance-item"><span>Manifest</span><strong>${{esc(fusedPipeline.manifest || missing)}}</strong></div>
+              <div class="provenance-item"><span>Quality config</span><strong>${{esc(configText)}}</strong></div>
+              <div class="provenance-item"><span>Input SHA-256</span><strong>${{esc((fusedPipeline.inputs || {{}}).observations_csv_sha256 || missing)}}</strong></div>
+            </div>
+          </div>
+        `;
+      }}
+
       function renderProvenanceAudit() {{
         const provenance = dashboard.provenance || {{}};
         const dataset = provenance.dataset || {{}};
@@ -4223,6 +4323,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         const suite = provenance.suite || null;
         const holdout = provenance.holdout || null;
         const protocols = provenance.protocols || null;
+        const fusedPipeline = provenance.fused_pipeline || null;
         const missing = t("provenanceMissing");
         const datasetText = [dataset.name, Array.isArray(dataset.splits) ? dataset.splits.join("/") : ""]
           .filter(Boolean)
@@ -4263,6 +4364,11 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
             [t("provenanceProtocolLabels"), `${{Number(protocols.positive_count || 0)}} / ${{Number(protocols.total_labels || 0)}}`],
           );
         }}
+        if (fusedPipeline) {{
+          items.push(
+            [t("provenanceFusedPipeline"), [fusedPipeline.pipeline, fusedPipeline.manifest].filter(Boolean).join(" / ") || missing],
+          );
+        }}
         return `
           <div id="provenancePanel" class="provenance-panel">
             <h3>${{t("provenanceTitle")}}</h3>
@@ -4275,6 +4381,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
               `).join("")}}
             </div>
             ${{renderProtocolProvenancePanel(protocols, missing)}}
+            ${{renderFusedPipelinePanel(fusedPipeline, missing)}}
             ${{renderDatasetQualityPanel(dataset.quality, missing)}}
             ${{renderHoldoutPanel(holdout, missing)}}
           </div>

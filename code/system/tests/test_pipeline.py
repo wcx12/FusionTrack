@@ -116,6 +116,112 @@ def test_build_final_results_report_from_summary_files(tmp_path: Path) -> None:
     assert (paths.work_root / "final_dashboard" / "index.html").exists()
 
 
+def test_build_final_results_report_links_fused_pipeline_manifest(tmp_path: Path) -> None:
+    paths = FusionTrackPaths.defaults(data_root=tmp_path / "data", work_root=tmp_path / "runs")
+    final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
+    fused_jsonl = tmp_path / "fused_pipeline" / "fused_trajectories_test.jsonl"
+    _write_jsonl(
+        fused_jsonl,
+        [
+            {
+                "sample_id": "S1:1",
+                "sequence": "S1",
+                "track_id": "1",
+                "category_name": "plane",
+                "points": [
+                    {"frame_id": 1, "fused": {"center_xy": [1, 2], "confidence": 0.9}},
+                    {"frame_id": 2, "fused": {"center_xy": [3, 4], "confidence": 0.8}},
+                ],
+            }
+        ],
+    )
+    fused_pipeline_manifest = tmp_path / "fused_pipeline" / "fused_track_pipeline_manifest_test.json"
+    fused_pipeline_manifest.write_text(
+        json.dumps(
+            {
+                "manifest_schema_version": 1,
+                "pipeline": "fused_track_pipeline",
+                "split": "test",
+                "inputs": {
+                    "observations_csv": "observations_test.csv",
+                    "observations_csv_sha256": "abc123",
+                },
+                "config": {
+                    "split": "test",
+                    "quality": {
+                        "min_points": 2,
+                        "min_visible_any_frames": 1,
+                        "max_frame_gap": 8,
+                        "min_fused_ratio": 0.5,
+                        "keep_filtered": False,
+                    },
+                },
+                "summary": {
+                    "counts": {
+                        "observations": 12,
+                        "raw_trajectories": 4,
+                        "trajectories": 3,
+                        "fused_trajectories": 3,
+                        "filtered_trajectories": 1,
+                        "group_windows": 2,
+                    },
+                    "modality_coverage": {
+                        "total_points": 8,
+                        "fused_points": 7,
+                        "paired_ratio": 0.625,
+                        "fused_ratio": 0.875,
+                    },
+                    "trajectory_quality": {
+                        "kept_trajectories": 3,
+                        "filtered_trajectories": 1,
+                        "drop_reason_counts": {"large_frame_gap": 1},
+                    },
+                },
+                "artifacts": {
+                    "fused_trajectories": {
+                        "path": "fused_trajectories_test.jsonl",
+                        "sha256": "def456",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = build_final_results_report(
+        paths=paths,
+        final_results_root=final_root,
+        individual_label_file=individual_labels,
+        group_label_file=group_labels,
+        score_search_roots=[score_root],
+        fused_jsonl=fused_jsonl,
+        fused_pipeline_manifest=fused_pipeline_manifest,
+        top_sequences=1,
+        top_k=2,
+        case_limit=3,
+        sync_remote_report=False,
+    )
+
+    assert summary["fused_pipeline_manifest_path"] == str(fused_pipeline_manifest)
+    assert summary["fused_pipeline_manifest"]["pipeline"] == "fused_track_pipeline"
+    dashboard_data = json.loads(
+        (paths.work_root / "final_dashboard" / "assets" / "final_dashboard_data.json").read_text(encoding="utf-8")
+    )
+    fused_pipeline = dashboard_data["provenance"]["fused_pipeline"]
+    assert fused_pipeline["pipeline"] == "fused_track_pipeline"
+    assert fused_pipeline["manifest"] == "fused_track_pipeline_manifest_test.json"
+    assert fused_pipeline["counts"]["filtered_trajectories"] == 1
+    assert fused_pipeline["modality_coverage"]["fused_ratio"] == 0.875
+    assert fused_pipeline["trajectory_quality"]["drop_reason_counts"] == {"large_frame_gap": 1}
+    assert str(tmp_path) not in json.dumps(fused_pipeline)
+    html = (paths.work_root / "final_dashboard" / "index.html").read_text(encoding="utf-8")
+    assert "fusedPipelinePanel" in html
+    assert "renderFusedPipelinePanel" in html
+    assert "provenanceFusedPipeline" in html
+    pipeline_manifest = json.loads(Path(summary["manifest_path"]).read_text(encoding="utf-8"))
+    assert pipeline_manifest["fused_pipeline_manifest_path"] == str(fused_pipeline_manifest)
+
+
 def test_build_final_results_report_links_suite_manifest(tmp_path: Path) -> None:
     paths = FusionTrackPaths.defaults(data_root=tmp_path / "data", work_root=tmp_path / "runs")
     final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)

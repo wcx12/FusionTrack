@@ -32,6 +32,7 @@ PATH_CONFIG_FIELDS = {
     "registration_manifest",
     "registration_fused_jsonl",
     "fused_jsonl",
+    "fused_pipeline_manifest",
     "final_results_root",
     "individual_label_file",
     "group_label_file",
@@ -118,6 +119,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Method to visualize from registration benchmark summary.",
     )
     parser.add_argument("--fused-jsonl", type=Path, default=config_defaults.get("fused_jsonl"), help="Fused trajectory JSONL used by the result manifest.")
+    parser.add_argument("--fused-pipeline-manifest", type=Path, default=config_defaults.get("fused_pipeline_manifest"), help="Optional fused_track_pipeline_manifest_<split>.json to link into final dashboard provenance.")
     parser.add_argument("--final-results-root", type=Path, default=config_defaults.get("final_results_root"), help="Directory with final_*_summary files.")
     parser.add_argument("--individual-label-file", type=Path, default=config_defaults.get("individual_label_file"), help="Individual labels JSONL for final dashboard.")
     parser.add_argument("--group-label-file", type=Path, default=config_defaults.get("group_label_file"), help="Group labels JSONL for final dashboard.")
@@ -189,6 +191,7 @@ def main() -> None:
             registration_manifest=registration_manifest,
             registration_fused_jsonl=registration_fused_jsonl,
             fused_jsonl=args.fused_jsonl,
+            fused_pipeline_manifest=args.fused_pipeline_manifest,
             suite_manifest=args.suite_manifest,
             holdout_manifest=args.holdout_manifest,
             protocol_manifests=args.protocol_manifest,

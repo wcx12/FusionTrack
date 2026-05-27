@@ -144,6 +144,18 @@ def _load_holdout_manifest(holdout_manifest: str | Path | None) -> tuple[dict[st
     return payload, holdout_manifest_path
 
 
+def _load_fused_pipeline_manifest(fused_pipeline_manifest: str | Path | None) -> tuple[dict[str, Any] | None, Path | None]:
+    if fused_pipeline_manifest is None:
+        return None, None
+    manifest_path = Path(fused_pipeline_manifest)
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing fused track pipeline manifest: {manifest_path}")
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Fused track pipeline manifest must be a JSON object: {manifest_path}")
+    return payload, manifest_path
+
+
 def _load_protocol_manifests(protocol_manifests: list[str | Path] | None) -> tuple[list[dict[str, Any]], list[Path]]:
     payloads: list[dict[str, Any]] = []
     paths: list[Path] = []
@@ -411,6 +423,7 @@ def build_final_results_report(
     registration_manifest: str | Path | None = None,
     registration_fused_jsonl: str | Path | None = None,
     fused_jsonl: str | Path | None = None,
+    fused_pipeline_manifest: str | Path | None = None,
     suite_manifest: str | Path | None = None,
     holdout_manifest: str | Path | None = None,
     protocol_manifests: list[str | Path] | None = None,
@@ -423,6 +436,7 @@ def build_final_results_report(
     dataset_manifest, dataset_manifest_path = _write_dataset_manifest(paths, "all")
     suite_manifest_payload, suite_manifest_path = _load_suite_manifest(suite_manifest)
     holdout_manifest_payload, holdout_manifest_path = _load_holdout_manifest(holdout_manifest)
+    fused_pipeline_manifest_payload, fused_pipeline_manifest_path = _load_fused_pipeline_manifest(fused_pipeline_manifest)
     protocol_manifest_payloads, protocol_manifest_paths = _load_protocol_manifests(protocol_manifests)
     manifest_registration = Path(registration_manifest) if registration_manifest is not None else None
     manifest_fused = Path(registration_fused_jsonl) if registration_fused_jsonl is not None else None
@@ -457,6 +471,8 @@ def build_final_results_report(
             "group_label_file": group_label_file,
             "score_search_roots": score_search_roots,
             "fused_jsonl": dashboard_fused_jsonl,
+            "fused_pipeline_manifest": fused_pipeline_manifest_payload,
+            "fused_pipeline_manifest_path": fused_pipeline_manifest_path,
             "registration_manifest": registration_manifest,
             "registration_fused_jsonl": registration_fused_jsonl,
             "suite_manifest": suite_manifest_payload,
@@ -486,6 +502,8 @@ def build_final_results_report(
         "group_label_file": str(group_label_file),
         "score_search_roots": [str(path) for path in score_search_roots],
         "fused_jsonl": None if dashboard_fused_jsonl is None else str(dashboard_fused_jsonl),
+        "fused_pipeline_manifest_path": str(fused_pipeline_manifest_path) if fused_pipeline_manifest_path is not None else None,
+        "fused_pipeline_manifest": fused_pipeline_manifest_payload,
         "registration_manifest": str(registration_manifest) if registration_manifest is not None else None,
         "registration_fused_jsonl": str(registration_fused_jsonl) if registration_fused_jsonl is not None else None,
         "suite_manifest_path": str(suite_manifest_path) if suite_manifest_path is not None else None,
@@ -511,6 +529,8 @@ def build_final_results_report(
             "individual_label_file": str(individual_label_file),
             "group_label_file": str(group_label_file),
             "score_search_roots": [str(path) for path in score_search_roots],
+            "fused_pipeline_manifest_path": str(fused_pipeline_manifest_path) if fused_pipeline_manifest_path is not None else None,
+            "fused_pipeline_manifest": fused_pipeline_manifest_payload,
             "registration_manifest": str(registration_manifest) if registration_manifest is not None else None,
             "registration_fused_jsonl": str(manifest_fused) if manifest_fused is not None else None,
             "suite_manifest_path": str(suite_manifest_path) if suite_manifest_path is not None else None,
