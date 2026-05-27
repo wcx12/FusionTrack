@@ -276,6 +276,13 @@ python -c "import collections, collections.abc; collections.Callable = collectio
 - Python 编译检查。
 - `method_registry.json` 注册表校验。
 - `code/system/tests` 系统测试。
+- 生成一份小样例 dashboard，并以 `sample-dashboard` artifact 上传，便于在没有真实数据集和服务器产物的 CI 环境里检查静态页面是否能完整构建。
+
+本地也可以手动生成这份小样例：
+
+```bash
+python code/system/tools/build_sample_dashboard.py --output-dir runs/sample_dashboard_ci
+```
 
 生成网页后建议用浏览器或 Playwright 截图验证：
 

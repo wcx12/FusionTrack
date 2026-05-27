@@ -120,8 +120,8 @@
   下一步：补充系统设计与执行说明。
 
 - 自动化流程：✅（基础闭环）
-  现状：新增 `.github/workflows/system-ci.yml`，在系统代码、方法注册表或 CI 配置变更时自动执行 Python 编译、方法注册表校验和 `code/system/tests` 系统测试，并支持手动触发。
-  下一步：后续如要形成完整端到端 CI，可继续接入小样例 dashboard 构建产物上传和 GitHub Pages 自动发布。
+  现状：新增 `.github/workflows/system-ci.yml`，在系统代码、方法注册表或 CI 配置变更时自动执行 Python 编译、方法注册表校验和 `code/system/tests` 系统测试，并通过 `code/system/tools/build_sample_dashboard.py` 生成可打开的小样例 dashboard，以 `sample-dashboard` artifact 上传；workflow 支持手动触发。
+  下一步：后续如要形成完整端到端 CI，可继续接入 GitHub Pages 自动发布和 run_id 版本归档。
 
 ## 3. 当前结论
 

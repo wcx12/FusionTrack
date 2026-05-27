@@ -46,3 +46,15 @@ jobs:
       - name: Run system tests
         run: |
           python -c "import collections, collections.abc; collections.Callable = collections.abc.Callable; import pytest, sys; sys.exit(pytest.main(['code/system/tests', '-q']))"
+
+      - name: Build sample dashboard artifact
+        run: |
+          python code/system/tools/build_sample_dashboard.py --output-dir runs/sample_dashboard_ci
+
+      - name: Upload sample dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-dashboard
+          path: |
+            runs/sample_dashboard_ci/sample_dashboard
+            runs/sample_dashboard_ci/sample_dashboard_summary.json
