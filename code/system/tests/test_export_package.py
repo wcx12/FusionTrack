@@ -33,6 +33,26 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
         ),
         encoding="utf-8",
     )
+    holdout_dir = tmp_path / "holdout"
+    holdout_dir.mkdir()
+    holdout_manifest_path = holdout_dir / "manifest.json"
+    holdout_aggregate_path = holdout_dir / "aggregate.csv"
+    holdout_all_runs_path = holdout_dir / "all_runs.csv"
+    holdout_best_path = holdout_dir / "best_by_metric.json"
+    holdout_aggregate_path.write_text("level,method,auroc_mean\ngroup,fusiontrack,0.91\n", encoding="utf-8")
+    holdout_all_runs_path.write_text("seed,level,method,auroc\n42,group,fusiontrack,0.91\n", encoding="utf-8")
+    holdout_best_path.write_text('{"auroc":{"method":"fusiontrack","auroc_mean":0.91}}', encoding="utf-8")
+    holdout_manifest_path.write_text(
+        json.dumps(
+            {
+                "aggregate_csv": "/root/autodl-tmp/fusiontrack_holdout/aggregate.csv",
+                "best_by_metric_json": "/root/autodl-tmp/fusiontrack_holdout/best_by_metric.json",
+                "all_runs_csv": "/root/autodl-tmp/fusiontrack_holdout/all_runs.csv",
+                "seeds": [42, 43, 44],
+            }
+        ),
+        encoding="utf-8",
+    )
     summary = {
         "mode": "final_results_dashboard",
         "work_root": str(work_root),
@@ -45,6 +65,13 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
             "suite_name": "paper_suite",
             "aggregate_summary_csv": str(aggregate_summary_path),
             "matrices": [],
+        },
+        "holdout_manifest_path": str(holdout_manifest_path),
+        "holdout_manifest": {
+            "aggregate_csv": "/root/autodl-tmp/fusiontrack_holdout/aggregate.csv",
+            "best_by_metric_json": "/root/autodl-tmp/fusiontrack_holdout/best_by_metric.json",
+            "all_runs_csv": "/root/autodl-tmp/fusiontrack_holdout/all_runs.csv",
+            "seeds": [42, 43, 44],
         },
         "dataset_manifest": {"status": "ok", "dataset_fingerprint": "abc123"},
         "dashboard": {
@@ -83,6 +110,10 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
         assert "artifacts/work_root/dataset_manifest_all.json" in names
         assert "artifacts/suite_root/suite_manifest.json" in names
         assert "artifacts/suite_root/aggregate_summary.csv" in names
+        assert "artifacts/holdout_root/manifest.json" in names
+        assert "artifacts/holdout_root/aggregate.csv" in names
+        assert "artifacts/holdout_root/all_runs.csv" in names
+        assert "artifacts/holdout_root/best_by_metric.json" in names
         assert "export_manifest.json" in names
         assert not any(name.startswith("artifacts/work_root/pipeline_summary") for name in names)
         dataset_manifest_text = archive.read("artifacts/work_root/dataset_manifest_all.json").decode("utf-8")
@@ -91,5 +122,9 @@ def test_build_analysis_export_package_collects_report_and_sanitizes_paths(tmp_p
         manifest = json.loads(archive.read("export_manifest.json").decode("utf-8"))
         manifest_text = json.dumps(manifest, ensure_ascii=False)
         assert str(tmp_path) not in manifest_text
+        assert "/root/autodl-tmp" not in manifest_text
         assert "${work_root}/final_dashboard/index.html" in manifest_text
+        holdout_manifest_text = archive.read("artifacts/holdout_root/manifest.json").decode("utf-8")
+        assert "/root/autodl-tmp" not in holdout_manifest_text
+        assert "${external}/aggregate.csv" in holdout_manifest_text
         assert manifest["package_format"] == "fusiontrack_analysis_export_v1"

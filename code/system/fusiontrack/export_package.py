@@ -57,7 +57,7 @@ def build_analysis_export_package(summary: dict[str, Any], output_zip: str | Pat
                 arcname = "report/" + path.relative_to(report_dir).as_posix()
                 _write_file(archive, path, arcname, files, written, roots)
 
-        for path in _iter_referenced_files(summary):
+        for path in _dedupe_paths(_iter_referenced_files(summary) + _iter_holdout_artifact_files(summary)):
             if report_dir is not None:
                 try:
                     path.relative_to(report_dir)
@@ -170,6 +170,9 @@ def _package_roots(summary: dict[str, Any]) -> dict[str, Path]:
     suite_manifest_path = summary.get("suite_manifest_path")
     if suite_manifest_path:
         roots.setdefault("suite_root", Path(str(suite_manifest_path)).resolve().parent)
+    holdout_manifest_path = summary.get("holdout_manifest_path")
+    if holdout_manifest_path:
+        roots.setdefault("holdout_root", Path(str(holdout_manifest_path)).resolve().parent)
     return roots
 
 
@@ -206,6 +209,46 @@ def _iter_referenced_files(value: Any) -> list[Path]:
         if path.exists() and path.is_file():
             paths.append(path.resolve())
     return _dedupe_paths(paths)
+
+
+def _iter_holdout_artifact_files(summary: dict[str, Any]) -> list[Path]:
+    manifest_value = summary.get("holdout_manifest_path")
+    if not manifest_value:
+        return []
+    manifest_path = Path(str(manifest_value)).resolve()
+    if not manifest_path.exists() or not manifest_path.is_file():
+        return []
+    paths = [manifest_path]
+    manifest = summary.get("holdout_manifest")
+    if not isinstance(manifest, dict):
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            manifest = {}
+    for key in ("aggregate_csv", "all_runs_csv", "best_by_metric_json"):
+        resolved = _resolve_companion_artifact(manifest.get(key), manifest_path.parent)
+        if resolved is not None:
+            paths.append(resolved)
+    return _dedupe_paths(paths)
+
+
+def _resolve_companion_artifact(value: Any, root: Path) -> Path | None:
+    if value is None:
+        return None
+    raw = str(value)
+    if not raw:
+        return None
+    candidate = Path(raw)
+    if candidate.exists() and candidate.is_file():
+        return candidate.resolve()
+    by_name = root / candidate.name
+    if by_name.exists() and by_name.is_file():
+        return by_name.resolve()
+    if not candidate.is_absolute() and not raw.startswith("/"):
+        relative = root / candidate
+        if relative.exists() and relative.is_file():
+            return relative.resolve()
+    return None
 
 
 def _looks_like_exportable_path(value: str) -> bool:
@@ -248,6 +291,8 @@ def _sanitize_value(value: Any, roots: dict[str, Path]) -> Any:
 def _sanitize_string(value: str, roots: dict[str, Path]) -> str:
     if not _looks_like_path_string(value):
         return value
+    if value.startswith("/"):
+        return f"${{external}}/{Path(value).name}"
     path = Path(value)
     if not path.is_absolute():
         return value.replace("\\", "/")
@@ -259,7 +304,7 @@ def _looks_like_path_string(value: str) -> bool:
         return False
     if value.startswith("${"):
         return False
-    return Path(value).is_absolute() or "/" in value or "\\" in value
+    return value.startswith("/") or Path(value).is_absolute() or "/" in value or "\\" in value
 
 
 def _sanitize_path(path: Path, roots: dict[str, Path]) -> str:
