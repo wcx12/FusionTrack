@@ -1501,6 +1501,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           <button type="button" class="secondary-button" id="exportViewJson" data-i18n="exportViewJson">Export view JSON</button>
           <button type="button" class="secondary-button" id="exportLeaderboardCsv" data-i18n="exportLeaderboardCsv">Export ranking CSV</button>
           <button type="button" class="secondary-button" id="exportSequenceJson" data-i18n="exportSequenceJson">Export sequence JSON</button>
+          <button type="button" class="secondary-button" id="exportPlaybackPng" data-i18n="exportPlaybackPng">Export frame PNG</button>
           <span id="exportStatus" class="export-status" role="status"></span>
         </div>
       </div>
@@ -1568,6 +1569,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       const exportViewJson = document.getElementById("exportViewJson");
       const exportLeaderboardCsv = document.getElementById("exportLeaderboardCsv");
       const exportSequenceJson = document.getElementById("exportSequenceJson");
+      const exportPlaybackPng = document.getElementById("exportPlaybackPng");
       const exportStatus = document.getElementById("exportStatus");
       const helpButton = document.getElementById("helpButton");
       const helpDialog = document.getElementById("helpDialog");
@@ -1763,7 +1765,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           exportViewJson: "Export view JSON",
           exportLeaderboardCsv: "Export ranking CSV",
           exportSequenceJson: "Export sequence JSON",
+          exportPlaybackPng: "Export frame PNG",
           exportDone: "Exported",
+          exportFailed: "Export failed",
           tabLeaderboard: "Method Ranking",
           tabTypes: "Anomaly-Type Analysis",
           tabCases: "Representative Cases",
@@ -2272,7 +2276,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         exportViewJson: "\u5bfc\u51fa\u5f53\u524d\u89c6\u56fe JSON",
         exportLeaderboardCsv: "\u5bfc\u51fa\u6392\u884c\u699c CSV",
         exportSequenceJson: "\u5bfc\u51fa\u5f53\u524d\u5e8f\u5217 JSON",
-        exportDone: "\u5df2\u5bfc\u51fa"
+        exportPlaybackPng: "\u5bfc\u51fa\u5f53\u524d\u753b\u9762 PNG",
+        exportDone: "\u5df2\u5bfc\u51fa",
+        exportFailed: "\u5bfc\u51fa\u5931\u8d25"
       }});
       Object.assign(translations.en, {{
         eventThresholdLabel: "Event threshold",
@@ -2544,8 +2550,21 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           .slice(0, 140) || "fusiontrack";
       }}
 
-      function downloadTextFile(filename, text, mimeType) {{
-        const blob = new Blob([text], {{ type: mimeType }});
+      function setExportStatus(message, timeout = 2400) {{
+        if (!exportStatus) {{
+          return;
+        }}
+        exportStatus.textContent = message || "";
+        if (message && timeout > 0) {{
+          window.setTimeout(() => {{
+            if (exportStatus && exportStatus.textContent === message) {{
+              exportStatus.textContent = "";
+            }}
+          }}, timeout);
+        }}
+      }}
+
+      function downloadBlobFile(filename, blob) {{
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -2554,14 +2573,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         link.click();
         link.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 500);
-        if (exportStatus) {{
-          exportStatus.textContent = `${{t("exportDone")}}: ${{link.download}}`;
-          window.setTimeout(() => {{
-            if (exportStatus) {{
-              exportStatus.textContent = "";
-            }}
-          }}, 2400);
-        }}
+        setExportStatus(`${{t("exportDone")}}: ${{link.download}}`);
+      }}
+
+      function downloadTextFile(filename, text, mimeType) {{
+        const blob = new Blob([text], {{ type: mimeType }});
+        downloadBlobFile(filename, blob);
       }}
 
       function csvValue(value) {{
@@ -2665,6 +2682,90 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }};
       }}
 
+      function canvasToPngBlob(canvas) {{
+        return new Promise((resolve, reject) => {{
+          if (!canvas || !canvas.width || !canvas.height) {{
+            reject(new Error("empty canvas"));
+            return;
+          }}
+          if (canvas.toBlob) {{
+            canvas.toBlob(blob => {{
+              if (blob) {{
+                resolve(blob);
+              }} else {{
+                reject(new Error("canvas export returned empty blob"));
+              }}
+            }}, "image/png");
+            return;
+          }}
+          try {{
+            const dataUrl = canvas.toDataURL("image/png");
+            const bytes = atob(dataUrl.split(",")[1] || "");
+            const buffer = new Uint8Array(bytes.length);
+            for (let index = 0; index < bytes.length; index += 1) {{
+              buffer[index] = bytes.charCodeAt(index);
+            }}
+            resolve(new Blob([buffer], {{ type: "image/png" }}));
+          }} catch (error) {{
+            reject(error);
+          }}
+        }});
+      }}
+
+      function playbackPngPanels(data) {{
+        if (!data) {{
+          return [];
+        }}
+        if (isRegistrationTask() || playbackMediaKind(data) === "registration_point_cloud") {{
+          return [{{ label: t("registrationPlaybackTitle"), canvas: canvases.registration }}];
+        }}
+        if (state.viewMode === "single") {{
+          const labelKey = state.layer === "both" ? "panelBoth" : state.layer === "heatmap" ? "panelHeatmap" : state.layer === "tracks" ? "panelTracks" : "panelOriginal";
+          return [{{ label: t(labelKey), canvas: canvases.single }}];
+        }}
+        return [
+          {{ label: t("panelOriginal"), canvas: canvases.original }},
+          {{ label: t("panelHeatmap"), canvas: canvases.heatmap }},
+          {{ label: t("panelTracks"), canvas: canvases.tracks }},
+          {{ label: t("panelBoth"), canvas: canvases.both }}
+        ].filter(item => item.canvas);
+      }}
+
+      function buildPlaybackPngCanvas() {{
+        const data = currentPlayback();
+        drawPlayback();
+        const panels = playbackPngPanels(data).filter(item => item.canvas && item.canvas.width && item.canvas.height);
+        if (!panels.length) {{
+          return null;
+        }}
+        if (panels.length === 1) {{
+          return panels[0].canvas;
+        }}
+        const cellWidth = Math.max(...panels.map(item => item.canvas.width || 0));
+        const cellHeight = Math.max(...panels.map(item => item.canvas.height || 0));
+        const gap = 18;
+        const labelHeight = 34;
+        const columns = 2;
+        const rows = Math.ceil(panels.length / columns);
+        const canvas = document.createElement("canvas");
+        canvas.width = columns * cellWidth + (columns - 1) * gap;
+        canvas.height = rows * (cellHeight + labelHeight) + (rows - 1) * gap;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.font = "600 18px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        ctx.fillStyle = "#0f172a";
+        panels.forEach((item, index) => {{
+          const column = index % columns;
+          const row = Math.floor(index / columns);
+          const x = column * (cellWidth + gap);
+          const y = row * (cellHeight + labelHeight + gap);
+          ctx.fillText(item.label, x + 2, y + 23);
+          ctx.drawImage(item.canvas, x, y + labelHeight, cellWidth, cellHeight);
+        }});
+        return canvas;
+      }}
+
       function updateExportControls() {{
         const task = taskData() || {{}};
         if (exportViewJson) {{
@@ -2675,6 +2776,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }}
         if (exportSequenceJson) {{
           exportSequenceJson.disabled = !currentPlayback();
+        }}
+        if (exportPlaybackPng) {{
+          exportPlaybackPng.disabled = !currentPlayback();
         }}
       }}
 
@@ -2691,6 +2795,18 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       function handleSequenceExport() {{
         const filename = `fusiontrack_${{state.task}}_${{state.method}}_${{state.sequence || "sequence"}}_sequence.json`;
         downloadTextFile(filename, JSON.stringify(buildCurrentSequenceExport(), null, 2), "application/json;charset=utf-8");
+      }}
+
+      async function handlePlaybackPngExport() {{
+        try {{
+          const canvas = buildPlaybackPngCanvas();
+          const blob = await canvasToPngBlob(canvas);
+          const mode = isRegistrationTask() ? "registration" : state.viewMode;
+          const filename = `fusiontrack_${{state.task}}_${{state.method}}_${{state.sequence || "sequence"}}_frame_${{state.frame}}_${{mode}}.png`;
+          downloadBlobFile(filename, blob);
+        }} catch (error) {{
+          setExportStatus(`${{t("exportFailed")}}: ${{error && error.message ? error.message : "PNG"}}`, 3600);
+        }}
       }}
 
       function frameEventScoresForWindow(row, frame = state.frame, window = state.heatWindow, threshold = state.eventThreshold) {{
@@ -5331,6 +5447,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       }}
       if (exportSequenceJson) {{
         exportSequenceJson.addEventListener("click", handleSequenceExport);
+      }}
+      if (exportPlaybackPng) {{
+        exportPlaybackPng.addEventListener("click", handlePlaybackPngExport);
       }}
       document.addEventListener("keydown", handlePlaybackKeydown);
       [canvases.heatmap, canvases.tracks, canvases.both, canvases.single].forEach(targetCanvas => {{

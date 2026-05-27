@@ -375,8 +375,11 @@ def test_final_results_dashboard_exposes_schema_diagnostics(tmp_path: Path) -> N
     assert "exportViewJson" in html
     assert "exportLeaderboardCsv" in html
     assert "exportSequenceJson" in html
+    assert "exportPlaybackPng" in html
     assert "fusiontrack_dashboard_view_export_v1" in html
     assert "rowsToCsv" in html
+    assert "buildPlaybackPngCanvas" in html
+    assert "handlePlaybackPngExport" in html
 
 
 def test_score_decomposition_reads_fused_metadata_sources_and_explicit_components() -> None:
