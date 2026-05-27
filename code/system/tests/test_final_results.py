@@ -502,7 +502,25 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
                 "dataset_name": "VT-Tiny-MOT",
                 "status": "ok",
                 "dataset_fingerprint": "fingerprint-for-test",
-                "splits": {"test": {"requested_split": "test"}},
+                "splits": {
+                    "test": {
+                        "requested_split": "test",
+                        "quality": {
+                            "status": "partial",
+                            "num_observation_keys": 3,
+                            "num_rgb_annotations": 2,
+                            "num_thermal_annotations": 2,
+                            "num_paired_annotations": 1,
+                            "num_missing_rgb_annotations": 1,
+                            "num_missing_thermal_annotations": 1,
+                            "rgb_annotation_coverage": 0.666667,
+                            "thermal_annotation_coverage": 0.666667,
+                            "paired_annotation_coverage": 0.333333,
+                            "modal_offset_mean": 5.0,
+                            "modal_offset_max": 5.0,
+                        },
+                    }
+                },
             },
             "dataset_manifest_path": tmp_path / "work" / "dataset_manifest_all.json",
             "final_results_root": final_root,
@@ -526,6 +544,8 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     provenance = dashboard_payload["provenance"]
     assert provenance["dataset"]["fingerprint"] == "fingerprint-for-test"
     assert provenance["dataset"]["status"] == "ok"
+    assert provenance["dataset"]["quality"]["num_observation_keys"] == 3
+    assert provenance["dataset"]["quality"]["rgb_annotation_coverage"] == 0.666667
     assert provenance["inputs"]["score_search_root_count"] == 2
     assert provenance["inputs"]["final_results_root"] == "final"
     assert provenance["inputs"]["registration_manifest"] == "manifest.json"
@@ -610,6 +630,8 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "renderTrackInsights" in html
     assert "renderDataFlowAudit" in html
     assert "renderProvenanceAudit" in html
+    assert "datasetQualityPanel" in html
+    assert "provenanceDatasetQuality" in html
     assert "provenancePanel" in html
     assert "provenanceDatasetFingerprint" in html
     assert "fingerprint-for-test" in html

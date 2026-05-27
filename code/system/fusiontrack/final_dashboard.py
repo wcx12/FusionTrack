@@ -75,16 +75,20 @@ def _build_public_provenance(provenance: dict[str, Any]) -> dict[str, Any]:
         "top_k": provenance.get("top_k"),
         "case_limit": provenance.get("case_limit"),
     }
+    dataset_public = {
+        "name": dataset_manifest.get("dataset_name"),
+        "status": dataset_manifest.get("status"),
+        "fingerprint": dataset_manifest.get("dataset_fingerprint"),
+        "splits": split_names,
+        "manifest": _public_path_hint(provenance.get("dataset_manifest_path")),
+    }
+    dataset_quality = _build_public_dataset_quality(splits)
+    if dataset_quality:
+        dataset_public["quality"] = dataset_quality
     public = {
         "mode": str(provenance.get("mode") or "final_results_dashboard"),
         "generated_at_utc": provenance.get("generated_at_utc"),
-        "dataset": {
-            "name": dataset_manifest.get("dataset_name"),
-            "status": dataset_manifest.get("status"),
-            "fingerprint": dataset_manifest.get("dataset_fingerprint"),
-            "splits": split_names,
-            "manifest": _public_path_hint(provenance.get("dataset_manifest_path")),
-        },
+        "dataset": dataset_public,
         "inputs": {
             "final_results_root": _public_path_hint(provenance.get("final_results_root")),
             "individual_label_file": _public_path_hint(provenance.get("individual_label_file")),
@@ -110,6 +114,85 @@ def _build_public_provenance(provenance: dict[str, Any]) -> dict[str, Any]:
     if holdout:
         public["holdout"] = holdout
     return public
+
+
+def _build_public_dataset_quality(splits: Any) -> dict[str, Any]:
+    if not isinstance(splits, dict):
+        return {}
+    rows: list[dict[str, Any]] = []
+    for split_name, split_payload in sorted(splits.items(), key=lambda item: str(item[0])):
+        if not isinstance(split_payload, dict):
+            continue
+        quality = split_payload.get("quality")
+        if not isinstance(quality, dict):
+            continue
+        rows.append(
+            {
+                "split": str(split_name),
+                "status": quality.get("status"),
+                "num_observation_keys": _int_or_zero(quality.get("num_observation_keys")),
+                "num_rgb_annotations": _int_or_zero(quality.get("num_rgb_annotations")),
+                "num_thermal_annotations": _int_or_zero(quality.get("num_thermal_annotations")),
+                "num_paired_annotations": _int_or_zero(quality.get("num_paired_annotations")),
+                "num_missing_rgb_annotations": _int_or_zero(quality.get("num_missing_rgb_annotations")),
+                "num_missing_thermal_annotations": _int_or_zero(quality.get("num_missing_thermal_annotations")),
+                "rgb_annotation_coverage": _float_or_zero(quality.get("rgb_annotation_coverage")),
+                "thermal_annotation_coverage": _float_or_zero(quality.get("thermal_annotation_coverage")),
+                "paired_annotation_coverage": _float_or_zero(quality.get("paired_annotation_coverage")),
+                "modal_offset_mean": _float_or_zero(quality.get("modal_offset_mean")),
+                "modal_offset_max": _float_or_zero(quality.get("modal_offset_max")),
+            }
+        )
+    if not rows:
+        return {}
+    observation_count = sum(row["num_observation_keys"] for row in rows)
+    paired_count = sum(row["num_paired_annotations"] for row in rows)
+    weighted_offsets = [
+        row["modal_offset_mean"] * row["num_paired_annotations"]
+        for row in rows
+        if row["num_paired_annotations"] > 0
+    ]
+    return {
+        "status": _aggregate_quality_status(rows),
+        "num_splits": len(rows),
+        "num_observation_keys": observation_count,
+        "num_rgb_annotations": sum(row["num_rgb_annotations"] for row in rows),
+        "num_thermal_annotations": sum(row["num_thermal_annotations"] for row in rows),
+        "num_paired_annotations": paired_count,
+        "num_missing_rgb_annotations": sum(row["num_missing_rgb_annotations"] for row in rows),
+        "num_missing_thermal_annotations": sum(row["num_missing_thermal_annotations"] for row in rows),
+        "rgb_annotation_coverage": _ratio(sum(row["num_rgb_annotations"] for row in rows), observation_count),
+        "thermal_annotation_coverage": _ratio(sum(row["num_thermal_annotations"] for row in rows), observation_count),
+        "paired_annotation_coverage": _ratio(paired_count, observation_count),
+        "modal_offset_mean": round(sum(weighted_offsets) / paired_count, 6) if paired_count else 0.0,
+        "modal_offset_max": max(row["modal_offset_max"] for row in rows),
+        "splits": rows,
+    }
+
+
+def _aggregate_quality_status(rows: list[dict[str, Any]]) -> str:
+    statuses = {str(row.get("status") or "") for row in rows}
+    if "partial" in statuses:
+        return "partial"
+    if "missing" in statuses:
+        return "missing"
+    return "ok"
+
+
+def _int_or_zero(value: Any) -> int:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _float_or_zero(value: Any) -> float:
+    number = _float_or_none(value)
+    return 0.0 if number is None else number
+
+
+def _ratio(numerator: int, denominator: int) -> float:
+    return round(float(numerator) / float(denominator), 6) if denominator else 0.0
 
 
 def _build_public_suite_provenance(
@@ -1916,6 +1999,14 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         provenanceDatasetStatus: "Dataset status",
         provenanceDatasetFingerprint: "Dataset fingerprint",
         provenanceDatasetManifest: "Dataset manifest",
+        provenanceDatasetQuality: "Dataset modality quality",
+        datasetQualitySplits: "Quality splits",
+        datasetQualityObservationKeys: "Observation keys",
+        datasetQualityPaired: "Paired RGB/Thermal",
+        datasetQualityMissingRgb: "Missing RGB",
+        datasetQualityMissingThermal: "Missing thermal",
+        datasetQualityPairCoverage: "Pair coverage",
+        datasetQualitySplit: "Split",
         provenanceFinalResults: "Final results root",
         provenanceLabelFiles: "Label files",
         provenanceScoreRoots: "Score search roots",
@@ -1953,6 +2044,16 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         windowEventSource: "证据来源",
         windowEventSourceModel: "逐帧模型输出",
         windowEventSourceSegment: "事件段/协议段回退"
+      }});
+      Object.assign(translations.zh, {{
+        provenanceDatasetQuality: "数据集多模态质量",
+        datasetQualitySplits: "质量 split 数",
+        datasetQualityObservationKeys: "观测键数量",
+        datasetQualityPaired: "RGB/Thermal 配对",
+        datasetQualityMissingRgb: "缺失 RGB",
+        datasetQualityMissingThermal: "缺失 Thermal",
+        datasetQualityPairCoverage: "配对覆盖率",
+        datasetQualitySplit: "Split"
       }});
       Object.assign(translations.en, {{
         eventThresholdLabel: "Event threshold",
@@ -3375,6 +3476,64 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         `;
       }}
 
+      function renderDatasetQualityPanel(quality, missing) {{
+        if (!quality || !Object.keys(quality).length) {{
+          return "";
+        }}
+        const rows = Array.isArray(quality.splits) ? quality.splits : [];
+        const qualityStatusMeta = (status) => {{
+          if (status === "ok") {{
+            return {{ label: t("dataFlowOk"), cls: "ok" }};
+          }}
+          if (status === "missing") {{
+            return {{ label: t("dataFlowMissing"), cls: "missing" }};
+          }}
+          return {{ label: t("dataFlowPartial"), cls: "partial" }};
+        }};
+        const status = qualityStatusMeta(quality.status || "missing");
+        const cards = [
+          [t("datasetQualitySplits"), quality.num_splits ?? rows.length],
+          [t("datasetQualityObservationKeys"), quality.num_observation_keys ?? 0],
+          [t("datasetQualityPaired"), quality.num_paired_annotations ?? 0],
+          [t("datasetQualityMissingRgb"), quality.num_missing_rgb_annotations ?? 0],
+          [t("datasetQualityMissingThermal"), quality.num_missing_thermal_annotations ?? 0],
+          [t("datasetQualityPairCoverage"), pct(quality.paired_annotation_coverage || 0)],
+          [t("dataFlowAvgOffset"), fmt(quality.modal_offset_mean || 0)],
+          [t("dataFlowBackgroundStatus"), status.label],
+        ];
+        const splitRows = rows.map(row => {{
+          const rowStatus = qualityStatusMeta(row.status || "missing");
+          return `
+            <tr>
+              <td><strong>${{esc(row.split || missing)}}</strong></td>
+              <td><span class="status-pill ${{rowStatus.cls}}">${{rowStatus.label}}</span></td>
+              <td class="metric">${{row.num_observation_keys ?? 0}}</td>
+              <td class="metric">${{row.num_paired_annotations ?? 0}}</td>
+              <td class="metric">${{pct(row.rgb_annotation_coverage || 0)}}</td>
+              <td class="metric">${{pct(row.thermal_annotation_coverage || 0)}}</td>
+              <td class="metric">${{Number(row.num_missing_rgb_annotations || 0) + Number(row.num_missing_thermal_annotations || 0)}}</td>
+              <td class="metric">${{fmt(row.modal_offset_mean || 0)}}</td>
+            </tr>
+          `;
+        }}).join("");
+        return `
+          <div id="datasetQualityPanel" class="provenance-subsection">
+            <h4>${{t("provenanceDatasetQuality")}}</h4>
+            <div class="data-flow-grid">
+              ${{cards.map(([label, value]) => `<div class="data-flow-card"><span>${{label}}</span><strong>${{value}}</strong></div>`).join("")}}
+            </div>
+            ${{splitRows ? `
+              <div class="table-scroll" style="margin-top: 10px;">
+                <table class="leaderboard">
+                  <thead><tr><th>${{t("datasetQualitySplit")}}</th><th>${{t("statusHeader")}}</th><th class="metric">${{t("datasetQualityObservationKeys")}}</th><th class="metric">${{t("datasetQualityPaired")}}</th><th class="metric">${{t("dataFlowRgbCoverage")}}</th><th class="metric">${{t("dataFlowThermalCoverage")}}</th><th class="metric">${{t("dataFlowMissingModalities")}}</th><th class="metric">${{t("dataFlowAvgOffset")}}</th></tr></thead>
+                  <tbody>${{splitRows}}</tbody>
+                </table>
+              </div>
+            ` : ""}}
+          </div>
+        `;
+      }}
+
       function renderProvenanceAudit() {{
         const provenance = dashboard.provenance || {{}};
         const dataset = provenance.dataset || {{}};
@@ -3427,6 +3586,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
                 </div>
               `).join("")}}
             </div>
+            ${{renderDatasetQualityPanel(dataset.quality, missing)}}
             ${{renderHoldoutPanel(holdout, missing)}}
           </div>
         `;
