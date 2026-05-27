@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from evaluation.tables import (
     build_latex_table,
+    build_markdown_table,
     export_report_tables,
     filter_rows,
     rank_rows,
@@ -59,6 +60,42 @@ def test_rank_rows_sorts_empty_metric_last_and_latex_renders_empty_as_dash() -> 
     assert [row["method"] for row in ranked] == ["high", "low", "missing", "not_finite"]
     assert "missing & -- & --" in table
     assert "not\\_finite & -- & --" in table
+
+
+def test_tables_render_holdout_aggregate_mean_and_std() -> None:
+    rows = [
+        {
+            "level": "individual",
+            "method": "fusiontrack_individual",
+            "task": "individual",
+            "auprc_mean": "0.20",
+            "auprc_std": "0.03",
+            "auroc_mean": "0.70",
+            "auroc_std": "0.02",
+            "f1_mean": "0.40",
+            "f1_std": "0.01",
+        },
+        {
+            "level": "individual",
+            "method": "individual_lof",
+            "task": "individual",
+            "auprc_mean": "0.18",
+            "auprc_std": "0.01",
+            "auroc_mean": "0.72",
+            "auroc_std": "0.04",
+            "f1_mean": "0.36",
+            "f1_std": "0.02",
+        },
+    ]
+
+    ranked = rank_rows(rows, metric="auprc")
+    markdown = build_markdown_table(rows, metric="auprc")
+    latex = build_latex_table(rows, metric="auprc")
+
+    assert [row["method"] for row in ranked] == ["fusiontrack_individual", "individual_lof"]
+    assert "0.2000 +/- 0.0300" in markdown
+    assert r"\textbf{0.2000 $\pm$ 0.0300}" in latex
+    assert "0.7200 $\\pm$ 0.0400" in latex
 
 
 def test_filter_rows_infers_individual_and_group_from_task_or_method() -> None:

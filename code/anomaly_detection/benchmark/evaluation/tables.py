@@ -50,7 +50,7 @@ def filter_rows(rows: Iterable[dict[str, Any]], level: str | None = None) -> lis
 
 def rank_rows(rows: Iterable[dict[str, Any]], metric: str = "auprc") -> list[dict[str, Any]]:
     def sort_key(row: dict[str, Any]) -> tuple[bool, float]:
-        value = _metric_value(row.get(metric))
+        value = _row_metric_value(row, metric)
         return value is not None, value if value is not None else float("-inf")
 
     return sorted(
@@ -97,7 +97,7 @@ def build_latex_table(
                 key,
                 bold=key == metric
                 and best_metric is not None
-                and _metric_value(row.get(metric)) == best_metric,
+                and _row_metric_value(row, metric) == best_metric,
             )
             for key, _ in TABLE_COLUMNS
         ]
@@ -208,7 +208,7 @@ def _metric_value(value: Any) -> float | None:
 
 
 def _best_metric_value(rows: Iterable[dict[str, Any]], metric: str) -> float | None:
-    values = [_metric_value(row.get(metric)) for row in rows]
+    values = [_row_metric_value(row, metric) for row in rows]
     valid_values = [value for value in values if value is not None]
     return max(valid_values) if valid_values else None
 
@@ -216,16 +216,28 @@ def _best_metric_value(rows: Iterable[dict[str, Any]], metric: str) -> float | N
 def _markdown_cell(row: dict[str, Any], key: str) -> str:
     if key == "method":
         return str(row.get(key) or "--")
-    return _format_number(_row_value(row, key))
+    return _format_metric_cell(row, key, latex=False)
 
 
 def _latex_cell(row: dict[str, Any], key: str, bold: bool = False) -> str:
     if key == "method":
         return _latex_escape(str(row.get(key) or "--"))
-    value = _format_number(_row_value(row, key))
+    value = _format_metric_cell(row, key, latex=True)
     if bold and value != "--":
         return rf"\textbf{{{value}}}"
     return value
+
+
+def _format_metric_cell(row: dict[str, Any], key: str, latex: bool) -> str:
+    value = _row_metric_value(row, key)
+    if value is None:
+        return "--"
+    std_value = _row_metric_std(row, key)
+    formatted = _format_number(value)
+    if std_value is None:
+        return formatted
+    separator = r" $\pm$ " if latex else " +/- "
+    return f"{formatted}{separator}{_format_number(std_value)}"
 
 
 def _format_number(value: Any) -> str:
@@ -239,6 +251,26 @@ def _row_value(row: dict[str, Any], key: str) -> Any:
     if key == "best_f1" and key not in row:
         return row.get("f1")
     return row.get(key)
+
+
+def _row_metric_value(row: dict[str, Any], key: str) -> float | None:
+    value = _metric_value(_row_value(row, key))
+    if value is not None:
+        return value
+    return _metric_value(_row_aggregate_value(row, key, "mean"))
+
+
+def _row_metric_std(row: dict[str, Any], key: str) -> float | None:
+    return _metric_value(_row_aggregate_value(row, key, "std"))
+
+
+def _row_aggregate_value(row: dict[str, Any], key: str, suffix: str) -> Any:
+    field = f"{key}_{suffix}"
+    if field in row:
+        return row.get(field)
+    if key == "best_f1":
+        return row.get(f"f1_{suffix}")
+    return None
 
 
 def _latex_escape(value: str) -> str:
