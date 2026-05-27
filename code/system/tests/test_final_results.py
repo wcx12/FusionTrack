@@ -125,6 +125,7 @@ def _build_small_final_result_tree(tmp_path: Path) -> tuple[Path, Path, Path, Pa
                 "track_id": "2",
                 "score": 0.75,
                 "event_score": 0.8,
+                "component_scores": {"graph_leave": 0.8},
                 "event_segments": [{"frame_start": 4, "frame_end": 8, "score": 0.8, "dominant_reason": "leave"}],
                 "frame_event_scores": [
                     {"frame": 1, "score": 0.0, "dominant_reason": "object_group"},
@@ -590,6 +591,9 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     ]
     assert group_components["frame_event_scores"][1]["frame"] == 8
     assert group_components["frame_event_scores"][1]["dominant_reason"] == "leave"
+    assert group_components["explanation_schema"]["top_reason"] == "leave"
+    assert group_components["explanation_schema"]["evidence_source"] == "event_segments"
+    assert group_components["explanation_schema"]["score_components"][0]["name"] == "graph_leave"
     derived_components = group_tracks["G1:1"]["task_score_components"]["group"]["group_prediction_linear"]
     assert derived_components["event_segments"] == [
         {
@@ -601,6 +605,8 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
             "component_scores": {"graph_dispersion": 0.55},
         }
     ]
+    assert derived_components["explanation_schema"]["top_reason"] == "dispersion"
+    assert derived_components["explanation_schema"]["evidence_source"] == "frame_event_scores"
     assert group_tracks["G1:1"]["task_labels"]["group"]["label"] == 1
     assert "FusionTrack 最终结果看板" in html
     assert "总标签数" in html
@@ -633,6 +639,7 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "renderProtocolOverview" in html
     assert "renderMethodStatus" in html
     assert "renderTrackInsights" in html
+    assert "explanationSchemaReason" in html
     assert "renderDataFlowAudit" in html
     assert "renderProvenanceAudit" in html
     assert "datasetQualityPanel" in html

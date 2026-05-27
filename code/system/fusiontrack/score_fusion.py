@@ -7,6 +7,7 @@ from statistics import median
 from typing import Any
 
 from fusiontrack.event_segments import event_segments_from_frame_scores, normalize_frame_event_scores
+from fusiontrack.explanation_schema import build_explanation_schema
 
 
 EPSILON = 1e-6
@@ -154,6 +155,15 @@ def fuse_score_records(
             + _source_frame_event_scores("group", group)
         )
         frame_event_scores.sort(key=lambda item: (int(item["frame"]), item["source"]))
+        explanation_schema = build_explanation_schema(
+            {
+                "score": score,
+                "event_score": s_event,
+                "event_segments": event_segments,
+                "frame_event_scores": frame_event_scores,
+                "component_scores": component_scores,
+            }
+        )
 
         fused_records.append(
             {
@@ -168,6 +178,7 @@ def fuse_score_records(
                 "event_segments": event_segments,
                 "frame_event_scores": frame_event_scores,
                 "component_scores": component_scores,
+                "explanation_schema": explanation_schema,
                 "metadata": {
                     "alpha": alpha,
                     "used_sources": used_sources,

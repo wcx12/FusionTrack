@@ -19,6 +19,7 @@
 - `code/system/fusiontrack/visualization.py`：轨迹、背景帧和基础可视化工具。
 - `code/system/fusiontrack/registration_adapter.py`：配准实验结果接入 dashboard。
 - `code/system/fusiontrack/final_results.py`：最终结果表、排行榜、case 和方法分类汇总。
+- `code/system/fusiontrack/explanation_schema.py`：后端解释 schema，统一输出主导原因、证据来源、事件阈值策略和分数分量。
 - `code/system/fusiontrack/dataset_manifest.py`：生成数据集结构、annotation hash、图像目录计数和数据集指纹。
 - `code/system/fusiontrack/method_registry.py`：读取和校验中心方法注册表。
 - `code/anomaly_detection/benchmark/configs/method_registry.json`：中心方法注册表，是方法归属、角色、方法族、学习类型、来源类型和接入状态的权威来源。
@@ -165,6 +166,7 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 - `event_score`：当前轨迹或对象的事件级最高风险分数。
 - `event_segments`：算法侧已经合并好的事件段，包含 `frame_start`、`frame_end`、`score` 和主导原因。
 - `frame_event_scores`：逐帧事件证据序列，包含帧号、逐帧分数、主导原因和分量分数。
+- `explanation_schema`：后端生成的稳定解释结构，包含 `top_reason`、`evidence_source`、`policy`、`peak_event` 和 `score_components`。
 
 事件段合并现在由 `code/system/fusiontrack/event_segments.py` 统一处理：
 
@@ -173,7 +175,9 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 
 如果方法已经输出 `event_segments`，页面会直接使用该字段绘制预测事件段。如果方法只输出 `frame_event_scores`，`score_fusion.py` 和 `final_dashboard.py` 会先在后端合并生成 `event_segments`；前端的 `eventSegmentsFromFrameScores()` 只保留为兼容旧数据的兜底逻辑。这样可以让热力时间窗口、事件时间线、右侧解释面板和导出的 score JSONL 围绕同一份逐帧证据工作。
 
-当前群体图打分方法已经输出 `frame_event_scores` 和 `event_segments`；后续 individual route/speed/shape 分支也应采用相同字段接入。
+`explanation_schema.py` 会在后端统一确定解释主因：优先使用峰值事件段的 `dominant_reason`，没有事件证据时回退到分数分量中贡献最大的组件。该 schema 同时记录事件阈值、最大合并间隔、最小事件长度等策略字段，因此前端解释面板不再需要自行猜测 top reason，只负责把后端解释结构渲染出来。
+
+当前群体图打分方法已经输出 `frame_event_scores` 和 `event_segments`；后续 individual route/speed/shape 分支也应采用相同字段接入，并尽量直接输出或复用统一的 `explanation_schema`。
 
 融合分数 row 也会保留这些事件字段，并在 `component_scores` 中补充：
 
@@ -181,6 +185,7 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 - `S_grp`：归一化后的 group 分支分数。
 - `S_event`：来自 individual/group 事件证据的最高事件分数。
 - `S_fused`：最终融合分数。
+- `explanation_schema`：融合 row 的后端解释结果，供最终 dashboard 的分数分解条、事件时间线和解释面板共用。
 
 最终 dashboard 会优先读取这些显式 `S_*` 字段；来源判断同时支持顶层 `used_sources` 和 `metadata.used_sources`，因此 `score_fusion.py` 导出的融合 JSONL 可以直接驱动网页分数分解条。
 
@@ -270,10 +275,10 @@ python code/system/run_fusiontrack.py \
 修改网页后至少运行：
 
 ```bash
-python -m py_compile code/system/fusiontrack/final_dashboard.py
+python -m py_compile code/system/fusiontrack/final_dashboard.py code/system/fusiontrack/explanation_schema.py
 python -m py_compile code/system/fusiontrack/final_results.py code/system/fusiontrack/method_registry.py code/system/fusiontrack/dataset_manifest.py
 python -m py_compile code/system/tools/build_sample_dashboard.py code/system/tools/publish_dashboard_pages.py code/system/tools/build_dashboard_release.py
-python -c "import collections, collections.abc; collections.Callable = collections.abc.Callable; import pytest, sys; sys.exit(pytest.main(['code/system/tests/test_dataset_manifest.py', 'code/system/tests/test_method_registry.py', 'code/system/tests/test_final_results.py', 'code/system/tests/test_pipeline.py', '-q']))"
+python -c "import collections, collections.abc; collections.Callable = collections.abc.Callable; import pytest, sys; sys.exit(pytest.main(['code/system/tests/test_explanation_schema.py', 'code/system/tests/test_dataset_manifest.py', 'code/system/tests/test_method_registry.py', 'code/system/tests/test_final_results.py', 'code/system/tests/test_pipeline.py', '-q']))"
 ```
 
 仓库还提供了 `.github/workflows/system-ci.yml`，当 `code/system/**`、中心方法注册表或该 workflow 自身变更时，会在 GitHub Actions 中自动执行：

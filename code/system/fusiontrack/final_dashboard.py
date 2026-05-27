@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fusiontrack.event_segments import event_segments_from_frame_scores, normalize_frame_event_scores
+from fusiontrack.explanation_schema import build_explanation_schema
 from fusiontrack.final_results import FinalResultsDashboard
 from fusiontrack.visualization import (
     _copy_background_asset,
@@ -1038,6 +1039,17 @@ def _score_component_payload(method_rows: dict[str, Any]) -> dict[str, Any]:
     event_score = method_rows.get("event_score")
     if event_score is None:
         event_score = max((float(row.get("score", 0.0) or 0.0) for row in frame_event_scores), default=0.0)
+    explanation_schema = method_rows.get("explanation_schema")
+    if not isinstance(explanation_schema, dict):
+        explanation_row = {
+            "score": method_rows.get("score", 0.0),
+            "event_score": event_score,
+            "frame_event_scores": frame_event_scores,
+            "component_scores": method_rows.get("component_scores", {}),
+        }
+        if raw_event_segments:
+            explanation_row["event_segments"] = event_segments
+        explanation_schema = build_explanation_schema(explanation_row)
     return {
         "score": round(float(method_rows.get("score", 0.0) or 0.0), 6),
         "used_sources": str(method_rows.get("used_sources", "")),
@@ -1046,6 +1058,7 @@ def _score_component_payload(method_rows: dict[str, Any]) -> dict[str, Any]:
         "event_segments": event_segments,
         "frame_event_scores": frame_event_scores,
         "component_scores": method_rows.get("component_scores", {}),
+        "explanation_schema": explanation_schema,
         "metadata": method_rows.get("metadata", {}),
         "rotation_error_deg": method_rows.get("rotation_error_deg"),
         "translation_error": method_rows.get("translation_error"),
@@ -3671,13 +3684,28 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         const label = trackLabel(track);
         const typeName = String(label.anomaly_type || "normal");
         const base = typeName !== "normal" ? anomalyDescription(typeName) : (state.language === "zh" ? "当前轨迹未被协议标为正样本，若分数较高则属于候选误报或模型认为的高风险轨迹。" : "This track is not labeled positive by the protocol; a high score means a candidate false positive or high-risk model output.");
+        const backend = explanationSchemaReason(track);
         const motion = state.language === "zh"
           ? `运动证据：轨迹长度 ${{fmt(stats.length)}}，平均速度 ${{fmt(stats.avgSpeed)}}，首尾位移 ${{fmt(stats.displacement)}}。`
           : `Motion evidence: path length ${{fmt(stats.length)}}, mean speed ${{fmt(stats.avgSpeed)}}, displacement ${{fmt(stats.displacement)}}.`;
         const group = state.task === "group"
           ? (state.language === "zh" ? `群体证据：当前帧邻近对象 ${{groupStats.neighbors.length}} 个，群体半径 ${{fmt(groupStats.radius)}}。` : `Group evidence: ${{groupStats.neighbors.length}} nearby objects at the current frame, group radius ${{fmt(groupStats.radius)}}.`)
           : "";
-        return [base, motion, group].filter(Boolean).join(" ");
+        return [base, backend, motion, group].filter(Boolean).join(" ");
+      }}
+
+      function explanationSchemaReason(track) {{
+        const schema = (selectedTrackScoreComponents(track) || {{}}).explanation_schema || {{}};
+        if (!schema.top_reason) {{
+          return "";
+        }}
+        const policy = schema.policy || {{}};
+        const components = Array.isArray(schema.score_components)
+          ? schema.score_components.slice(0, 3).map(item => `${{item.name}}=${{fmt(item.value)}}`).join(", ")
+          : "";
+        return state.language === "zh"
+          ? `后端解释：主因 ${{schema.top_reason}}，证据来源 ${{schema.evidence_source || "-"}}，事件阈值 ${{policy.event_threshold ?? "-"}}。${{components ? `主要分量：${{components}}。` : ""}}`
+          : `Backend explanation: top reason ${{schema.top_reason}}, evidence source ${{schema.evidence_source || "-"}}, event threshold ${{policy.event_threshold ?? "-"}}.${{components ? ` Top components: ${{components}}.` : ""}}`;
       }}
 
       function renderTrackInsights(ranked) {{

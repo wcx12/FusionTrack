@@ -54,19 +54,19 @@
 
 - Individual 分支（route/speed/shape）：✅（基础闭环）
   现状：`fusiontrack/individual_scoring.py` 已为 nearest 与 ensemble score rows 统一输出 `route_score`、`speed_score`、`speed_slowdown_score`、`jump_score`、`shape_score`、`route_shape_score` 和 `modal_offset_score`；这些字段写入 `component_scores`，dashboard 子模块解释面板可直接读取，metadata 记录 schema 版本和分量对应的 feature columns。
-  下一步：后续可把分量阈值和 top reason 文案进一步从前端规则迁移为后端事件解释输出。
+  下一步：后续可把 individual 各分支的事件阈值按验证集重新标定，并让方法侧直接写出逐帧 `frame_event_scores`。
 
 - Group 分支（群体结构与事件）：✅（基础闭环）
   现状：`fusiontrack/group_scoring.py` 已输出 `event_score`、`event_segments`、`frame_event_scores` 与群体图结构分量；`fusiontrack/group_temporal_profile.py` 已在 `fusiontrack_group_hybrid` score rows 中透传 `graph_leave`、`graph_motion`、`graph_neighbor`、`graph_count`、`graph_dispersion`、`graph_split_merge`、`graph_object_group`、`graph_group_event`，并通过 `metadata.score_sources` 记录 prediction / graph / temporal_profile 三个子分支的原始分数和组件来源。
-  下一步：后续把 group top reason 文案和事件段阈值策略进一步固化为后端 explanation schema。
+  下一步：后续可继续细化不同群体异常类型的阈值、持续时间和分量解释文案。
 
 - 个体-群体融合：✅（基础闭环）
-  现状：`code/system/fusiontrack/score_fusion.py` 已把 individual/group score rows 融合为统一 JSONL/CSV，输出 `S_ind`、`S_grp`、`S_event`、`S_fused`，并合并 `event_segments` 与 `frame_event_scores`；`final_dashboard.py` 已在 `task_score_decomposition` 中读取顶层 `used_sources`、`metadata.used_sources` 和显式 `component_scores.S_*`，确保网页分数分解条与导出 score JSONL 使用同一条融合解释链。
-  下一步：后续可把融合权重、事件阈值和 top reason 策略提升为统一 explanation schema。
+  现状：`code/system/fusiontrack/score_fusion.py` 已把 individual/group score rows 融合为统一 JSONL/CSV，输出 `S_ind`、`S_grp`、`S_event`、`S_fused`，并合并 `event_segments`、`frame_event_scores` 与 `explanation_schema`；`final_dashboard.py` 已在 `task_score_decomposition` 中读取顶层 `used_sources`、`metadata.used_sources`、显式 `component_scores.S_*` 和后端解释 schema，确保网页分数分解条、解释面板与导出 score JSONL 使用同一条融合解释链。
+  下一步：后续可把融合权重和事件阈值按实验配置显式写入 run manifest，方便不同实验批次对比。
 
 - 事件段生成与平滑：✅（基础闭环）
-  现状：`code/system/fusiontrack/event_segments.py` 已提供统一的 `frame_event_scores` 标准化、阈值过滤、小间隔合并和事件段输出；`score_fusion.py` 与 `final_dashboard.py` 已接入该工具，方法只输出逐帧事件分数时也会在后端生成 `event_segments`。
-  下一步：把阈值、最大间隔和 top reason 文案提升为可配置 explanation schema。
+  现状：`code/system/fusiontrack/event_segments.py` 已提供统一的 `frame_event_scores` 标准化、阈值过滤、小间隔合并和事件段输出；`score_fusion.py` 与 `final_dashboard.py` 已接入该工具，方法只输出逐帧事件分数时也会在后端生成 `event_segments`。新增 `code/system/fusiontrack/explanation_schema.py` 后，阈值、最大间隔、最小长度、峰值事件、证据来源和 top reason 已统一落入后端解释 schema。
+  下一步：后续可把 explanation schema 的默认阈值从当前保守默认值迁移到配置文件或方法注册表。
 
 ### D. 评测与治理层
 
@@ -102,8 +102,8 @@
   下一步：后续可把阈值策略进一步沉淀为后端 explanation schema。
 
 - 事件可解释说明：✅（基础闭环）
-  现状：解释面板已展示窗口范围、证据来源、峰值事件分数、主导原因、命中帧数和分量证据；当方法缺少逐帧事件分数时，会回退到事件段/协议段证据。
-  下一步：后续把 top reason 文案和阈值策略继续后端化，减少前端兜底规则。
+  现状：解释面板已展示窗口范围、证据来源、峰值事件分数、主导原因、命中帧数和分量证据；当方法缺少逐帧事件分数时，会回退到事件段/协议段证据。当前页面还会读取 `explanation_schema`，展示后端判定的主因、证据来源、事件阈值和主要分量。
+  下一步：后续可把异常类型中文释义也下沉到 schema 或方法注册表，让前端只做纯展示。
 
 - 导出能力（json/csv/png）：✅（json/csv 基础闭环）
   现状：审计版页面已支持当前视图 JSON、排行榜 CSV、当前序列 JSON 导出；系统构建命令也支持导出静态报告 zip 包。
@@ -245,3 +245,11 @@
 - 最终 dashboard 的 provenance 新增 `protocols` 字段，公开展示协议数量、任务列表、总标签数、异常标签数、异常类型、seed、schema version 和 dataset fingerprint。
 - 数据流审计面板新增异常协议 manifest 表，答辩时可以直接说明当前 Individual / Group 异常标签来自哪份 synthetic injection 协议。
 - `build_analysis_export_package()` 会把 protocol manifest 归档到 `artifacts/protocol_root/`，并继续脱敏其中的数据集路径。
+
+## 2026-05-28 更新：后端 explanation schema
+
+- 新增 `code/system/fusiontrack/explanation_schema.py`，统一生成 `schema_version`、`top_reason`、`evidence_source`、`policy`、`peak_event` 和 `score_components`。
+- `score_fusion.py` 在输出融合 score row 时同步写入 `explanation_schema`，把融合分数、事件峰值、事件段和分量证据绑定在同一条记录里。
+- `final_dashboard.py` 在构建播放 payload 时会优先读取已有 `explanation_schema`；旧方法缺少该字段时，后端会根据 `event_segments` 或 `frame_event_scores` 自动补齐解释结构。
+- 前端解释面板现在展示后端给出的主因、证据来源、事件阈值和主要分量，前端规则只保留为兼容旧数据的兜底逻辑。
+- 新增 `test_explanation_schema.py`，并扩展融合输出与最终 dashboard 测试，覆盖事件主因优先、分量回退、事件来源区分和页面函数接入。

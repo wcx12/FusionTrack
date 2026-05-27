@@ -84,6 +84,10 @@ def test_score_fusion_combines_and_falls_back(tmp_path: Path) -> None:
     assert "group_leave" in by_id["S1:2"]["component_scores"]
     assert {"S_ind", "S_grp", "S_event", "S_fused"} <= set(by_id["S1:2"]["component_scores"])
     assert by_id["S1:2"]["event_score"] == 0.9
+    assert by_id["S1:2"]["explanation_schema"]["schema_version"] == 1
+    assert by_id["S1:2"]["explanation_schema"]["top_reason"] == "leave"
+    assert by_id["S1:2"]["explanation_schema"]["evidence_source"] == "event_segments"
+    assert by_id["S1:2"]["explanation_schema"]["policy"]["event_threshold"] == 0.0
     assert [segment["source"] for segment in by_id["S1:2"]["event_segments"]] == ["individual", "group"]
     assert [item["frame"] for item in by_id["S1:2"]["frame_event_scores"]] == [2, 3]
     assert by_id["S1:2"]["frame_event_scores"][1]["source"] == "group"
