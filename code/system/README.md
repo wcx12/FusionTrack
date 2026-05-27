@@ -39,6 +39,8 @@ python code/system/run_fusiontrack.py \
   --top-sequences 3
 ```
 
+如果配置中提供 `registration_benchmark_summary`，系统会先用该 benchmark summary 重新生成 `registration_scores/`、`registration_metrics/` 和 `registration_artifacts/registration_experiment_manifest.json`，再构建最终 dashboard。这样可以保证 Registration 页面使用最新适配器字段，例如 `metadata.registration_point_source`，不会误用旧的 registration manifest。
+
 常见生成产物：
 
 - `server_artifacts/remote_result/report/index.html`

@@ -197,14 +197,13 @@ def main() -> None:
             raise SystemExit("--individual-label-file and --group-label-file are required with --final-results-root")
         registration_manifest = args.registration_manifest
         registration_fused_jsonl = args.registration_fused_jsonl
-        if args.registration_benchmark_summary is not None and registration_manifest is None:
+        if args.registration_benchmark_summary is not None:
             bundle = build_registration_experiment_bundle(
                 summary_path=args.registration_benchmark_summary,
                 work_root=paths.work_root,
             )
             registration_manifest = Path(bundle["manifest_path"])
-            if registration_fused_jsonl is None:
-                registration_fused_jsonl = Path(bundle["fused_jsonl"])
+            registration_fused_jsonl = Path(bundle["fused_jsonl"])
         default_root = args.final_results_root.parent
         score_roots = list(args.score_search_root) if args.score_search_root else [default_root]
         if registration_manifest is not None and paths.work_root is not None:

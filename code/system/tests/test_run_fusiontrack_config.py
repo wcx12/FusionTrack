@@ -18,6 +18,9 @@ def test_run_config_resolves_relative_paths_against_base_dir(tmp_path: Path) -> 
                 "final_results_root": "server_artifacts/final_results",
                 "individual_label_file": "labels/individual.jsonl",
                 "group_label_file": "labels/group.jsonl",
+                "registration_benchmark_summary": "registration/baseline_summary.json",
+                "registration_manifest": "registration/registration_manifest.json",
+                "registration_fused_jsonl": "registration/registration_fused.jsonl",
                 "fused_jsonl": "runs/final/fused.jsonl",
                 "score_search_roots": ["scores/a", "scores/b"],
                 "protocol_manifests": ["protocols/individual_manifest.json", "protocols/group_manifest.json"],
@@ -36,6 +39,9 @@ def test_run_config_resolves_relative_paths_against_base_dir(tmp_path: Path) -> 
     assert args.final_results_root == tmp_path / "server_artifacts" / "final_results"
     assert args.individual_label_file == tmp_path / "labels" / "individual.jsonl"
     assert args.group_label_file == tmp_path / "labels" / "group.jsonl"
+    assert args.registration_benchmark_summary == tmp_path / "registration" / "baseline_summary.json"
+    assert args.registration_manifest == tmp_path / "registration" / "registration_manifest.json"
+    assert args.registration_fused_jsonl == tmp_path / "registration" / "registration_fused.jsonl"
     assert args.fused_jsonl == tmp_path / "runs" / "final" / "fused.jsonl"
     assert args.score_search_root == [tmp_path / "scores" / "a", tmp_path / "scores" / "b"]
     assert args.protocol_manifest == [
