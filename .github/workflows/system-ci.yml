@@ -37,7 +37,10 @@ jobs:
             code/system/fusiontrack/final_dashboard.py \
             code/system/fusiontrack/final_results.py \
             code/system/fusiontrack/method_registry.py \
-            code/system/fusiontrack/dataset_manifest.py
+            code/system/fusiontrack/dataset_manifest.py \
+            code/system/tools/build_sample_dashboard.py \
+            code/system/tools/publish_dashboard_pages.py \
+            code/system/tools/build_dashboard_release.py
 
       - name: Validate method registry
         run: |

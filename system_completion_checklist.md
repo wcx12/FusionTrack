@@ -112,16 +112,16 @@
 ### F. 部署与交付层
 
 - 一键构建与页面发布：✅（基础闭环）
-  现状：可构建并已发布；`run_fusiontrack.py` 新增 `--run-config` 配置入口，可用 `code/system/configs/final_dashboard.local.example.json` 固化最终 dashboard 的长命令，配置内路径均可使用相对路径；本地 `server_artifacts/remote_result/report` 已重新生成，`final_playback_data.json` 的背景引用与回退引用均通过资源存在性检查。
-  下一步：把 GitHub Pages 的静态资源发布流程进一步固化为自动化 job，并按 run_id 保留版本历史。
+  现状：可构建并已发布；`run_fusiontrack.py` 支持 `--run-config` 配置入口，可用 `code/system/configs/final_dashboard.local.example.json` 固化最终 dashboard 的长命令，配置内路径均可使用相对路径；`publish_dashboard_pages.py` 可同步 GitHub Pages 根目录并按 `run_id` 归档历史版本；`build_dashboard_release.py` 可把 dashboard 构建、导出包、Pages 发布和交付清单串成一次发布动作。
+  下一步：如需完全无人值守发布，可继续把 `build_dashboard_release.py` 接入 GitHub Actions 或服务器定时任务。
 
 - 中文文档与复现实验说明：🟡  
   现状：README 已较完整，但系统层面清单与流程未集中。  
   下一步：补充系统设计与执行说明。
 
 - 自动化流程：✅（基础闭环）
-  现状：新增 `.github/workflows/system-ci.yml`，在系统代码、方法注册表或 CI 配置变更时自动执行 Python 编译、方法注册表校验和 `code/system/tests` 系统测试，并通过 `code/system/tools/build_sample_dashboard.py` 生成可打开的小样例 dashboard，以 `sample-dashboard` artifact 上传；workflow 支持手动触发。
-  下一步：后续如要形成完整端到端 CI，可继续接入 GitHub Pages 自动发布和 run_id 版本归档。
+  现状：`.github/workflows/system-ci.yml` 会在系统代码、方法注册表或 CI 配置变更时自动执行 Python 编译、方法注册表校验和 `code/system/tests` 系统测试，并通过 `code/system/tools/build_sample_dashboard.py` 生成可打开的小样例 dashboard，以 `sample-dashboard` artifact 上传；workflow 也会编译交付相关工具 `publish_dashboard_pages.py` 与 `build_dashboard_release.py`。
+  下一步：后续如要形成完整端到端 CI，可继续增加受保护的 Pages 自动发布 job。
 
 ## 3. 当前结论
 
@@ -228,3 +228,12 @@
 - 发布清单 `publish_manifest.json` 只记录公开相对路径、资产数量、发布时间和 `run_id`，不会写入本机绝对路径。
 - 新增 `test_publish_dashboard_pages.py`，覆盖根目录更新、旧资产清理、版本归档、非 dashboard 文件保留和绝对路径脱敏。
 - 该更新把 F 层中的“GitHub 可访问页面”和“版本发布”推进到可重复执行状态；后续如果需要完全自动化，可在 GitHub Actions 或本地发布脚本中继续调用该工具。
+
+## 2026-05-28 更新：一键交付编排命令
+
+- 新增 `code/system/tools/build_dashboard_release.py`，可把 `run_fusiontrack.py --run-config`、`--export-package`、GitHub Pages 发布和 `run_id` 版本归档串成一次交付命令。
+- 交付命令会读取 pipeline summary 中的 dashboard 输出目录，调用 `publish_dashboard_pages.py` 同步 Pages 根目录与 `history/<run_id>/`。
+- 每次交付会在 `work_root` 下写入 `dashboard_release_<run_id>.json`，记录构建命令、pipeline summary、pipeline manifest、dashboard 目录、导出包和 Pages 发布结果。
+- 交付清单中的路径会脱敏为相对路径或 `${external}` 占位符，不写入本机绝对路径，便于公开部署和跨机器复现。
+- 新增 `test_build_dashboard_release.py`，覆盖 pipeline 调用参数、导出包参数、Pages 发布、历史归档、交付清单写入和绝对路径脱敏。
+- CI 编译范围同步纳入 `build_sample_dashboard.py`、`publish_dashboard_pages.py` 与 `build_dashboard_release.py`，降低交付脚本损坏后漏检的风险。

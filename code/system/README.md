@@ -268,6 +268,7 @@ python code/system/run_fusiontrack.py \
 ```bash
 python -m py_compile code/system/fusiontrack/final_dashboard.py
 python -m py_compile code/system/fusiontrack/final_results.py code/system/fusiontrack/method_registry.py code/system/fusiontrack/dataset_manifest.py
+python -m py_compile code/system/tools/build_sample_dashboard.py code/system/tools/publish_dashboard_pages.py code/system/tools/build_dashboard_release.py
 python -c "import collections, collections.abc; collections.Callable = collections.abc.Callable; import pytest, sys; sys.exit(pytest.main(['code/system/tests/test_dataset_manifest.py', 'code/system/tests/test_method_registry.py', 'code/system/tests/test_final_results.py', 'code/system/tests/test_pipeline.py', '-q']))"
 ```
 
@@ -285,6 +286,18 @@ python code/system/tools/build_sample_dashboard.py --output-dir runs/sample_dash
 ```
 
 ## GitHub Pages 发布与版本归档
+
+如果希望把“构建 dashboard、生成导出包、发布 GitHub Pages、写交付清单”作为一次交付动作，可以使用一键交付命令：
+
+```bash
+python code/system/tools/build_dashboard_release.py \
+  --run-config code/system/configs/final_dashboard.local.example.json \
+  --export-package runs/releases/fusiontrack_20260528_final_dashboard.zip \
+  --pages-dir ../FusionTrack-gh-pages \
+  --run-id 20260528_final_dashboard
+```
+
+该命令会先调用 `run_fusiontrack.py --run-config ...`，再根据 pipeline summary 中的 dashboard 输出目录调用 Pages 发布工具。运行完成后，会在 `work_root` 下写入 `dashboard_release_<run_id>.json`，记录本次交付的构建命令、pipeline summary、manifest、dashboard 目录、导出包和 Pages 发布结果。该交付清单使用相对路径或 `${external}` 占位符，不写入本机绝对路径。
 
 生成最终 dashboard 后，可以用发布工具把静态网页同步到 GitHub Pages 工作树。命令建议只写相对路径，避免把本机绝对路径带入脚本、服务器命令或公开清单：
 
