@@ -4867,6 +4867,153 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }}, 120 / speed);
       }}
 
+      function playbackFrameBounds(data = currentPlayback()) {{
+        if (!data) {{
+          return {{ start: 0, end: 0 }};
+        }}
+        const start = Number(data.frame_range?.[0] || 0);
+        const end = Number(data.frame_range?.[1] || start);
+        return {{ start, end }};
+      }}
+
+      function setPlaybackFrame(frame) {{
+        const data = currentPlayback();
+        const bounds = playbackFrameBounds(data);
+        const nextFrame = clamp(Math.round(Number(frame) || bounds.start), bounds.start, bounds.end);
+        state.frame = nextFrame;
+        if (frameSlider) {{
+          frameSlider.value = String(nextFrame);
+        }}
+        if (frameBadge) {{
+          frameBadge.textContent = `${{nextFrame}} / ${{bounds.end}}`;
+        }}
+        drawPlayback();
+      }}
+
+      function stepPlaybackFrame(delta) {{
+        const bounds = playbackFrameBounds();
+        const currentFrame = Number.isFinite(Number(state.frame)) ? Number(state.frame) : bounds.start;
+        setPlaybackFrame(currentFrame + Number(delta || 0));
+      }}
+
+      function setPlaybackViewMode(mode, layer = state.layer) {{
+        const data = currentPlayback();
+        if (isRegistrationTask()) {{
+          return;
+        }}
+        if (mode === "comparison" && !playbackUsesOriginalVideo(data)) {{
+          return;
+        }}
+        state.viewMode = mode === "comparison" ? "comparison" : "single";
+        if (["tracks", "heatmap", "both"].includes(layer)) {{
+          state.layer = layer;
+        }}
+        viewModeButtons.forEach(button => button.classList.toggle("active", button.dataset.viewMode === state.viewMode));
+        layerButtons.forEach(button => button.classList.toggle("active", button.dataset.layer === state.layer));
+        setViewModeVisibility(data);
+        drawPlayback();
+      }}
+
+      function adjustPlaybackSpeed(delta) {{
+        state.playSpeed = Math.max(0.2, Math.min(3, Number(state.playSpeed || 1) + Number(delta || 0)));
+        updatePlaySpeedDisplay();
+        if (state.playing) {{
+          stopPlayback();
+          startPlayback();
+        }}
+        drawPlayback();
+      }}
+
+      function shouldIgnorePlaybackShortcut(event) {{
+        if (event.defaultPrevented) {{
+          return true;
+        }}
+        const target = event.target;
+        if (!target || target === document.body || target === document.documentElement) {{
+          return false;
+        }}
+        const tagName = String(target.tagName || "").toLowerCase();
+        if (["input", "select", "textarea", "button"].includes(tagName)) {{
+          return true;
+        }}
+        return Boolean(target.isContentEditable || target.closest?.("[contenteditable='true']"));
+      }}
+
+      function handlePlaybackKeydown(event) {{
+        if (shouldIgnorePlaybackShortcut(event)) {{
+          return;
+        }}
+        const code = event.code || event.key;
+        const data = currentPlayback();
+        if (!data) {{
+          return;
+        }}
+        if (code === "Space" || event.key === " ") {{
+          event.preventDefault();
+          state.playing ? stopPlayback() : startPlayback();
+          return;
+        }}
+        if (code === "ArrowLeft") {{
+          event.preventDefault();
+          stepPlaybackFrame(-1);
+          return;
+        }}
+        if (code === "ArrowRight") {{
+          event.preventDefault();
+          stepPlaybackFrame(1);
+          return;
+        }}
+        if (code === "PageDown") {{
+          event.preventDefault();
+          stepPlaybackFrame(-10);
+          return;
+        }}
+        if (code === "PageUp") {{
+          event.preventDefault();
+          stepPlaybackFrame(10);
+          return;
+        }}
+        if (code === "Home") {{
+          event.preventDefault();
+          setPlaybackFrame(playbackFrameBounds(data).start);
+          return;
+        }}
+        if (code === "End") {{
+          event.preventDefault();
+          setPlaybackFrame(playbackFrameBounds(data).end);
+          return;
+        }}
+        if (code === "Digit1") {{
+          event.preventDefault();
+          setPlaybackViewMode("comparison");
+          return;
+        }}
+        if (code === "Digit2") {{
+          event.preventDefault();
+          setPlaybackViewMode("single", "tracks");
+          return;
+        }}
+        if (code === "Digit3") {{
+          event.preventDefault();
+          setPlaybackViewMode("single", "heatmap");
+          return;
+        }}
+        if (code === "Digit4") {{
+          event.preventDefault();
+          setPlaybackViewMode("single", "both");
+          return;
+        }}
+        if (code === "Equal" || code === "NumpadAdd") {{
+          event.preventDefault();
+          adjustPlaybackSpeed(0.1);
+          return;
+        }}
+        if (code === "Minus" || code === "NumpadSubtract") {{
+          event.preventDefault();
+          adjustPlaybackSpeed(-0.1);
+        }}
+      }}
+
       function pickTrackFromCanvas(event, targetCanvas) {{
         const data = currentPlayback();
         if (!data || !targetCanvas) {{
@@ -5022,6 +5169,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       if (exportSequenceJson) {{
         exportSequenceJson.addEventListener("click", handleSequenceExport);
       }}
+      document.addEventListener("keydown", handlePlaybackKeydown);
       [canvases.heatmap, canvases.tracks, canvases.both, canvases.single].forEach(targetCanvas => {{
         if (targetCanvas) {{
           targetCanvas.addEventListener("click", event => pickTrackFromCanvas(event, targetCanvas));

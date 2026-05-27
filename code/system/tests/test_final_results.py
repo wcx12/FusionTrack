@@ -709,6 +709,11 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "windowEventTitle" in html
     assert "windowEventSourceSegment" in html
     assert "eventSegmentsFromFrameScores" in html
+    assert "handlePlaybackKeydown" in html
+    assert "shouldIgnorePlaybackShortcut" in html
+    assert "ArrowRight" in html
+    assert "Space" in html
+    assert "Digit1" in html
     assert "Heat + Tracks" in html
     assert "renderMethodView" in html
     assert "playbackData" in html
