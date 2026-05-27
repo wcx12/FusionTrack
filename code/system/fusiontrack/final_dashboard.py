@@ -1130,6 +1130,21 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .data-flow-card {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 10px; }}
     .data-flow-card span {{ display: block; color: #64748b; font-size: 12px; }}
     .data-flow-card strong {{ display: block; margin-top: 3px; font-size: 18px; font-variant-numeric: tabular-nums; }}
+    .demo-summary-grid {{ display: grid; grid-template-columns: minmax(260px, 1.05fr) minmax(260px, 0.95fr) minmax(260px, 0.95fr); gap: 12px; margin-bottom: 16px; }}
+    .demo-card h2 {{ margin-bottom: 8px; }}
+    .demo-steps {{ display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }}
+    .demo-step {{ display: grid; grid-template-columns: 28px 1fr; gap: 8px; align-items: start; border: 1px solid #dbe4ee; border-radius: 7px; background: #f8fafc; padding: 8px 10px; }}
+    .demo-step-index {{ display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; background: #0f766e; color: #fff; font-size: 12px; font-weight: 800; }}
+    .demo-step strong {{ display: block; color: #0f172a; }}
+    .demo-step span {{ display: block; color: #64748b; font-size: 12px; }}
+    .demo-metrics {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
+    .demo-metric {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 8px 10px; min-width: 0; }}
+    .demo-metric span {{ display: block; color: #64748b; font-size: 12px; }}
+    .demo-metric strong {{ display: block; margin-top: 2px; font-size: 17px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }}
+    .demo-top-list {{ display: grid; gap: 7px; margin-top: 10px; }}
+    .demo-top-row {{ display: grid; grid-template-columns: 32px 1fr auto; gap: 8px; align-items: center; border: 1px solid #e1e7ef; border-radius: 7px; background: #fff; padding: 8px 10px; }}
+    .demo-top-rank {{ font-weight: 800; color: #0f766e; }}
+    .demo-mode .audit-only {{ display: none; }}
     .provenance-panel {{ grid-column: 1 / -1; border: 1px solid #dbe4ee; border-radius: 8px; background: #ffffff; padding: 12px; }}
     .provenance-panel h3 {{ margin: 0 0 10px; font-size: 15px; }}
     .provenance-subsection {{ margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0; }}
@@ -1179,12 +1194,13 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       .control-surface {{ padding: 10px; }}
       .mode-switch button, .layer-switch button {{ flex: 1 1 140px; }}
       .protocol-strip, .insight-grid, .method-summary, .data-flow-grid {{ grid-template-columns: 1fr; }}
+      .demo-summary-grid, .demo-metrics {{ grid-template-columns: 1fr; }}
       .insight-grid-large {{ grid-template-columns: 1fr; }}
       .explain-metrics {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
-<body>
+<body class="demo-mode">
   <main>
     <header>
       <div>
@@ -1196,6 +1212,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           <select id="languageSelector">
             <option value="zh">中文</option>
             <option value="en">English</option>
+          </select>
+        </label>
+        <label><span data-i18n="presentationMode">Mode</span>
+          <select id="presentationModeSelector">
+            <option value="demo" data-i18n-option="presentationDemo">Thesis demo</option>
+            <option value="audit" data-i18n-option="presentationAudit">Full audit</option>
           </select>
         </label>
         <label><span data-i18n="task">任务</span>
@@ -1211,6 +1233,21 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       </div>
     </header>
     <div id="cards" class="cards"></div>
+
+    <section id="demoSummary" class="demo-summary-grid" aria-label="Thesis demo summary">
+      <div class="panel demo-card">
+        <h2 data-i18n="demoPipelineTitle">System flow</h2>
+        <div id="demoPipelineSummary"></div>
+      </div>
+      <div class="panel demo-card">
+        <h2 data-i18n="demoResultTitle">Result snapshot</h2>
+        <div id="demoResultSummary"></div>
+      </div>
+      <div class="panel demo-card">
+        <h2 data-i18n="demoEvidenceTitle">Evidence snapshot</h2>
+        <div id="demoEvidenceSummary"></div>
+      </div>
+    </section>
 
     <section class="protocol-strip" aria-label="Anomaly protocol overview">
       <div class="panel protocol-note">
@@ -1342,7 +1379,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel audit-only" id="analysisSection">
       <div class="section-heading">
         <h2 data-i18n="analysisTitle">实验分析</h2>
       </div>
@@ -1390,9 +1427,13 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       const dashboard = JSON.parse(document.getElementById("dashboardData").textContent);
       const playbackData = JSON.parse(document.getElementById("playbackData").textContent);
       const languageSelector = document.getElementById("languageSelector");
+      const presentationModeSelector = document.getElementById("presentationModeSelector");
       const taskSelector = document.getElementById("taskSelector");
       const methodSelector = document.getElementById("methodSelector");
       const cards = document.getElementById("cards");
+      const demoPipelineSummary = document.getElementById("demoPipelineSummary");
+      const demoResultSummary = document.getElementById("demoResultSummary");
+      const demoEvidenceSummary = document.getElementById("demoEvidenceSummary");
       const individualProtocol = document.getElementById("individualProtocol");
       const groupProtocol = document.getElementById("groupProtocol");
       const registrationProtocol = document.getElementById("registrationProtocol");
@@ -2055,6 +2096,30 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         datasetQualityPairCoverage: "配对覆盖率",
         datasetQualitySplit: "Split"
       }});
+      Object.assign(translations.zh, {{
+        presentationMode: "展示模式",
+        presentationDemo: "论文展示版",
+        presentationAudit: "完整审计版",
+        demoPipelineTitle: "系统流程",
+        demoResultTitle: "结果概览",
+        demoEvidenceTitle: "证据概览",
+        demoStepInput: "输入数据",
+        demoStepInputText: "VT-Tiny-MOT 多模态序列与轨迹数据",
+        demoStepProtocol: "异常协议",
+        demoStepProtocolText: "基于规则的 synthetic anomaly injection 标签构造",
+        demoStepModel: "算法评测",
+        demoStepModelText: "个体、群体与配准模块统一接入结果表",
+        demoStepVisual: "展示输出",
+        demoStepVisualText: "四画面对比、解释证据、数据审计与指标汇总",
+        demoTopMethods: "当前任务 Top 方法",
+        demoCurrentMethod: "当前方法",
+        demoCurrentSequence: "当前序列",
+        demoDatasetQuality: "多模态配对覆盖",
+        demoHoldout: "Holdout 证据",
+        demoPlaybackMode: "默认展示",
+        demoPlaybackModeText: "原视频 / 热力 / 轨迹 / 热力+轨迹",
+        demoMissing: "未提供"
+      }});
       Object.assign(translations.en, {{
         eventThresholdLabel: "Event threshold",
         windowEventTitle: "Current-window event evidence",
@@ -2068,10 +2133,35 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         windowEventSourceModel: "Frame-level model output",
         windowEventSourceSegment: "Event/protocol segment fallback"
       }});
+      Object.assign(translations.en, {{
+        presentationMode: "Display mode",
+        presentationDemo: "Thesis demo",
+        presentationAudit: "Full audit",
+        demoPipelineTitle: "System Flow",
+        demoResultTitle: "Result Snapshot",
+        demoEvidenceTitle: "Evidence Snapshot",
+        demoStepInput: "Input data",
+        demoStepInputText: "VT-Tiny-MOT multimodal sequences and trajectories",
+        demoStepProtocol: "Anomaly protocol",
+        demoStepProtocolText: "Rule-based synthetic anomaly injection labels",
+        demoStepModel: "Algorithm evaluation",
+        demoStepModelText: "Individual, group, and registration modules are integrated into one result table",
+        demoStepVisual: "Demo output",
+        demoStepVisualText: "Four-panel playback, explanation evidence, data audit, and metrics",
+        demoTopMethods: "Top methods for current task",
+        demoCurrentMethod: "Current method",
+        demoCurrentSequence: "Current sequence",
+        demoDatasetQuality: "Multimodal pair coverage",
+        demoHoldout: "Holdout evidence",
+        demoPlaybackMode: "Default view",
+        demoPlaybackModeText: "Original / heatmap / tracks / heat+tracks",
+        demoMissing: "Not provided"
+      }});
       const backgroundCache = new Map();
       const backgroundFailures = new Set();
       const state = {{
         language: localStorage.getItem("fusiontrack.finalDashboard.language") || "zh",
+        presentationMode: localStorage.getItem("fusiontrack.finalDashboard.presentationMode") || "demo",
         task: "{html.escape(initial_task)}",
         method: "{html.escape(initial_method)}",
         caseType: "true_positive",
@@ -3363,6 +3453,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         document.querySelectorAll("[data-i18n]").forEach(element => {{
           element.textContent = t(element.dataset.i18n);
         }});
+        document.querySelectorAll("[data-i18n-option]").forEach(element => {{
+          element.textContent = t(element.dataset.i18nOption);
+        }});
         setTaskOptions();
       }}
 
@@ -3410,6 +3503,88 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           [isRegistrationTask() ? t("registrationFailedCount") : t("cardPositives"), positiveCount],
           [metricLabel, fmt(metricValue)]
         ].map(([label, value]) => `<div class="card"><div>${{label}}</div><div class="value">${{value}}</div></div>`).join("");
+      }}
+
+      function applyPresentationMode(mode = state.presentationMode) {{
+        state.presentationMode = mode === "audit" ? "audit" : "demo";
+        if (presentationModeSelector) {{
+          presentationModeSelector.value = state.presentationMode;
+        }}
+        document.body.classList.toggle("demo-mode", state.presentationMode === "demo");
+        document.body.classList.toggle("audit-mode", state.presentationMode === "audit");
+        localStorage.setItem("fusiontrack.finalDashboard.presentationMode", state.presentationMode);
+      }}
+
+      function renderDemoSummary() {{
+        const task = taskData() || {{}};
+        const current = (task.methods || {{}})[state.method] || {{ metrics: {{}} }};
+        const metrics = current.metrics || {{}};
+        const data = currentPlayback() || {{}};
+        const provenance = dashboard.provenance || {{}};
+        const datasetQuality = ((provenance.dataset || {{}}).quality || {{}});
+        const holdout = provenance.holdout || null;
+        const pipelineSteps = isRegistrationTask() ? [
+          [t("flowStepRegistrationPair"), t("registrationProtocolText")],
+          [t("flowStepRegistrationFeature"), t("registrationPlaybackNote")],
+          [t("flowStepRegistrationMetric"), t("registrationNoVideoBackgroundShort")],
+          [t("demoStepVisual"), t("demoStepVisualText")]
+        ] : [
+          [t("demoStepInput"), t("demoStepInputText")],
+          [t("demoStepProtocol"), t("demoStepProtocolText")],
+          [t("demoStepModel"), t("demoStepModelText")],
+          [t("demoStepVisual"), t("demoStepVisualText")]
+        ];
+        demoPipelineSummary.innerHTML = `
+          <ol class="demo-steps">
+            ${{pipelineSteps.map(([title, text], index) => `
+              <li class="demo-step">
+                <span class="demo-step-index">${{index + 1}}</span>
+                <span><strong>${{esc(title)}}</strong><span>${{esc(text)}}</span></span>
+              </li>
+            `).join("")}}
+          </ol>
+        `;
+
+        const metricLabel = isRegistrationTask() ? t("registrationSuccessRate") : t("cardAuroc");
+        const metricValue = isRegistrationTask() ? (metrics.success_rate ?? metrics.auroc ?? 0) : metrics.auroc;
+        const topRows = (task.leaderboard || []).slice(0, 3);
+        demoResultSummary.innerHTML = `
+          <div class="demo-metrics">
+            <div class="demo-metric"><span>${{t("demoCurrentMethod")}}</span><strong>${{esc(state.method || t("demoMissing"))}}</strong></div>
+            <div class="demo-metric"><span>${{metricLabel}}</span><strong>${{fmt(metricValue)}}</strong></div>
+            <div class="demo-metric"><span>${{isRegistrationTask() ? t("registrationPairCount") : t("cardLabels")}}</span><strong>${{isRegistrationTask() ? Math.round(Number(metrics.num_score_rows || 0)) : Number(task.num_labels || 0)}}</strong></div>
+            <div class="demo-metric"><span>${{isRegistrationTask() ? t("registrationFailedCount") : t("cardPositives")}}</span><strong>${{isRegistrationTask() ? Math.round(Number(metrics.num_failed_pairs || 0)) : Number(task.num_positive || 0)}}</strong></div>
+          </div>
+          <div class="demo-top-list" aria-label="${{t("demoTopMethods")}}">
+            ${{topRows.map((row, index) => `
+              <div class="demo-top-row">
+                <span class="demo-top-rank">#${{index + 1}}</span>
+                <span><strong>${{esc(row.method || "")}}</strong><br><span class="subtle">${{esc(row.owner || row.method_family || "")}}</span></span>
+                <strong>${{isRegistrationTask() ? fmt(row.success_rate || row.auroc || 0) : fmt(row.auroc || 0)}}</strong>
+              </div>
+            `).join("")}}
+          </div>
+        `;
+
+        const sequenceStatsForTask = ((data.stats_by_task || {{}})[state.task]) || data.stats || {{}};
+        const qualityCoverage = datasetQuality.paired_annotation_coverage === undefined
+          ? t("demoMissing")
+          : pct(datasetQuality.paired_annotation_coverage || 0);
+        const holdoutText = holdout
+          ? `${{Array.isArray(holdout.seeds) ? holdout.seeds.length : 0}} seeds / ${{Array.isArray(holdout.levels) ? holdout.levels.join("+") : t("demoMissing")}}`
+          : t("demoMissing");
+        demoEvidenceSummary.innerHTML = `
+          <div class="demo-metrics">
+            <div class="demo-metric"><span>${{t("demoCurrentSequence")}}</span><strong>${{esc(data.sequence || state.sequence || t("demoMissing"))}}</strong></div>
+            <div class="demo-metric"><span>${{t("sequenceVisualizedTracks")}}</span><strong>${{Number(sequenceStatsForTask.visualized_tracks || (data.tracks || []).length || 0)}}</strong></div>
+            <div class="demo-metric"><span>${{t("demoDatasetQuality")}}</span><strong>${{qualityCoverage}}</strong></div>
+            <div class="demo-metric"><span>${{t("demoHoldout")}}</span><strong>${{esc(holdoutText)}}</strong></div>
+          </div>
+          <div class="event-card" style="margin-top: 10px;">
+            <strong>${{t("demoPlaybackMode")}}</strong>
+            <div class="subtle">${{isRegistrationTask() ? t("registrationPlaybackNote") : t("demoPlaybackModeText")}}</div>
+          </div>
+        `;
       }}
 
       function renderHoldoutPanel(holdout, missing) {{
@@ -4482,6 +4657,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         setSequenceOptions();
         playToggle.textContent = state.playing ? t("pause") : t("play");
         renderCards();
+        renderDemoSummary();
         renderSequenceStats();
         renderCaseTabs();
         renderLeaderboard();
@@ -4497,6 +4673,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       languageSelector.addEventListener("change", () => {{
         applyLanguage(languageSelector.value);
         renderMethodView();
+      }});
+      presentationModeSelector.addEventListener("change", () => {{
+        applyPresentationMode(presentationModeSelector.value);
+        renderDemoSummary();
       }});
       taskSelector.addEventListener("change", () => {{
         state.task = taskSelector.value;
@@ -4605,6 +4785,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         helpDialog.close();
       }});
       applyLanguage(state.language);
+      applyPresentationMode(state.presentationMode);
       updatePlaySpeedDisplay();
       updateEventThresholdDisplay();
       setAnalysisPanel("leaderboard");

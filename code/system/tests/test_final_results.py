@@ -663,6 +663,16 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "languageSelector" in html
     assert "localStorage" in html
     assert "translations" in html
+    assert "presentationModeSelector" in html
+    assert "fusiontrack.finalDashboard.presentationMode" in html
+    assert "data-i18n-option" in html
+    assert "demoSummary" in html
+    assert "demoPipelineSummary" in html
+    assert "demoResultSummary" in html
+    assert "demoEvidenceSummary" in html
+    assert "audit-only" in html
+    assert "applyPresentationMode" in html
+    assert "renderDemoSummary" in html
     assert "data-analysis-panel=\"leaderboard\"" in html
     assert "data-analysis-panel=\"types\"" in html
     assert "data-analysis-panel=\"cases\"" in html
