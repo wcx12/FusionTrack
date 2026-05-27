@@ -126,6 +126,9 @@ def _build_public_provenance(provenance: dict[str, Any]) -> dict[str, Any]:
     )
     if fused_pipeline:
         public["fused_pipeline"] = fused_pipeline
+    export_package = _build_public_export_package_provenance(provenance.get("export_package"))
+    if export_package:
+        public["export_package"] = export_package
     return public
 
 
@@ -349,6 +352,43 @@ def _build_public_fused_pipeline_provenance(manifest: Any, manifest_path: Any = 
         "quality_config": config.get("quality") if isinstance(config.get("quality"), dict) else {},
         "artifacts": public_artifacts,
     }
+
+
+def _build_public_export_package_provenance(package: Any) -> dict[str, Any]:
+    if not isinstance(package, dict):
+        return {}
+    href = _public_download_href(package.get("href") or package.get("download_href"))
+    if not href:
+        return {}
+    public: dict[str, Any] = {
+        "href": href,
+        "name": str(package.get("name") or Path(href).name),
+        "package_format": str(package.get("package_format") or "fusiontrack_analysis_export_v1"),
+    }
+    if package.get("num_files") is not None:
+        public["num_files"] = _int_or_zero(package.get("num_files"))
+    if package.get("size_bytes") is not None:
+        public["size_bytes"] = _int_or_zero(package.get("size_bytes"))
+    return public
+
+
+def _public_download_href(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    raw = str(value).strip().replace("\\", "/")
+    if not raw or raw.startswith(("/", "#")):
+        return None
+    first_part = raw.split("/", 1)[0]
+    if ":" in first_part or "://" in raw:
+        return None
+    parts: list[str] = []
+    for part in raw.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            return None
+        parts.append(part)
+    return "/".join(parts) if parts else None
 
 
 def _protocol_anomaly_types(manifest: dict[str, Any]) -> list[str]:
@@ -1184,6 +1224,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .control-surface {{ display: grid; gap: 10px; margin-bottom: 12px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }}
     .player-tools {{ display: grid; grid-template-columns: auto minmax(220px, 1fr) auto; gap: 12px; align-items: end; }}
     .secondary-button {{ padding: 8px 14px; }}
+    a.secondary-button {{ display: inline-flex; align-items: center; justify-content: center; min-height: 34px; border: 1px solid #cbd5e1; border-radius: 7px; background: white; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 700; }}
+    a.secondary-button:hover {{ border-color: #94a3b8; background: #f8fafc; }}
+    a.secondary-button[hidden] {{ display: none; }}
     .secondary-button.active {{ background: #111827; border-color: #111827; color: white; }}
     .mode-switch {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
     .view-mode-button {{ min-height: 44px; padding: 7px 12px; }}
@@ -1277,7 +1320,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .method-summary-item span {{ display: block; color: #64748b; font-size: 12px; }}
     .method-summary-item strong {{ display: block; margin-top: 2px; }}
     .export-actions {{ display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; align-items: center; }}
-    .export-actions button {{ min-height: 34px; padding: 6px 10px; border-radius: 7px; font-size: 12px; }}
+    .export-actions button, .export-actions a.secondary-button {{ min-height: 34px; padding: 6px 10px; border-radius: 7px; font-size: 12px; }}
+    .export-package-download {{ border-color: #99f6e4; background: #f0fdfa; color: #0f766e; }}
+    .export-package-download:hover {{ border-color: #5eead4; background: #ccfbf1; }}
     .export-status {{ min-width: 150px; color: #64748b; font-size: 12px; text-align: right; }}
     .data-flow-grid {{ display: grid; grid-template-columns: repeat(4, minmax(170px, 1fr)); gap: 10px; }}
     .data-flow-card {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 10px; }}
@@ -1548,6 +1593,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           <button type="button" class="secondary-button" id="exportLeaderboardCsv" data-i18n="exportLeaderboardCsv">Export ranking CSV</button>
           <button type="button" class="secondary-button" id="exportSequenceJson" data-i18n="exportSequenceJson">Export sequence JSON</button>
           <button type="button" class="secondary-button" id="exportPlaybackPng" data-i18n="exportPlaybackPng">Export frame PNG</button>
+          <a class="secondary-button export-package-download" id="exportPackageDownload" data-i18n="exportPackageDownload" href="#" download hidden>Download package</a>
           <span id="exportStatus" class="export-status" role="status"></span>
         </div>
       </div>
@@ -1616,6 +1662,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       const exportLeaderboardCsv = document.getElementById("exportLeaderboardCsv");
       const exportSequenceJson = document.getElementById("exportSequenceJson");
       const exportPlaybackPng = document.getElementById("exportPlaybackPng");
+      const exportPackageDownload = document.getElementById("exportPackageDownload");
       const exportStatus = document.getElementById("exportStatus");
       const helpButton = document.getElementById("helpButton");
       const helpDialog = document.getElementById("helpDialog");
@@ -1812,6 +1859,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           exportLeaderboardCsv: "Export ranking CSV",
           exportSequenceJson: "Export sequence JSON",
           exportPlaybackPng: "Export frame PNG",
+          exportPackageDownload: "Download full package",
           exportDone: "Exported",
           exportFailed: "Export failed",
           tabLeaderboard: "Method Ranking",
@@ -2351,6 +2399,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         exportLeaderboardCsv: "\u5bfc\u51fa\u6392\u884c\u699c CSV",
         exportSequenceJson: "\u5bfc\u51fa\u5f53\u524d\u5e8f\u5217 JSON",
         exportPlaybackPng: "\u5bfc\u51fa\u5f53\u524d\u753b\u9762 PNG",
+        exportPackageDownload: "\u4e0b\u8f7d\u5b8c\u6574\u62a5\u544a\u5305",
         exportDone: "\u5df2\u5bfc\u51fa",
         exportFailed: "\u5bfc\u51fa\u5931\u8d25"
       }});
@@ -2400,6 +2449,25 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         moduleStatusDone: "Integrated",
         moduleStatusPartial: "Placeholder / needs upgrade",
         moduleStatusMissing: "Missing"
+      }});
+      Object.assign(translations.en, {{
+        exportPackageDownload: "Download full package",
+        exportPackageTitle: "Full report package",
+        exportPackageDescription: "Portable ZIP containing the dashboard, sanitized summaries, manifests, and referenced experiment artifacts.",
+        exportPackageHref: "Download path",
+        exportPackageFormat: "Package format",
+        exportPackageSize: "Package size",
+        exportPackageFiles: "Included files",
+        provenanceExportPackage: "Export package"
+      }});
+      Object.assign(translations.zh, {{
+        exportPackageTitle: "\u5b8c\u6574\u62a5\u544a\u5305",
+        exportPackageDescription: "\u53ef\u79bb\u7ebf\u67e5\u770b\u7684 ZIP \u5305\uff0c\u5305\u542b\u770b\u677f\u3001\u8131\u654f\u6c47\u603b\u3001manifest \u548c\u88ab\u5f15\u7528\u7684\u5b9e\u9a8c\u4ea7\u7269\u3002",
+        exportPackageHref: "\u4e0b\u8f7d\u8def\u5f84",
+        exportPackageFormat: "\u6253\u5305\u683c\u5f0f",
+        exportPackageSize: "\u6587\u4ef6\u5927\u5c0f",
+        exportPackageFiles: "\u5305\u5185\u6587\u4ef6\u6570",
+        provenanceExportPackage: "\u62a5\u544a\u5bfc\u51fa\u5305"
       }});
       const backgroundCache = new Map();
       const backgroundFailures = new Set();
@@ -2491,6 +2559,31 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         return Number.isFinite(number) ? number : fallback;
       }}
       function esc(value) {{ return String(value ?? "").replace(/[&<>"']/g, ch => ({{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"}})[ch]); }}
+      function formatBytes(value) {{
+        const bytes = Number(value || 0);
+        if (!Number.isFinite(bytes) || bytes <= 0) {{
+          return t("provenanceMissing");
+        }}
+        const units = ["B", "KB", "MB", "GB"];
+        let size = bytes;
+        let unitIndex = 0;
+        while (size >= 1024 && unitIndex < units.length - 1) {{
+          size /= 1024;
+          unitIndex += 1;
+        }}
+        return `${{size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)}} ${{units[unitIndex]}}`;
+      }}
+      function safeDownloadHref(value) {{
+        const href = String(value || "").trim().replace(/\\\\/g, "/");
+        if (!href || href.startsWith("/") || href.startsWith("#") || href.includes("://")) {{
+          return "";
+        }}
+        const parts = href.split("/").filter(Boolean);
+        if (!parts.length || parts.some(part => part === "..") || parts[0].includes(":")) {{
+          return "";
+        }}
+        return parts.join("/");
+      }}
       function methodsForTask(task) {{ return task.leaderboard.map(row => row.method); }}
       function sequences() {{ return Object.keys(playbackData); }}
       function sequenceHasTaskData(sequence, taskName) {{
@@ -2857,6 +2950,19 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }}
         if (exportPlaybackPng) {{
           exportPlaybackPng.disabled = !currentPlayback();
+        }}
+        if (exportPackageDownload) {{
+          const packageInfo = (dashboard.provenance || {{}}).export_package || {{}};
+          const href = safeDownloadHref(packageInfo.href);
+          if (href) {{
+            exportPackageDownload.hidden = false;
+            exportPackageDownload.href = href;
+            exportPackageDownload.setAttribute("download", packageInfo.name || "");
+            exportPackageDownload.title = [packageInfo.name, packageInfo.package_format].filter(Boolean).join(" / ");
+          }} else {{
+            exportPackageDownload.hidden = true;
+            exportPackageDownload.removeAttribute("href");
+          }}
         }}
       }}
 
@@ -4315,6 +4421,39 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         `;
       }}
 
+      function renderExportPackagePanel(packageInfo, missing) {{
+        if (!packageInfo || !Object.keys(packageInfo).length) {{
+          return "";
+        }}
+        const href = safeDownloadHref(packageInfo.href);
+        if (!href) {{
+          return "";
+        }}
+        const rows = [
+          [t("exportPackageFormat"), packageInfo.package_format || missing],
+          [t("exportPackageSize"), packageInfo.size_bytes ? formatBytes(packageInfo.size_bytes) : missing],
+          [t("exportPackageFiles"), packageInfo.num_files !== undefined ? Number(packageInfo.num_files || 0) : missing],
+          [t("exportPackageHref"), href]
+        ];
+        return `
+          <div id="exportPackagePanel" class="provenance-subsection">
+            <h4>${{t("exportPackageTitle")}}</h4>
+            <div class="subtle" style="margin-bottom: 10px;">${{t("exportPackageDescription")}}</div>
+            <div class="export-actions" style="justify-content: flex-start; margin-bottom: 10px;">
+              <a class="secondary-button export-package-download" href="${{esc(href)}}" download="${{esc(packageInfo.name || "")}}">${{t("exportPackageDownload")}}</a>
+            </div>
+            <div class="provenance-grid">
+              ${{rows.map(([label, value]) => `
+                <div class="provenance-item">
+                  <span>${{label}}</span>
+                  <strong>${{esc(value)}}</strong>
+                </div>
+              `).join("")}}
+            </div>
+          </div>
+        `;
+      }}
+
       function renderProvenanceAudit() {{
         const provenance = dashboard.provenance || {{}};
         const dataset = provenance.dataset || {{}};
@@ -4324,6 +4463,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         const holdout = provenance.holdout || null;
         const protocols = provenance.protocols || null;
         const fusedPipeline = provenance.fused_pipeline || null;
+        const exportPackage = provenance.export_package || null;
         const missing = t("provenanceMissing");
         const datasetText = [dataset.name, Array.isArray(dataset.splits) ? dataset.splits.join("/") : ""]
           .filter(Boolean)
@@ -4369,6 +4509,11 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
             [t("provenanceFusedPipeline"), [fusedPipeline.pipeline, fusedPipeline.manifest].filter(Boolean).join(" / ") || missing],
           );
         }}
+        if (exportPackage) {{
+          items.push(
+            [t("provenanceExportPackage"), [exportPackage.name, exportPackage.package_format].filter(Boolean).join(" / ") || missing],
+          );
+        }}
         return `
           <div id="provenancePanel" class="provenance-panel">
             <h3>${{t("provenanceTitle")}}</h3>
@@ -4380,6 +4525,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
                 </div>
               `).join("")}}
             </div>
+            ${{renderExportPackagePanel(exportPackage, missing)}}
             ${{renderProtocolProvenancePanel(protocols, missing)}}
             ${{renderFusedPipelinePanel(fusedPipeline, missing)}}
             ${{renderDatasetQualityPanel(dataset.quality, missing)}}

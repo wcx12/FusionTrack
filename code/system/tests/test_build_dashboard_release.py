@@ -32,6 +32,8 @@ def test_build_dashboard_release_runs_pipeline_publishes_pages_and_writes_saniti
 
     def fake_runner(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
+        export_package.parent.mkdir(parents=True)
+        export_package.write_bytes(b"fusiontrack zip")
         summary = {
             "mode": "final_results_dashboard",
             "work_root": str(tmp_path / "runs" / "final_results_dashboard"),
@@ -68,11 +70,14 @@ def test_build_dashboard_release_runs_pipeline_publishes_pages_and_writes_saniti
         ]
     ]
     assert (pages_dir / "index.html").exists()
+    assert (pages_dir / "assets" / "fusiontrack_release.zip").read_bytes() == b"fusiontrack zip"
     assert (pages_dir / "history" / "20260528_demo" / "index.html").exists()
+    assert (pages_dir / "history" / "20260528_demo" / "assets" / "fusiontrack_release.zip").exists()
     assert release["run_id"] == "20260528_demo"
     assert release["pipeline"]["mode"] == "final_results_dashboard"
     assert release["pipeline"]["dashboard_dir"] == "runs/final_results_dashboard/final_dashboard"
     assert release["pages_publish"]["archive"]["index"] == "history/20260528_demo/index.html"
+    assert "fusiontrack_release.zip" in release["pages_publish"]["copied_assets"]
 
     manifest_path = tmp_path / "runs" / "final_results_dashboard" / "dashboard_release_20260528_demo.json"
     persisted = json.loads(manifest_path.read_text(encoding="utf-8"))

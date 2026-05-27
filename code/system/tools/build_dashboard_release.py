@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -83,6 +84,27 @@ def _dashboard_dir_from_summary(summary: dict[str, Any]) -> Path | None:
     return None
 
 
+def _copy_export_package_to_dashboard_assets(
+    summary: dict[str, Any],
+    dashboard_dir: Path | None,
+    export_path: Path | None,
+) -> str | None:
+    package_value: Any = export_path
+    if isinstance(summary.get("export_package"), dict):
+        package_value = summary["export_package"].get("package_path") or package_value
+    if package_value in (None, "") or dashboard_dir is None:
+        return None
+    package_path = Path(str(package_value))
+    if not package_path.exists() or not package_path.is_file():
+        return None
+    assets_dir = dashboard_dir / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    target = assets_dir / package_path.name
+    if package_path.resolve() != target.resolve():
+        shutil.copy2(package_path, target)
+    return f"assets/{package_path.name}"
+
+
 def _release_manifest_path(summary: dict[str, Any], dashboard_dir: Path | None, run_id: str | None) -> Path:
     manifest_name = f"dashboard_release_{run_id or 'latest'}.json"
     work_root = summary.get("work_root")
@@ -133,6 +155,9 @@ def build_dashboard_release(
     dashboard_dir = _dashboard_dir_from_summary(summary)
     if pages_dir is not None and dashboard_dir is None:
         raise ValueError("Cannot publish dashboard release because pipeline summary does not include dashboard output.")
+    dashboard_export_href = _copy_export_package_to_dashboard_assets(summary, dashboard_dir, export_path)
+    if dashboard_export_href and isinstance(summary.get("dashboard"), dict):
+        summary["dashboard"]["export_package_href"] = dashboard_export_href
 
     pages_publish = None
     if pages_dir is not None:
@@ -152,6 +177,7 @@ def build_dashboard_release(
             "dashboard_dir": _sanitize_path(dashboard_dir, repo),
             "dashboard_index": _sanitize_path(dashboard.get("report_html"), repo),
             "assets_dir": _sanitize_path(dashboard.get("assets_dir"), repo),
+            "dashboard_export_package_href": dashboard_export_href,
             "export_package": _sanitize_path(
                 (summary.get("export_package") or {}).get("package_path")
                 if isinstance(summary.get("export_package"), dict)

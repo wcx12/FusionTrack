@@ -74,6 +74,17 @@ def _safe_filename(value: str) -> str:
     return value.replace("/", "_").replace("\\", "_").replace(" ", "_")
 
 
+def _dashboard_export_package_provenance(export_package_href: str | None) -> dict[str, Any] | None:
+    if not export_package_href:
+        return None
+    href = str(export_package_href).replace("\\", "/").strip()
+    return {
+        "href": href,
+        "name": Path(href).name,
+        "package_format": "fusiontrack_analysis_export_v1",
+    }
+
+
 def _build_manifest(
     mode: str,
     paths: FusionTrackPaths,
@@ -427,6 +438,7 @@ def build_final_results_report(
     suite_manifest: str | Path | None = None,
     holdout_manifest: str | Path | None = None,
     protocol_manifests: list[str | Path] | None = None,
+    export_package_href: str | None = None,
     top_sequences: int = 5,
     top_k: int = 100,
     case_limit: int = 12,
@@ -481,6 +493,7 @@ def build_final_results_report(
             "holdout_manifest_path": holdout_manifest_path,
             "protocol_manifests": protocol_manifest_payloads,
             "protocol_manifest_paths": protocol_manifest_paths,
+            "export_package": _dashboard_export_package_provenance(export_package_href),
             "top_sequences": top_sequences,
             "top_k": top_k,
             "case_limit": case_limit,
@@ -512,6 +525,7 @@ def build_final_results_report(
         "holdout_manifest": holdout_manifest_payload,
         "protocol_manifest_paths": [str(path) for path in protocol_manifest_paths],
         "protocol_manifests": protocol_manifest_payloads,
+        "dashboard_export_package_href": export_package_href,
         "dashboard": dashboard_summary,
     }
     summary_path = paths.work_root / "pipeline_summary_final_dashboard.json"
@@ -539,6 +553,7 @@ def build_final_results_report(
             "holdout_manifest": holdout_manifest_payload,
             "protocol_manifest_paths": [str(path) for path in protocol_manifest_paths],
             "protocol_manifests": protocol_manifest_payloads,
+            "dashboard_export_package_href": export_package_href,
             "top_sequences": top_sequences,
             "top_k": top_k,
             "case_limit": case_limit,

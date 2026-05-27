@@ -209,6 +209,7 @@ VT-Tiny-MOT 原始数据没有异常标签。当前 `Individual` 和 `Group` 的
 - 方法排行榜 CSV：导出当前任务下的方法排名表。
 - 当前序列 JSON：导出当前序列的轨迹、标签、分数、背景帧和数据审计信息。
 - 当前画面 PNG：导出当前播放画面；四画面对比模式会生成原视频、热力、轨迹、热力+轨迹的 2x2 拼图，单画面模式导出当前图层，Registration 模块导出点云配准画面。
+- 完整报告包 ZIP：当构建命令传入 `--export-package` 时，页面右上角会出现“下载完整报告包”入口；该 ZIP 会包含 dashboard、脱敏后的 summary/manifest 以及被引用的实验产物，便于答辩离线演示或归档。
 
 PNG 导出依赖浏览器 Canvas，因此公开部署时仍要保证 `assets/` 背景帧与页面同源发布，避免浏览器把 canvas 标记为不可导出。
 
@@ -344,6 +345,8 @@ python code/system/tools/build_dashboard_release.py \
 ```
 
 该命令会先调用 `run_fusiontrack.py --run-config ...`，再根据 pipeline summary 中的 dashboard 输出目录调用 Pages 发布工具。运行完成后，会在 `work_root` 下写入 `dashboard_release_<run_id>.json`，记录本次交付的构建命令、pipeline summary、manifest、dashboard 目录、导出包和 Pages 发布结果。该交付清单使用相对路径或 `${external}` 占位符，不写入本机绝对路径。
+
+当命令传入 `--export-package` 时，生成的 ZIP 会同步复制到 dashboard 的 `assets/` 目录，并随 GitHub Pages 根页面和 `history/<run_id>/` 一起发布。网页中的下载入口只使用 `assets/<zip_name>` 这样的相对链接，不写入本机路径或服务器绝对路径。
 
 生成最终 dashboard 后，可以用发布工具把静态网页同步到 GitHub Pages 工作树。命令建议只写相对路径，避免把本机绝对路径带入脚本、服务器命令或公开清单：
 

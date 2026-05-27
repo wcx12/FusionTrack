@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -75,6 +76,39 @@ def _load_run_config(config_path: Path) -> dict[str, Any]:
         else:
             config[normalized_key] = value
     return config
+
+
+def _dashboard_export_package_href(export_package: Path | None) -> str | None:
+    if export_package is None:
+        return None
+    return f"assets/{export_package.name}"
+
+
+def _dashboard_assets_dir(summary: dict[str, Any]) -> Path | None:
+    dashboard = summary.get("dashboard")
+    if not isinstance(dashboard, dict):
+        return None
+    assets_dir = dashboard.get("assets_dir")
+    if not assets_dir:
+        return None
+    return Path(str(assets_dir))
+
+
+def _copy_export_package_to_dashboard_assets(summary: dict[str, Any], package_path: Path) -> str | None:
+    assets_dir = _dashboard_assets_dir(summary)
+    if assets_dir is None or not package_path.exists():
+        return None
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    target = assets_dir / package_path.name
+    if package_path.resolve() != target.resolve():
+        shutil.copy2(package_path, target)
+
+    remote_assets = Path("server_artifacts") / "remote_result" / "report" / "assets"
+    if remote_assets.exists():
+        remote_target = remote_assets / package_path.name
+        if target.resolve() != remote_target.resolve():
+            shutil.copy2(target, remote_target)
+    return f"assets/{package_path.name}"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -195,6 +229,7 @@ def main() -> None:
             suite_manifest=args.suite_manifest,
             holdout_manifest=args.holdout_manifest,
             protocol_manifests=args.protocol_manifest,
+            export_package_href=_dashboard_export_package_href(args.export_package),
             top_sequences=args.top_sequences,
             top_k=args.top_k,
             case_limit=args.case_limit,
@@ -234,7 +269,13 @@ def main() -> None:
             skip_extraction=args.skip_extraction,
         )
     if args.export_package:
-        summary["export_package"] = build_analysis_export_package(summary, args.export_package)
+        export_summary = build_analysis_export_package(summary, args.export_package)
+        dashboard_href = _copy_export_package_to_dashboard_assets(summary, Path(export_summary["package_path"]))
+        if dashboard_href:
+            export_summary["dashboard_href"] = dashboard_href
+            if isinstance(summary.get("dashboard"), dict):
+                summary["dashboard"]["export_package_href"] = dashboard_href
+        summary["export_package"] = export_summary
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 

@@ -382,6 +382,54 @@ def test_final_results_dashboard_exposes_schema_diagnostics(tmp_path: Path) -> N
     assert "handlePlaybackPngExport" in html
 
 
+def test_final_dashboard_exposes_public_export_package_download(tmp_path: Path) -> None:
+    final_root, score_root, individual_labels, group_labels = _build_small_final_result_tree(tmp_path)
+    dashboard = load_final_results_dashboard(
+        final_results_root=final_root,
+        individual_label_file=individual_labels,
+        group_label_file=group_labels,
+        score_search_roots=[score_root],
+        top_k=2,
+        case_limit=3,
+    )
+
+    build_final_dashboard(
+        dashboard=dashboard,
+        output_dir=tmp_path / "dashboard",
+        top_sequences=1,
+        provenance={
+            "mode": "final_results_dashboard",
+            "dataset_manifest": {"dataset_name": "VT-Tiny-MOT", "status": "ok", "splits": {}},
+            "export_package": {
+                "href": "assets/fusiontrack_export.zip",
+                "path": str(tmp_path / "exports" / "fusiontrack_export.zip"),
+                "package_format": "fusiontrack_analysis_export_v1",
+                "num_files": 18,
+                "size_bytes": 4096,
+            },
+        },
+    )
+
+    dashboard_payload = json.loads(
+        (tmp_path / "dashboard" / "assets" / "final_dashboard_data.json").read_text(encoding="utf-8")
+    )
+    export_package = dashboard_payload["provenance"]["export_package"]
+    assert export_package["href"] == "assets/fusiontrack_export.zip"
+    assert export_package["name"] == "fusiontrack_export.zip"
+    assert export_package["package_format"] == "fusiontrack_analysis_export_v1"
+    assert export_package["num_files"] == 18
+    assert export_package["size_bytes"] == 4096
+    assert "path" not in export_package
+    assert str(tmp_path) not in json.dumps(export_package)
+
+    html = (tmp_path / "dashboard" / "index.html").read_text(encoding="utf-8")
+    assert "exportPackageDownload" in html
+    assert "renderExportPackagePanel" in html
+    assert "provenanceExportPackage" in html
+    assert "assets/fusiontrack_export.zip" in html
+    assert str(tmp_path) not in html
+
+
 def test_score_decomposition_reads_fused_metadata_sources_and_explicit_components() -> None:
     row = {
         "score": 0.62,
