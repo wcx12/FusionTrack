@@ -371,6 +371,11 @@ def test_final_results_dashboard_exposes_schema_diagnostics(tmp_path: Path) -> N
     assert "schemaWarningHeader" in html
     assert "missing_score_keys" in html
     assert "schemaDiagnosticsSummary" in html
+    assert "exportViewJson" in html
+    assert "exportLeaderboardCsv" in html
+    assert "exportSequenceJson" in html
+    assert "fusiontrack_dashboard_view_export_v1" in html
+    assert "rowsToCsv" in html
 
 
 def test_score_decomposition_reads_fused_metadata_sources_and_explicit_components() -> None:

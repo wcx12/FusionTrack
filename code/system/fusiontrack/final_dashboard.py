@@ -1126,6 +1126,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .method-summary-item {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 8px 10px; }}
     .method-summary-item span {{ display: block; color: #64748b; font-size: 12px; }}
     .method-summary-item strong {{ display: block; margin-top: 2px; }}
+    .export-actions {{ display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; align-items: center; }}
+    .export-actions button {{ min-height: 34px; padding: 6px 10px; border-radius: 7px; font-size: 12px; }}
+    .export-status {{ min-width: 150px; color: #64748b; font-size: 12px; text-align: right; }}
     .data-flow-grid {{ display: grid; grid-template-columns: repeat(4, minmax(170px, 1fr)); gap: 10px; }}
     .data-flow-card {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 10px; }}
     .data-flow-card span {{ display: block; color: #64748b; font-size: 12px; }}
@@ -1196,6 +1199,8 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       .toolbar label {{ width: 100%; }}
       .section-heading {{ display: grid; }}
       .section-heading .subtle {{ text-align: left; }}
+      .section-heading .export-actions {{ justify-content: flex-start; }}
+      .export-status {{ text-align: left; }}
       .control-surface {{ padding: 10px; }}
       .mode-switch button, .layer-switch button {{ flex: 1 1 140px; }}
       .protocol-strip, .insight-grid, .method-summary, .data-flow-grid {{ grid-template-columns: 1fr; }}
@@ -1388,6 +1393,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     <section class="panel audit-only" id="analysisSection">
       <div class="section-heading">
         <h2 data-i18n="analysisTitle">实验分析</h2>
+        <div class="export-actions" aria-label="Data export actions">
+          <button type="button" class="secondary-button" id="exportViewJson" data-i18n="exportViewJson">Export view JSON</button>
+          <button type="button" class="secondary-button" id="exportLeaderboardCsv" data-i18n="exportLeaderboardCsv">Export ranking CSV</button>
+          <button type="button" class="secondary-button" id="exportSequenceJson" data-i18n="exportSequenceJson">Export sequence JSON</button>
+          <span id="exportStatus" class="export-status" role="status"></span>
+        </div>
       </div>
       <div class="analysis-tabs">
         <button type="button" class="analysis-tab active" data-panel="leaderboard" data-i18n="tabLeaderboard">方法排名</button>
@@ -1450,6 +1461,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       const methodSummary = document.getElementById("methodSummary");
       const methodStatusTable = document.getElementById("methodStatusTable");
       const dataFlowPanel = document.getElementById("dataFlowPanel");
+      const exportViewJson = document.getElementById("exportViewJson");
+      const exportLeaderboardCsv = document.getElementById("exportLeaderboardCsv");
+      const exportSequenceJson = document.getElementById("exportSequenceJson");
+      const exportStatus = document.getElementById("exportStatus");
       const helpButton = document.getElementById("helpButton");
       const helpDialog = document.getElementById("helpDialog");
       const helpClose = document.getElementById("helpClose");
@@ -1641,6 +1656,10 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           sequenceFrameRange: "Sequence frame range",
           sequenceVisualizedTracks: "Visualized tracks",
           analysisTitle: "Experiment Analysis",
+          exportViewJson: "Export view JSON",
+          exportLeaderboardCsv: "Export ranking CSV",
+          exportSequenceJson: "Export sequence JSON",
+          exportDone: "Exported",
           tabLeaderboard: "Method Ranking",
           tabTypes: "Anomaly-Type Analysis",
           tabCases: "Representative Cases",
@@ -2137,6 +2156,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         moduleStatusPartial: "占位/待强化",
         moduleStatusMissing: "未接入"
       }});
+      Object.assign(translations.zh, {{
+        exportViewJson: "\u5bfc\u51fa\u5f53\u524d\u89c6\u56fe JSON",
+        exportLeaderboardCsv: "\u5bfc\u51fa\u6392\u884c\u699c CSV",
+        exportSequenceJson: "\u5bfc\u51fa\u5f53\u524d\u5e8f\u5217 JSON",
+        exportDone: "\u5df2\u5bfc\u51fa"
+      }});
       Object.assign(translations.en, {{
         eventThresholdLabel: "Event threshold",
         windowEventTitle: "Current-window event evidence",
@@ -2398,6 +2423,162 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         }}
         const compRows = (track.task_score_components || {{}})[state.task] || {{}};
         return compRows[state.method] || Object.values(compRows || {{}})[0] || {{}};
+      }}
+
+      function safeFilename(value) {{
+        return String(value || "fusiontrack")
+          .replace(/[^A-Za-z0-9_.-]+/g, "_")
+          .replace(/^_+|_+$/g, "")
+          .slice(0, 140) || "fusiontrack";
+      }}
+
+      function downloadTextFile(filename, text, mimeType) {{
+        const blob = new Blob([text], {{ type: mimeType }});
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = safeFilename(filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 500);
+        if (exportStatus) {{
+          exportStatus.textContent = `${{t("exportDone")}}: ${{link.download}}`;
+          window.setTimeout(() => {{
+            if (exportStatus) {{
+              exportStatus.textContent = "";
+            }}
+          }}, 2400);
+        }}
+      }}
+
+      function csvValue(value) {{
+        let text = "";
+        if (value === null || value === undefined) {{
+          text = "";
+        }} else if (typeof value === "object") {{
+          text = JSON.stringify(value);
+        }} else {{
+          text = String(value);
+        }}
+        return /[",\\r\\n]/.test(text) ? `"${{text.replace(/"/g, '""')}}"` : text;
+      }}
+
+      function rowsToCsv(rows) {{
+        const headerSet = new Set();
+        rows.forEach(row => Object.keys(row || {{}}).forEach(key => headerSet.add(key)));
+        const headers = Array.from(headerSet);
+        if (!headers.length) {{
+          return "";
+        }}
+        return [
+          headers.map(csvValue).join(","),
+          ...rows.map(row => headers.map(header => csvValue(row?.[header])).join(","))
+        ].join("\\n");
+      }}
+
+      function currentLeaderboardRows() {{
+        return (taskData().leaderboard || []).map((row, index) => ({{ rank: index + 1, ...row }}));
+      }}
+
+      function currentCaseRows() {{
+        return ((taskData().case_rows || {{}})[state.method] || {{}});
+      }}
+
+      function currentSequenceStats(data) {{
+        return ((data?.stats_by_task || {{}})[state.task]) || data?.stats || {{}};
+      }}
+
+      function compactTrackForExport(track) {{
+        return {{
+          sample_id: track.sample_id,
+          sequence: track.sequence,
+          track_id: track.track_id,
+          category_id: track.category_id,
+          category_name: track.category_name,
+          active_label: trackLabelForTask(track, state.task),
+          active_method_score: Number((trackScoresForTask(track, state.task) || {{}})[state.method] || 0),
+          active_score_components: selectedTrackScoreComponents(track),
+          active_score_decomposition: selectedTrackDecomposition(track),
+          points: track.points || []
+        }};
+      }}
+
+      function buildCurrentViewExport() {{
+        const task = taskData() || {{}};
+        const method = ((task.methods || {{}})[state.method]) || {{}};
+        const data = currentPlayback() || {{}};
+        const track = selectedTrack(data) || activeTrack(true);
+        const leaderboardRow = (task.leaderboard || []).find(row => row.method === state.method) || null;
+        return {{
+          schema: "fusiontrack_dashboard_view_export_v1",
+          exported_at_utc: new Date().toISOString(),
+          language: state.language,
+          display_mode: state.presentationMode,
+          task: state.task,
+          method: state.method,
+          sequence: data.sequence || state.sequence || "",
+          frame: state.frame,
+          visualization: {{
+            view_mode: state.viewMode,
+            layer: state.layer,
+            heat_opacity: state.heatOpacity,
+            heat_window: state.heatWindow,
+            event_threshold: state.eventThreshold,
+            play_speed: state.playSpeed
+          }},
+          method_metrics: method.metrics || {{}},
+          leaderboard_row: leaderboardRow,
+          case_rows: currentCaseRows(),
+          sequence_stats: currentSequenceStats(data),
+          media: data.media || {{}},
+          selected_track: track ? compactTrackForExport(track) : null
+        }};
+      }}
+
+      function buildCurrentSequenceExport() {{
+        const data = currentPlayback() || {{}};
+        return {{
+          schema: "fusiontrack_dashboard_sequence_export_v1",
+          exported_at_utc: new Date().toISOString(),
+          task: state.task,
+          method: state.method,
+          sequence: data.sequence || state.sequence || "",
+          frame_range: data.frame_range || [],
+          media: data.media || {{}},
+          modality_audit: data.modality_audit || {{}},
+          stats_by_task: data.stats_by_task || {{}},
+          background_frames: data.background_frames || [],
+          tracks: (data.tracks || []).map(compactTrackForExport)
+        }};
+      }}
+
+      function updateExportControls() {{
+        const task = taskData() || {{}};
+        if (exportViewJson) {{
+          exportViewJson.disabled = !state.task || !state.method;
+        }}
+        if (exportLeaderboardCsv) {{
+          exportLeaderboardCsv.disabled = !(task.leaderboard || []).length;
+        }}
+        if (exportSequenceJson) {{
+          exportSequenceJson.disabled = !currentPlayback();
+        }}
+      }}
+
+      function handleViewExport() {{
+        const filename = `fusiontrack_${{state.task}}_${{state.method}}_${{state.sequence || "sequence"}}_view.json`;
+        downloadTextFile(filename, JSON.stringify(buildCurrentViewExport(), null, 2), "application/json;charset=utf-8");
+      }}
+
+      function handleLeaderboardExport() {{
+        const filename = `fusiontrack_${{state.task}}_leaderboard.csv`;
+        downloadTextFile(filename, "\\uFEFF" + rowsToCsv(currentLeaderboardRows()), "text/csv;charset=utf-8");
+      }}
+
+      function handleSequenceExport() {{
+        const filename = `fusiontrack_${{state.task}}_${{state.method}}_${{state.sequence || "sequence"}}_sequence.json`;
+        downloadTextFile(filename, JSON.stringify(buildCurrentSequenceExport(), null, 2), "application/json;charset=utf-8");
       }}
 
       function frameEventScoresForWindow(row, frame = state.frame, window = state.heatWindow, threshold = state.eventThreshold) {{
@@ -4729,6 +4910,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         renderDataFlowAudit();
         renderProtocolOverview();
         renderHelp();
+        updateExportControls();
         drawPlayback();
       }}
 
@@ -4775,6 +4957,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         state.selectedSampleId = "";
         resetFrameForSequence();
         renderSequenceStats();
+        updateExportControls();
         drawPlayback();
       }});
       frameSlider.addEventListener("input", () => {{
@@ -4830,6 +5013,15 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       playToggle.addEventListener("click", () => {{
         state.playing ? stopPlayback() : startPlayback();
       }});
+      if (exportViewJson) {{
+        exportViewJson.addEventListener("click", handleViewExport);
+      }}
+      if (exportLeaderboardCsv) {{
+        exportLeaderboardCsv.addEventListener("click", handleLeaderboardExport);
+      }}
+      if (exportSequenceJson) {{
+        exportSequenceJson.addEventListener("click", handleSequenceExport);
+      }}
       [canvases.heatmap, canvases.tracks, canvases.both, canvases.single].forEach(targetCanvas => {{
         if (targetCanvas) {{
           targetCanvas.addEventListener("click", event => pickTrackFromCanvas(event, targetCanvas));
