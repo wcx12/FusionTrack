@@ -737,6 +737,12 @@ def test_build_final_dashboard_writes_method_switching_html(tmp_path: Path) -> N
     assert "fusiontrack.finalDashboard.presentationMode" in html
     assert "data-i18n-option" in html
     assert "demoSummary" in html
+    assert "summary-details" in html
+    assert "demoBriefTitle" in html
+    assert "protocolDetailsTitle" in html
+    assert "advancedControlsTitle" in html
+    assert "detailEvidenceDrawer" in html
+    assert "export-drawer" in html
     assert "demoPipelineSummary" in html
     assert "demoResultSummary" in html
     assert "demoEvidenceSummary" in html

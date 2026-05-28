@@ -1197,13 +1197,14 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
   <title>FusionTrack 最终结果看板</title>
   <style>
     * {{ box-sizing: border-box; }}
-    body {{ margin: 0; font-family: Arial, sans-serif; color: #172033; background: #f5f7fb; line-height: 1.5; }}
-    main {{ max-width: 1500px; margin: 0 auto; padding: 24px 24px 40px; }}
-    header {{ display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; margin-bottom: 16px; }}
-    h1 {{ margin: 0; font-size: 28px; line-height: 1.15; }}
+    body {{ margin: 0; font-family: Arial, sans-serif; color: #172033; background: #f7f9fc; line-height: 1.5; }}
+    main {{ max-width: 1440px; margin: 0 auto; padding: 20px 20px 36px; }}
+    header {{ display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; margin-bottom: 12px; padding: 16px; border: 1px solid #e1e7ef; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035); }}
+    header > div:first-child {{ flex: 0 0 360px; min-width: 300px; }}
+    h1 {{ margin: 0; font-size: 25px; line-height: 1.15; white-space: nowrap; }}
     h2 {{ margin: 0; font-size: 18px; line-height: 1.25; }}
     .subtle {{ color: #64748b; font-size: 13px; }}
-    .toolbar {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: end; justify-content: flex-end; }}
+    .toolbar {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: end; justify-content: flex-end; }}
     label {{ display: grid; gap: 5px; color: #475569; font-size: 12px; font-weight: 700; }}
     select, button, input {{ min-height: 44px; border: 1px solid #cbd5e1; border-radius: 7px; padding: 8px 10px; background: white; color: #0f172a; }}
     select {{ min-width: 170px; }}
@@ -1212,11 +1213,18 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     button:active {{ transform: translateY(1px); }}
     select:focus-visible, button:focus-visible, input:focus-visible {{ outline: 3px solid rgba(14, 116, 144, 0.28); outline-offset: 2px; }}
     input[type="range"] {{ min-height: 32px; padding: 0; accent-color: #0f766e; cursor: pointer; }}
-    .panel {{ background: white; border: 1px solid #e1e7ef; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }}
-    .cards {{ display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; margin-bottom: 16px; }}
-    .card {{ background: white; border: 1px solid #e1e7ef; border-radius: 8px; padding: 11px 13px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035); }}
+    .panel {{ background: white; border: 1px solid #e1e7ef; border-radius: 8px; padding: 14px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035); }}
+    .cards {{ display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }}
+    .card {{ background: white; border: 1px solid #e1e7ef; border-radius: 8px; padding: 9px 12px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025); }}
     .card > div:first-child {{ color: #64748b; font-size: 12px; font-weight: 700; }}
-    .value {{ margin-top: 2px; font-size: 25px; line-height: 1.05; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }}
+    .value {{ margin-top: 2px; font-size: 23px; line-height: 1.05; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }}
+    .summary-details {{ margin: 0 0 12px; border: 1px solid #e1e7ef; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025); overflow: clip; }}
+    .summary-details > summary {{ display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; min-height: 48px; padding: 10px 14px; cursor: pointer; list-style: none; font-weight: 800; color: #0f172a; }}
+    .summary-details > summary::-webkit-details-marker {{ display: none; }}
+    .summary-details > summary::after {{ content: "+"; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid #cbd5e1; border-radius: 999px; color: #475569; font-size: 18px; line-height: 1; }}
+    .summary-details[open] > summary::after {{ content: "-"; }}
+    .summary-details .summary-note {{ color: #64748b; font-size: 12px; font-weight: 600; }}
+    .summary-details-body {{ padding: 0 14px 14px; }}
     .leaderboard, .type-table, .case-list {{ width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13px; }}
     th, td {{ border-bottom: 1px solid #e5e7eb; padding: 9px 8px; text-align: left; vertical-align: top; }}
     th {{ color: #475569; font-weight: 800; background: #f8fafc; position: sticky; top: 0; z-index: 1; }}
@@ -1230,8 +1238,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .player {{ margin-top: 0; }}
     .section-heading {{ display: flex; justify-content: space-between; gap: 14px; align-items: start; margin-bottom: 12px; }}
     .section-heading .subtle {{ max-width: 780px; text-align: right; font-variant-numeric: tabular-nums; }}
-    .control-surface {{ display: grid; gap: 10px; margin-bottom: 12px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }}
-    .player-tools {{ display: grid; grid-template-columns: auto minmax(220px, 1fr) auto; gap: 12px; align-items: end; }}
+    .control-surface {{ display: grid; gap: 9px; margin-bottom: 12px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }}
+    .player-tools {{ display: grid; grid-template-columns: auto minmax(220px, 1fr) auto; gap: 10px; align-items: end; }}
+    .playback-primary-tools {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }}
     .secondary-button {{ padding: 8px 14px; }}
     a.secondary-button {{ display: inline-flex; align-items: center; justify-content: center; min-height: 34px; border: 1px solid #cbd5e1; border-radius: 7px; background: white; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 700; }}
     a.secondary-button:hover {{ border-color: #94a3b8; background: #f8fafc; }}
@@ -1245,6 +1254,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .layer-button {{ min-height: 44px; padding: 7px 12px; }}
     .layer-button.active {{ background: #111827; border-color: #111827; color: white; }}
     .mode-switch[hidden], .heat-controls[hidden], .layer-switch[hidden], .comparison-grid[hidden], .single-view[hidden], .registration-playback[hidden] {{ display: none; }}
+    .advanced-controls {{ border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; }}
+    .advanced-controls > summary {{ min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 11px; cursor: pointer; list-style: none; color: #334155; font-size: 13px; font-weight: 800; }}
+    .advanced-controls > summary::-webkit-details-marker {{ display: none; }}
+    .advanced-controls > summary::after {{ content: "+"; color: #64748b; font-size: 18px; line-height: 1; }}
+    .advanced-controls[open] > summary::after {{ content: "-"; }}
+    .advanced-body {{ display: grid; gap: 10px; padding: 0 11px 11px; }}
     .heat-controls {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }}
     .heat-controls label {{ min-width: 180px; max-width: 260px; }}
     .sequence-stats {{ display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 8px; }}
@@ -1260,7 +1275,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     #frameBadge {{ color: #475569; font-size: 13px; font-variant-numeric: tabular-nums; }}
     .canvas-shell {{ background: #111827; border-radius: 8px; padding: 10px; }}
     .comparison-grid {{ display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 12px; }}
-    .video-panel {{ min-width: 0; margin: 0; border: 1px solid #1f2937; border-radius: 8px; padding: 9px; background: #0f172a; }}
+    .video-panel {{ min-width: 0; margin: 0; border: 1px solid #1f2937; border-radius: 8px; padding: 8px; background: #0f172a; }}
     .video-panel figcaption {{ display: flex; align-items: center; min-height: 24px; margin: 0 0 7px; color: #f8fafc; font-size: 12px; font-weight: 800; }}
     .registration-playback {{ display: grid; grid-template-columns: minmax(320px, 1.6fr) minmax(260px, 0.8fr); gap: 12px; }}
     .registration-canvas-shell {{ background: #0f172a; border: 1px solid #1f2937; border-radius: 8px; padding: 10px; min-width: 0; }}
@@ -1272,7 +1287,13 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .registration-side-panel .explain-metrics {{ grid-template-columns: 1fr; }}
     .registration-cloud-legend {{ display: flex; flex-wrap: wrap; gap: 9px; margin-top: 9px; color: #cbd5e1; font-size: 12px; }}
     canvas {{ display: block; width: 100%; height: auto; background: #e2e8f0; border-radius: 6px; }}
-    section {{ margin-top: 16px; }}
+    section {{ margin-top: 14px; }}
+    .detail-drawer {{ margin-top: 12px; border: 1px solid #e1e7ef; border-radius: 8px; background: #ffffff; }}
+    .detail-drawer > summary {{ min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; cursor: pointer; list-style: none; font-weight: 800; color: #0f172a; }}
+    .detail-drawer > summary::-webkit-details-marker {{ display: none; }}
+    .detail-drawer > summary::after {{ content: "+"; color: #64748b; font-size: 18px; line-height: 1; }}
+    .detail-drawer[open] > summary::after {{ content: "-"; }}
+    .detail-drawer-body {{ padding: 0 12px 12px; }}
     .analysis-tabs {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }}
     .analysis-tab.active {{ background: #111827; border-color: #111827; color: white; }}
     .analysis-panel-block[hidden] {{ display: none; }}
@@ -1281,6 +1302,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .help-button {{ background: #0f766e; border-color: #0f766e; color: white; }}
     .help-button:hover {{ background: #115e59; border-color: #115e59; }}
     .protocol-strip {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 0 0 16px; }}
+    .protocol-details .protocol-strip {{ margin: 0; }}
     .protocol-note {{ border-left: 4px solid #0f766e; }}
     .protocol-note strong {{ display: block; margin-bottom: 6px; color: #0f172a; }}
     .protocol-card h3, .insight-card h3 {{ margin: 0 0 8px; font-size: 15px; }}
@@ -1328,7 +1350,12 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .method-summary-item {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 8px 10px; }}
     .method-summary-item span {{ display: block; color: #64748b; font-size: 12px; }}
     .method-summary-item strong {{ display: block; margin-top: 2px; }}
-    .export-actions {{ display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; align-items: center; }}
+    .export-drawer {{ min-width: min(100%, 360px); border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; }}
+    .export-drawer > summary {{ min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; cursor: pointer; list-style: none; font-size: 12px; font-weight: 800; color: #334155; }}
+    .export-drawer > summary::-webkit-details-marker {{ display: none; }}
+    .export-drawer > summary::after {{ content: "+"; color: #64748b; font-size: 16px; line-height: 1; }}
+    .export-drawer[open] > summary::after {{ content: "-"; }}
+    .export-actions {{ display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; align-items: center; padding: 0 10px 10px; }}
     .export-actions button, .export-actions a.secondary-button {{ min-height: 34px; padding: 6px 10px; border-radius: 7px; font-size: 12px; }}
     .export-package-download {{ border-color: #99f6e4; background: #f0fdfa; color: #0f766e; }}
     .export-package-download:hover {{ border-color: #5eead4; background: #ccfbf1; }}
@@ -1337,7 +1364,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .data-flow-card {{ border: 1px solid #e1e7ef; border-radius: 7px; background: #f8fafc; padding: 10px; }}
     .data-flow-card span {{ display: block; color: #64748b; font-size: 12px; }}
     .data-flow-card strong {{ display: block; margin-top: 3px; font-size: 18px; font-variant-numeric: tabular-nums; }}
-    .demo-summary-grid {{ display: grid; grid-template-columns: minmax(260px, 1.05fr) minmax(260px, 0.95fr) minmax(260px, 0.95fr); gap: 12px; margin-bottom: 16px; }}
+    .demo-summary-grid {{ display: grid; grid-template-columns: minmax(260px, 1.05fr) minmax(260px, 0.95fr) minmax(260px, 0.95fr); gap: 10px; }}
     .demo-card h2 {{ margin-bottom: 8px; }}
     .demo-steps {{ display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }}
     .demo-step {{ display: grid; grid-template-columns: 28px 1fr; gap: 8px; align-items: start; border: 1px solid #dbe4ee; border-radius: 7px; background: #f8fafc; padding: 8px 10px; }}
@@ -1357,6 +1384,7 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     .module-row span:first-child {{ color: #334155; font-size: 13px; }}
     .module-row .status-pill {{ white-space: nowrap; }}
     .demo-mode .audit-only {{ display: none; }}
+    .demo-mode .analysis-tab[data-panel="methods"], .demo-mode .analysis-tab[data-panel="dataflow"] {{ display: none; }}
     .provenance-panel {{ grid-column: 1 / -1; border: 1px solid #dbe4ee; border-radius: 8px; background: #ffffff; padding: 12px; }}
     .provenance-panel h3 {{ margin: 0 0 10px; font-size: 15px; }}
     .provenance-subsection {{ margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0; }}
@@ -1392,6 +1420,8 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     @media (max-width: 960px) {{
       main {{ padding: 16px; }}
       header {{ display: grid; }}
+      header > div:first-child {{ min-width: 0; flex: auto; }}
+      h1 {{ white-space: normal; }}
       .cards {{ grid-template-columns: repeat(2, minmax(120px, 1fr)); }}
       select {{ min-width: 0; width: 100%; }}
       .player-tools {{ grid-template-columns: 1fr; }}
@@ -1406,6 +1436,9 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
       .section-heading .export-actions {{ justify-content: flex-start; }}
       .export-status {{ text-align: left; }}
       .control-surface {{ padding: 10px; }}
+      .playback-primary-tools {{ grid-template-columns: 1fr; }}
+      .summary-details > summary {{ grid-template-columns: 1fr; }}
+      .summary-details > summary::after {{ display: none; }}
       .mode-switch button, .layer-switch button {{ flex: 1 1 140px; }}
       .protocol-strip, .insight-grid, .method-summary, .data-flow-grid {{ grid-template-columns: 1fr; }}
       .demo-summary-grid, .demo-metrics {{ grid-template-columns: 1fr; }}
@@ -1448,74 +1481,55 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
     </header>
     <div id="cards" class="cards"></div>
 
-    <section id="demoSummary" class="demo-summary-grid" aria-label="Thesis demo summary">
-      <div class="panel demo-card">
-        <h2 data-i18n="demoPipelineTitle">System flow</h2>
-        <div id="demoPipelineSummary"></div>
-        <div id="systemCoveragePanel" class="module-coverage"></div>
-      </div>
-      <div class="panel demo-card">
-        <h2 data-i18n="demoResultTitle">Result snapshot</h2>
-        <div id="demoResultSummary"></div>
-      </div>
-      <div class="panel demo-card">
-        <h2 data-i18n="demoEvidenceTitle">Evidence snapshot</h2>
-        <div id="demoEvidenceSummary"></div>
-      </div>
-    </section>
-
-    <section class="protocol-strip" aria-label="Anomaly protocol overview">
-      <div class="panel protocol-note">
-        <strong data-i18n="protocolTitle">异常协议</strong>
-        <div class="subtle" data-i18n="protocolNote">当前标签来自规则化 synthetic anomaly injection；背景帧仍是原始视频，异常主要体现在轨迹、热力和群体关系层。</div>
-      </div>
-      <div class="panel protocol-card" id="individualProtocol"></div>
-      <div class="panel protocol-card" id="groupProtocol"></div>
-      <div class="panel protocol-card" id="registrationProtocol"></div>
-    </section>
-
     <section class="panel player">
       <div class="section-heading">
         <h2 data-i18n="interactivePlayback">Interactive playback</h2>
         <div class="subtle" id="playbackReadout">No playback loaded</div>
       </div>
       <div class="control-surface">
-        <div class="player-tools">
-          <button type="button" class="secondary-button" id="playToggle">Play</button>
-          <label><span data-i18n="frame">帧</span>
-            <input id="frameSlider" type="range" min="0" max="0" value="0">
-          </label>
-          <span id="frameBadge">0 / 0</span>
+        <div class="playback-primary-tools">
+          <div class="player-tools">
+            <button type="button" class="secondary-button" id="playToggle">Play</button>
+            <label><span data-i18n="frame">帧</span>
+              <input id="frameSlider" type="range" min="0" max="0" value="0">
+            </label>
+            <span id="frameBadge">0 / 0</span>
+          </div>
+          <div class="mode-switch" aria-label="Visualization mode">
+            <button type="button" class="view-mode-button active" data-view-mode="comparison" data-i18n="viewComparison">四画面对比</button>
+            <button type="button" class="view-mode-button" data-view-mode="single" data-i18n="viewSingle">单画面模式</button>
+          </div>
         </div>
-        <div class="mode-switch" aria-label="Visualization mode">
-          <button type="button" class="view-mode-button active" data-view-mode="comparison" data-i18n="viewComparison">四画面对比</button>
-          <button type="button" class="view-mode-button" data-view-mode="single" data-i18n="viewSingle">单画面模式</button>
-        </div>
-        <div class="layer-switch" id="singleLayerSwitch" aria-label="Single playback layer" hidden>
-          <span class="subtle" data-i18n="singleLayerLabel">单画面图层</span>
-          <button type="button" class="layer-button" data-layer="tracks" data-i18n="layerTracks">Tracks</button>
-          <button type="button" class="layer-button active" data-layer="both" data-i18n="layerBoth">Heat + Tracks</button>
-          <button type="button" class="layer-button" data-layer="heatmap" data-i18n="layerHeatmap">Heatmap</button>
-        </div>
-        <div class="heat-controls">
-          <label><span data-i18n="heatOpacityLabel">热力透明度</span>
-            <input id="heatOpacity" type="range" min="0" max="100" value="64">
-          </label>
-          <label><span data-i18n="timeWindowLabel">时间窗口</span>
-            <input id="heatWindow" type="range" min="12" max="120" value="36">
-          </label>
-          <label><span data-i18n="eventThresholdLabel">Event threshold</span>
-            <input id="eventThreshold" type="range" min="0" max="100" value="0">
-            <span id="eventThresholdReadout" class="subtle">0.00</span>
-          </label>
-          <label><span data-i18n="playSpeedLabel">播放速度</span>
-            <input id="playSpeed" type="range" min="20" max="300" step="10" value="100">
-            <span id="playSpeedReadout" class="subtle">1.0x</span>
-          </label>
-        </div>
-        <div id="sequenceStats" class="sequence-stats"></div>
-        <div id="mediaStatusStrip" class="media-status-strip" role="status"></div>
-        <div id="backgroundNotice" class="background-notice" role="status" hidden></div>
+        <details class="advanced-controls" id="advancedControls">
+          <summary data-i18n="advancedControlsTitle">高级控制与状态</summary>
+          <div class="advanced-body">
+            <div class="layer-switch" id="singleLayerSwitch" aria-label="Single playback layer" hidden>
+              <span class="subtle" data-i18n="singleLayerLabel">单画面图层</span>
+              <button type="button" class="layer-button" data-layer="tracks" data-i18n="layerTracks">Tracks</button>
+              <button type="button" class="layer-button active" data-layer="both" data-i18n="layerBoth">Heat + Tracks</button>
+              <button type="button" class="layer-button" data-layer="heatmap" data-i18n="layerHeatmap">Heatmap</button>
+            </div>
+            <div class="heat-controls">
+              <label><span data-i18n="heatOpacityLabel">热力透明度</span>
+                <input id="heatOpacity" type="range" min="0" max="100" value="64">
+              </label>
+              <label><span data-i18n="timeWindowLabel">时间窗口</span>
+                <input id="heatWindow" type="range" min="12" max="120" value="36">
+              </label>
+              <label><span data-i18n="eventThresholdLabel">Event threshold</span>
+                <input id="eventThreshold" type="range" min="0" max="100" value="0">
+                <span id="eventThresholdReadout" class="subtle">0.00</span>
+              </label>
+              <label><span data-i18n="playSpeedLabel">播放速度</span>
+                <input id="playSpeed" type="range" min="20" max="300" step="10" value="100">
+                <span id="playSpeedReadout" class="subtle">1.0x</span>
+              </label>
+            </div>
+            <div id="sequenceStats" class="sequence-stats"></div>
+            <div id="mediaStatusStrip" class="media-status-strip" role="status"></div>
+            <div id="backgroundNotice" class="background-notice" role="status" hidden></div>
+          </div>
+        </details>
       </div>
       <div id="comparisonView" class="comparison-grid">
         <figure class="video-panel">
@@ -1570,41 +1584,91 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
           <div id="groupInsightPanel" class="subtle"></div>
         </div>
       </div>
-      <div class="insight-grid-large">
-        <div class="insight-card">
-          <h3 data-i18n="methodFlowTitle">Method flow</h3>
-          <div id="methodFlowPanel" class="flow-steps subtle">--</div>
-          <div id="flowReadout" class="subtle" style="margin-top: 8px;"></div>
-        </div>
-        <div class="insight-card">
-          <h3 data-i18n="submoduleTitle">Individual submodules</h3>
-          <div class="submodule-switch" id="submoduleSwitch">
-            <span class="subtle" data-i18n="submodulePrefix">Submodule</span>
-            <button type="button" class="submodule-tab active" data-submodule="route" data-i18n="submoduleRoute">Route</button>
-            <button type="button" class="submodule-tab" data-submodule="speed" data-i18n="submoduleSpeed">Speed</button>
-            <button type="button" class="submodule-tab" data-submodule="shape" data-i18n="submoduleShape">Shape</button>
+      <details class="detail-drawer" id="detailEvidenceDrawer">
+        <summary data-i18n="detailEvidenceTitle">展开方法流程、子模块和时间线</summary>
+        <div class="detail-drawer-body">
+          <div class="insight-grid-large">
+            <div class="insight-card">
+              <h3 data-i18n="methodFlowTitle">Method flow</h3>
+              <div id="methodFlowPanel" class="flow-steps subtle">--</div>
+              <div id="flowReadout" class="subtle" style="margin-top: 8px;"></div>
+            </div>
+            <div class="insight-card">
+              <h3 data-i18n="submoduleTitle">Individual submodules</h3>
+              <div class="submodule-switch" id="submoduleSwitch">
+                <span class="subtle" data-i18n="submodulePrefix">Submodule</span>
+                <button type="button" class="submodule-tab active" data-submodule="route" data-i18n="submoduleRoute">Route</button>
+                <button type="button" class="submodule-tab" data-submodule="speed" data-i18n="submoduleSpeed">Speed</button>
+                <button type="button" class="submodule-tab" data-submodule="shape" data-i18n="submoduleShape">Shape</button>
+              </div>
+              <div id="submodulePanel" class="subtle"></div>
+              <div class="decomp-bar" id="scoreCompositionPanel"></div>
+            </div>
+            <div class="insight-card">
+              <h3 data-i18n="timelineTitle">Event timeline</h3>
+              <div id="eventTimelinePanel" class="subtle"></div>
+            </div>
           </div>
-          <div id="submodulePanel" class="subtle"></div>
-          <div class="decomp-bar" id="scoreCompositionPanel"></div>
         </div>
-        <div class="insight-card">
-          <h3 data-i18n="timelineTitle">Event timeline</h3>
-          <div id="eventTimelinePanel" class="subtle"></div>
-        </div>
-      </div>
+      </details>
     </section>
 
-    <section class="panel audit-only" id="analysisSection">
+    <details id="demoSummary" class="summary-details" aria-label="Thesis demo summary">
+      <summary>
+        <span data-i18n="demoBriefTitle">论文展示摘要</span>
+        <span class="summary-note" data-i18n="demoBriefNote">系统流程、当前结果和论文模块覆盖，答辩需要时展开查看。</span>
+      </summary>
+      <div class="summary-details-body">
+        <div class="demo-summary-grid">
+          <div class="panel demo-card">
+            <h2 data-i18n="demoPipelineTitle">System flow</h2>
+            <div id="demoPipelineSummary"></div>
+            <div id="systemCoveragePanel" class="module-coverage"></div>
+          </div>
+          <div class="panel demo-card">
+            <h2 data-i18n="demoResultTitle">Result snapshot</h2>
+            <div id="demoResultSummary"></div>
+          </div>
+          <div class="panel demo-card">
+            <h2 data-i18n="demoEvidenceTitle">Evidence snapshot</h2>
+            <div id="demoEvidenceSummary"></div>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="summary-details protocol-details" aria-label="Anomaly protocol overview">
+      <summary>
+        <span data-i18n="protocolDetailsTitle">异常协议与数据说明</span>
+        <span class="summary-note" data-i18n="protocolDetailsNote">标签来源、Individual / Group / Registration 协议和数据边界。</span>
+      </summary>
+      <div class="summary-details-body">
+        <section class="protocol-strip" aria-label="Anomaly protocol overview">
+          <div class="panel protocol-note">
+            <strong data-i18n="protocolTitle">异常协议</strong>
+            <div class="subtle" data-i18n="protocolNote">当前标签来自规则化 synthetic anomaly injection；背景帧仍是原始视频，异常主要体现在轨迹、热力和群体关系层。</div>
+          </div>
+          <div class="panel protocol-card" id="individualProtocol"></div>
+          <div class="panel protocol-card" id="groupProtocol"></div>
+          <div class="panel protocol-card" id="registrationProtocol"></div>
+        </section>
+      </div>
+    </details>
+
+    <section class="panel analysis-section" id="analysisSection">
       <div class="section-heading">
         <h2 data-i18n="analysisTitle">实验分析</h2>
-        <div class="export-actions" aria-label="Data export actions">
-          <button type="button" class="secondary-button" id="exportViewJson" data-i18n="exportViewJson">Export view JSON</button>
-          <button type="button" class="secondary-button" id="exportLeaderboardCsv" data-i18n="exportLeaderboardCsv">Export ranking CSV</button>
-          <button type="button" class="secondary-button" id="exportSequenceJson" data-i18n="exportSequenceJson">Export sequence JSON</button>
-          <button type="button" class="secondary-button" id="exportPlaybackPng" data-i18n="exportPlaybackPng">Export frame PNG</button>
-          <a class="secondary-button export-package-download" id="exportPackageDownload" data-i18n="exportPackageDownload" href="#" download hidden>Download package</a>
-          <span id="exportStatus" class="export-status" role="status"></span>
-        </div>
+        <details class="export-drawer">
+          <summary data-i18n="exportDrawerTitle">导出与报告包</summary>
+          <div class="export-actions" aria-label="Data export actions">
+            <button type="button" class="secondary-button" id="exportViewJson" data-i18n="exportViewJson">Export view JSON</button>
+            <button type="button" class="secondary-button" id="exportLeaderboardCsv" data-i18n="exportLeaderboardCsv">Export ranking CSV</button>
+            <button type="button" class="secondary-button" id="exportSequenceJson" data-i18n="exportSequenceJson">Export sequence JSON</button>
+            <button type="button" class="secondary-button" id="exportPlaybackPng" data-i18n="exportPlaybackPng">Export frame PNG</button>
+            <a class="secondary-button export-package-download" id="exportPackageDownload" data-i18n="exportPackageDownload" href="#" download hidden>Download package</a>
+            <span id="exportStatus" class="export-status" role="status"></span>
+          </div>
+        </details>
       </div>
       <div class="analysis-tabs">
         <button type="button" class="analysis-tab active" data-panel="leaderboard" data-i18n="tabLeaderboard">方法排名</button>
@@ -2385,6 +2449,13 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         presentationMode: "展示模式",
         presentationDemo: "论文展示版",
         presentationAudit: "完整审计版",
+        demoBriefTitle: "论文展示摘要",
+        demoBriefNote: "系统流程、当前结果和论文模块覆盖，答辩需要时展开查看。",
+        protocolDetailsTitle: "异常协议与数据说明",
+        protocolDetailsNote: "标签来源、Individual / Group / Registration 协议和数据边界。",
+        advancedControlsTitle: "高级控制与状态",
+        detailEvidenceTitle: "展开方法流程、子模块和时间线",
+        exportDrawerTitle: "导出与报告包",
         demoPipelineTitle: "系统流程",
         demoResultTitle: "结果概览",
         demoEvidenceTitle: "证据概览",
@@ -2441,6 +2512,13 @@ def _render_html(dashboard_data: dict[str, Any], playback_payloads: dict[str, An
         presentationMode: "Display mode",
         presentationDemo: "Thesis demo",
         presentationAudit: "Full audit",
+        demoBriefTitle: "Thesis Demo Summary",
+        demoBriefNote: "System flow, current result, and module coverage. Expand when needed for defense explanation.",
+        protocolDetailsTitle: "Anomaly Protocol and Data",
+        protocolDetailsNote: "Label source, task protocol, and data boundaries for Individual / Group / Registration.",
+        advancedControlsTitle: "Advanced controls and status",
+        detailEvidenceTitle: "Show method flow, submodules, and timeline",
+        exportDrawerTitle: "Exports and report package",
         demoPipelineTitle: "System Flow",
         demoResultTitle: "Result Snapshot",
         demoEvidenceTitle: "Evidence Snapshot",
