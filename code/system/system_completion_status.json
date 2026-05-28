@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "last_reviewed": "2026-05-28",
+  "status_values": {
+    "done": "当前代码、文档和可验证产物已经形成闭环。",
+    "partial": "已有可展示或可运行版本，但距离论文理想系统仍有明确缺口。",
+    "pending": "尚未形成可用实现或尚未接入最终展示链路。"
+  },
+  "modules": [
+    {
+      "id": "data_ingestion_audit",
+      "name": "数据接入与数据流审计",
+      "status": "done",
+      "current_evidence": [
+        "dataset_manifest.py 生成数据集结构、annotation 摘要、图像目录计数和 dataset_fingerprint。",
+        "final_dashboard.py 在数据流审计页展示任务级和序列级覆盖情况。",
+        "final_playback_data.json 记录 media.kind、背景帧、轨迹点和模态审计字段。"
+      ],
+      "remaining_work": [
+        "真实部署时需要保证 data_root 指向完整 VT-Tiny-MOT 数据集，否则 manifest 会记录 missing_data_root。"
+      ]
+    },
+    {
+      "id": "synthetic_anomaly_protocol",
+      "name": "异常标签协议",
+      "status": "partial",
+      "current_evidence": [
+        "Individual 和 Group 已使用 synthetic anomaly injection 协议构造异常标签。",
+        "Dashboard 已展示异常类型、标签数、异常数、key policy 和 protocol provenance。"
+      ],
+      "remaining_work": [
+        "VT-Tiny-MOT 当前没有原生异常 label，因此论文中必须说明当前标签是规则注入标签。",
+        "如果后续获得人工异常标注，需要按 sample_id 或 sample_id+window_id key policy 接入并重新评估。"
+      ]
+    },
+    {
+      "id": "individual_detection",
+      "name": "个体异常检测",
+      "status": "partial",
+      "current_evidence": [
+        "系统已接入 individual score rows、指标排行榜、典型案例、逐帧事件证据和解释 schema。",
+        "轻量个体检测器已输出 component_scores、frame_event_scores、event_segments 和 explanation_schema。",
+        "最终 dashboard 支持原视频、热力、轨迹、热力+轨迹四画面对比。"
+      ],
+      "remaining_work": [
+        "还需要用最终训练后的学习式个体模型替换或强化轻量规则/传统方法结果。",
+        "官方深度 baseline 多种子收敛结果仍需补齐后才能作为论文主表最终证据。"
+      ]
+    },
+    {
+      "id": "group_detection",
+      "name": "群体异常检测",
+      "status": "partial",
+      "current_evidence": [
+        "系统已接入 group score rows、窗口级 key policy、群体事件聚合和群体关系可视化。",
+        "Dashboard 可以显示群体中心、群体半径、涉及轨迹数、事件持续帧数和高风险群体排序。"
+      ],
+      "remaining_work": [
+        "群体异常模型仍偏向轻量图结构/规则化打分，尚未完全替换为论文理想的学习式群体异常检测模型。",
+        "需要继续补充更强模型、消融实验和多种子主表结果。"
+      ]
+    },
+    {
+      "id": "registration_diagnostics",
+      "name": "点云配准诊断",
+      "status": "partial",
+      "current_evidence": [
+        "registration_adapter.py 可把 baseline_summary.json 转成 registration_scores、registration_metrics 和 registration_experiment_manifest。",
+        "Dashboard 已提供 Registration 动态点云 canvas、配准误差面板、点云来源标注和风险样本展示。",
+        "run_fusiontrack.py 在配置提供 registration_benchmark_summary 时会刷新 registration bundle，避免复用旧 manifest。"
+      ],
+      "remaining_work": [
+        "当前最终发布数据中的 registration_point_source 为 synthetic_preview，说明这批 benchmark 没有真实 source/reference/aligned 点云坐标。",
+        "需要让 MPS-GAF 或外部学习式配准 baseline 输出真实 registration_points 后重新生成 dashboard。"
+      ]
+    },
+    {
+      "id": "final_dashboard_interaction",
+      "name": "最终可视化网页",
+      "status": "done",
+      "current_evidence": [
+        "最终网页支持中文/英文切换、论文展示版/完整审计版切换、任务/方法/序列选择。",
+        "Individual/Group 默认四画面对比，Registration 使用独立点云配准动态视图。",
+        "页面提供播放、暂停、帧滑块、速度、热力透明度、时间窗口、事件阈值、点击选中轨迹和键盘快捷键。"
+      ],
+      "remaining_work": [
+        "后续算法结果更新后需要重新生成并部署静态页面。"
+      ]
+    },
+    {
+      "id": "explanation_and_exports",
+      "name": "解释证据与导出交付",
+      "status": "done",
+      "current_evidence": [
+        "explanation_schema.py 统一生成 top_reason、evidence_source、policy、peak_event 和 score_components。",
+        "Dashboard 已支持当前视图 JSON、排行榜 CSV、当前序列 JSON、当前画面 PNG 和完整报告包 ZIP 导出。",
+        "export_package.py 会脱敏路径并打包 dashboard、summary、manifest 和引用实验产物。"
+      ],
+      "remaining_work": [
+        "当前 GitHub Pages 上的完整报告 ZIP 接近 100 MB，已可用但仓库体积偏大；后续可以改成 GitHub Release 附件或外部下载。"
+      ]
+    },
+    {
+      "id": "public_pages_deployment",
+      "name": "GitHub Pages 公开部署",
+      "status": "done",
+      "current_evidence": [
+        "gh-pages 分支已发布新版 index.html、final_dashboard_data.json、final_playback_data.json 和报告 ZIP。",
+        "公开页面数据中 168 条 Registration 点云记录均带 registration_point_source 字段。",
+        "publish_manifest.json 记录静态资源清单且不写入本机绝对路径。"
+      ],
+      "remaining_work": [
+        "如果继续生成 history 归档，需要控制 Pages 仓库体积，避免重复提交整套背景帧。"
+      ]
+    },
+    {
+      "id": "acceptance_materials",
+      "name": "验收与答辩材料",
+      "status": "partial",
+      "current_evidence": [
+        "software_function_and_defense_notes.md 已说明软件功能、演示流程和答辩常见问题。",
+        "README 已补充最终 dashboard 生成、GitHub Pages 发布、数据审计和当前限制。"
+      ],
+      "remaining_work": [
+        "用户要求软件运行状况和验收结论暂时留空，因此尚未填写。",
+        "最终答辩前需要把实际运行截图、公开网页地址、测试结果和验收百分制结论补入材料。"
+      ]
+    }
+  ]
+}

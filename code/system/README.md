@@ -387,3 +387,5 @@ python code/system/tools/publish_dashboard_pages.py \
 - `Registration` 当前主要是配准诊断模块，不是异常检测 AUROC 任务。
 - Registration 会优先展示实验 score row 中真实的 `source/reference/aligned` 点云；只有缺少真实点云字段的旧结果会使用轻量预览点云。
 - 当前网页是静态页面，没有后端在线推理接口；重新跑实验后需要重新生成并部署页面。
+
+更细的系统完成度和剩余工作见 `system_completion_checklist.md`；机器可读状态源见 `system_completion_status.json`。
