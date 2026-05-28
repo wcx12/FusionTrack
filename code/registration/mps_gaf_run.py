@@ -6,7 +6,7 @@ import argparse
 import json
 import math
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Dict, Iterable, List, Tuple
 
 import numpy as np
@@ -40,7 +40,15 @@ except ImportError:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="MPS-GAF registration runner")
     parser.add_argument("--mode", choices=["inspect", "train", "eval"], required=True)
-    parser.add_argument("--dataset_path", required=True, help="Path to modelnet40_ply_hdf5_2048")
+    parser.add_argument("--dataset_path", required=True, help="Path to dataset root")
+    parser.add_argument(
+        "--dataset_name",
+        default="modelnet40",
+        choices=["modelnet40", "modellonet40", "3dmatch", "3dlomatch", "kitti", "eth"],
+    )
+    parser.add_argument("--split_root", default=None)
+    parser.add_argument("--pair_list", default=None)
+    parser.add_argument("--no_estimate_normals", action="store_true")
     parser.add_argument("--output_dir", default="runs/mps_gaf", help="Directory for checkpoints and metrics")
     parser.add_argument("--checkpoint", default=None, help="Checkpoint path for eval or training resume")
 
@@ -130,15 +138,43 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _is_policy_absolute_path(path_value: str) -> bool:
+    return (
+        Path(path_value).is_absolute()
+        or PurePosixPath(path_value).is_absolute()
+        or PureWindowsPath(path_value).is_absolute()
+    )
+
+
+def validate_relative_paths(args: argparse.Namespace) -> None:
+    for key in (
+        "dataset_path",
+        "split_root",
+        "pair_list",
+        "output_dir",
+        "checkpoint",
+        "train_category_file",
+        "val_category_file",
+        "test_category_file",
+    ):
+        value = getattr(args, key, None)
+        if value is not None and _is_policy_absolute_path(str(value)):
+            raise ValueError(f"{key} must be a relative path")
+
+
 def build_configs(args: argparse.Namespace) -> Tuple[MPSGAFDataConfig, MPSGAFConfig]:
     data_config = MPSGAFDataConfig(
         dataset_path=args.dataset_path,
+        dataset_name=getattr(args, "dataset_name", "modelnet40"),
         num_points=args.num_points,
         noise_type=args.noise_type,
         rot_mag=args.rot_mag,
         trans_mag=args.trans_mag,
         partial=tuple(args.partial),
         num_sources_per_ref=args.num_sources_per_ref,
+        split_root=getattr(args, "split_root", None),
+        pair_list=getattr(args, "pair_list", None),
+        estimate_normals=not getattr(args, "no_estimate_normals", False),
         train_category_file=args.train_category_file,
         val_category_file=args.val_category_file,
         test_category_file=args.test_category_file,
@@ -179,8 +215,21 @@ def rotation_error_deg(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor
     return rotation_error_rad(pred, target) * 180.0 / math.pi
 
 
+def project_rotation_matrix(rotation: torch.Tensor) -> torch.Tensor:
+    u, _, vh = torch.linalg.svd(rotation)
+    projected = u @ vh
+    det = torch.linalg.det(projected)
+    if torch.any(det < 0.0):
+        u = u.clone()
+        u[det < 0.0, :, -1] *= -1.0
+        projected = u @ vh
+    return projected
+
+
 def rotation_error_rad(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    residual = target[:, :3, :3].transpose(1, 2) @ pred[:, :3, :3]
+    pred_rot = project_rotation_matrix(pred[:, :3, :3])
+    target_rot = project_rotation_matrix(target[:, :3, :3])
+    residual = target_rot.transpose(1, 2) @ pred_rot
     trace = residual[:, 0, 0] + residual[:, 1, 1] + residual[:, 2, 2]
     return torch.acos(torch.clamp(0.5 * (trace - 1.0), min=-1.0, max=1.0))
 
@@ -221,6 +270,12 @@ def selection_metric(metrics: Dict[str, float], best_metric: str, pose_trans_wei
     if best_metric == "pose":
         return metrics["rotation_error_deg_mean"] + pose_trans_weight * metrics["translation_error_mean"]
     raise ValueError(f"Unsupported best_metric: {best_metric}")
+
+
+def to_comparison_schema(metrics: Dict[str, float], pose_trans_weight: float) -> Dict[str, float]:
+    out = dict(metrics)
+    out["pose_metric"] = out["rotation_error_deg_mean"] + pose_trans_weight * out["translation_error_mean"]
+    return out
 
 
 def compose_transforms(delta: torch.Tensor, base: torch.Tensor) -> torch.Tensor:
@@ -914,12 +969,18 @@ def evaluate(args: argparse.Namespace) -> None:
         icp_max_angle_deg=args.icp_max_angle_deg,
         icp_max_translation=args.icp_max_translation,
     )
+    comparison = {"mps_gaf": to_comparison_schema(metrics, args.pose_trans_weight)}
     (output_dir / "eval_summary.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    (output_dir / "comparison_schema_summary.json").write_text(
+        json.dumps(comparison, indent=2),
+        encoding="utf-8",
+    )
     print(json.dumps(metrics, indent=2))
 
 
 def main() -> None:
     args = parse_args()
+    validate_relative_paths(args)
     os.makedirs(args.output_dir, exist_ok=True)
     if args.mode == "inspect":
         inspect_pipeline(args)

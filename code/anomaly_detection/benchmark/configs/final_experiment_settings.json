@@ -451,7 +451,7 @@
       "date": "2026-05-22",
       "source_revision": "b3b8599",
       "tmux_session": "fusiontrack_group_knn_b3b8599",
-      "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_val/results",
+      "remote_result_root": "remote_runs/fusiontrack_b3b8599_val/results",
       "gpu_name": "NVIDIA GeForce RTX 5090",
       "scope": [
         "strict individual validation matrix",
@@ -462,7 +462,7 @@
       "latest_completed_official_run": {
       "date": "2026-05-22",
       "source_revision": "b3b8599",
-      "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_official_20260522",
+      "remote_result_root": "remote_runs/fusiontrack_b3b8599_official_20260522",
       "gpu_name": "NVIDIA GeForce RTX 5090",
       "parallel_tmux_sessions": [
         "official_traj_b3b8599",
@@ -504,7 +504,7 @@
     "latest_completed_cetrajad_fullcoverage_run": {
       "date": "2026-05-22",
       "source_revision": "1f8b52e plus remote CETrajAD full-coverage adapter rerun",
-      "remote_result_root": "/root/autodl-tmp/fusiontrack_cetrajad_fullcoverage_20260522",
+      "remote_result_root": "remote_runs/fusiontrack_cetrajad_fullcoverage_20260522",
       "local_archive": "server_artifacts/final_results_20260522/fusiontrack_cetrajad_fullcoverage_20260522.tar.gz",
       "gpu_name": "NVIDIA GeForce RTX 5090",
       "epoch_cap": 10,
@@ -530,7 +530,7 @@
     "latest_completed_method_update_run": {
       "date": "2026-05-22",
       "source_revision": "b3b8599 plus local enhanced-method patch",
-      "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_methods_20260522",
+      "remote_result_root": "remote_runs/fusiontrack_b3b8599_methods_20260522",
       "gpu_name": "NVIDIA GeForce RTX 5090",
       "scope": [
         "strict individual validation matrix with fusiontrack_individual_ensemble",
@@ -558,7 +558,7 @@
     "latest_completed_improved_method_run": {
       "date": "2026-05-22",
       "source_revision": "1f8b52e plus local feature-stratified calibration and residual-gate patch",
-      "remote_result_root": "/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522",
+      "remote_result_root": "remote_runs/fusiontrack_improved_methods_v2_20260522",
       "local_archive": "server_artifacts/final_results_20260522/fusiontrack_improved_methods_v2_20260522_summaries.tar.gz",
       "gpu_name": "NVIDIA GeForce RTX 5090",
       "scope": [
@@ -671,7 +671,7 @@
     "latest_completed_validation_tuned_subset_run": {
       "date": "2026-05-22",
       "source_revision": "1f8b52e plus validation-tuned candidate protocol patch",
-      "remote_result_root": "/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522/tuned_subset",
+      "remote_result_root": "remote_runs/fusiontrack_improved_methods_v2_20260522/tuned_subset",
       "local_archive": "server_artifacts/final_results_20260522/fusiontrack_tuned_subset_20260522_summaries.tar.gz",
       "gpu_name": "NVIDIA GeForce RTX 5090",
       "scope": [
@@ -721,7 +721,7 @@
     "latest_completed_group_fine_tuned_subset_run": {
       "date": "2026-05-22",
       "source_revision": "1f8b52e plus fine validation-tuned group candidate patch",
-      "remote_result_root": "/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522/tuned_subset/results/group_fine",
+      "remote_result_root": "remote_runs/fusiontrack_improved_methods_v2_20260522/tuned_subset/results/group_fine",
       "local_archive": "server_artifacts/final_results_20260522/fusiontrack_group_fine_tuned_subset_20260522_summaries.tar.gz",
       "gpu_name": "NVIDIA GeForce RTX 5090",
       "scope": [
@@ -762,7 +762,7 @@
     "latest_completed_holdout_multiseed_run": {
       "date": "2026-05-22",
       "source_revision": "1f8b52e plus holdout protocol and multi-seed runner patch",
-      "remote_result_root": "/root/autodl-tmp/fusiontrack_holdout_multiseed_combined_20260522",
+      "remote_result_root": "remote_runs/fusiontrack_holdout_multiseed_combined_20260522",
       "local_archive": "server_artifacts/final_results_20260522/fusiontrack_holdout_multiseed_combined_20260522_summaries.tar.gz",
       "gpu_name": "NVIDIA GeForce RTX 5090",
       "tmux_sessions": [
@@ -840,7 +840,7 @@
     "latest_completed_long_budget_official_run": {
       "date": "2026-05-22",
       "source_revision": "b3b8599 plus official-runner scripts",
-      "remote_result_root": "/root/autodl-tmp/fusiontrack_b3b8599_convergence_20260522",
+      "remote_result_root": "remote_runs/fusiontrack_b3b8599_convergence_20260522",
       "gpu_name": "NVIDIA GeForce RTX 5090",
       "epoch_cap": 50,
       "statuses": {
@@ -854,7 +854,7 @@
     "latest_completed_recent_official_run": {
       "date": "2026-05-22",
       "source_revision": "97a6719 plus recent-official runner patch",
-      "remote_result_root": "/root/autodl-tmp/fusiontrack_recent_official_20260522",
+      "remote_result_root": "remote_runs/fusiontrack_recent_official_20260522",
       "local_archive": "server_artifacts/final_results_20260522/fusiontrack_recent_official_20260522.tar.gz",
       "gpu_name": "NVIDIA GeForce RTX 5090",
       "epoch_cap": 20,

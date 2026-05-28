@@ -2,6 +2,10 @@
 
 Primary fair-comparison protocol: `source-2 / crop-noise / 20-batch validation`.
 
+> Superseded note: this summary points to the first 40-pair run. The current
+> main table uses the corrected 160-pair eval20 results in
+> `code/registration/benchmark_status_20260526.md`.
+
 Current protocol-aligned result: `code/registration/non_learning_source2_crop_protocol_results.md`
 
 The threshold sweep remains robustness/appendix evidence, because it uses a broader train-split sweep rather than the exact learned-model validation protocol.

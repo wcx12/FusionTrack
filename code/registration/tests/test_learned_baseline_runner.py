@@ -70,6 +70,10 @@ def make_args(**overrides) -> Namespace:
         dataset_path="datasets/modelnet40_ply_hdf5_2048",
         output_dir="runs/test",
         checkpoint=None,
+        dataset_name="modelnet40",
+        split_root=None,
+        pair_list=None,
+        no_estimate_normals=False,
         external_repo="external_src/learned_baselines/DCP",
         dcp_repo="external_src/learned_baselines/DCP",
         prnet_repo="external_src/learned_baselines/PRNet",
@@ -248,6 +252,37 @@ def test_build_data_config_passes_category_files(monkeypatch) -> None:
     assert captured["train_category_file"] == "splits/train.txt"
     assert captured["val_category_file"] == "splits/val.txt"
     assert captured["test_category_file"] == "splits/test.txt"
+
+
+def test_build_data_config_passes_kitti_metadata_options(monkeypatch) -> None:
+    captured = {}
+
+    def fake_config(**kwargs):
+        captured.update(kwargs)
+        return kwargs
+
+    monkeypatch.setattr(run_dcp_baseline, "MPSGAFDataConfig", fake_config)
+    args = make_args(
+        dataset_name="kitti",
+        dataset_path="datasets/kitti",
+        split_root="external_src/new_baselines/GeoTransformer/data/Kitti/metadata",
+        pair_list="splits/kitti/test.pkl",
+        no_estimate_normals=True,
+        num_points=2048,
+        noise_type="crop",
+        rot_mag=45.0,
+        trans_mag=0.5,
+        partial=[0.7, 0.7],
+        num_sources_per_ref=1,
+        seed=7,
+    )
+
+    run_dcp_baseline.build_data_config(args)
+
+    assert captured["dataset_name"] == "kitti"
+    assert captured["split_root"] == "external_src/new_baselines/GeoTransformer/data/Kitti/metadata"
+    assert captured["pair_list"] == "splits/kitti/test.pkl"
+    assert captured["estimate_normals"] is False
 
 
 class _FakeTensor:

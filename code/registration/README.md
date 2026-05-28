@@ -16,8 +16,15 @@
 - `run_registration_benchmark_suite.py`：多 preset 评测入口，支持 protocol 和 robustness 两种 case set。
 - `run_non_learning_baseline_sweep.py`：成功阈值网格扫描入口，用于比较不同旋转/平移成功标准下的鲁棒性。
 - `run_dcp_baseline.py`：将 DCP、PRNet、IDAM、RPMNet、PointNetLK 等外部学习式基线接入同一 MPS-GAF 评测协议。
+- `convert_geotransformer_schema.py`：将 GeoTransformer/Predator 等 3DMatch 风格特征导出结果转换为统一 comparison schema。
+- `convert_roitr_schema.py`：将 RoITr 官方配准日志转换为统一 comparison schema。
+- `export_eth_geotransformer_dataset.py`：把 ETH laser 数据导出为 GeoTransformer 兼容的数据结构。
+- `geotransformer_light_export.py`：轻量级 GeoTransformer 推理导出脚本，用于后续 schema 转换和对比表汇总。
+- `auto_launch_predator_standard_runs.py`：自动启动 Predator/GeoTransformer 在 3DMatch、3DLoMatch、ETH 等标准协议上的长实验。
+- `auto_eval_mps_gaf_when_done.py`：训练进程结束后自动补跑 MPS-GAF 最终评估。
 - `non_learning_baselines.py`：ICP、trimmed ICP、RANSAC+ICP、FPFH、GICP、CPD、TEASER++、Super4PCS、Go-ICP 等方法封装。
 - `EXPERIMENT_RECORD.md`：历史训练、消融和远程实验记录。
+- `benchmark_status_20260526.md`、`benchmark_expansion_status_20260527.md`、`existing_dataset_completion_matrix_20260527.md`：扩展 benchmark 的阶段记录、数据集完成矩阵和剩余任务说明。
 - `requirements.txt`：Python 依赖。
 
 ## 数据集要求
@@ -246,6 +253,60 @@ checkpoint 中保存的模型结构参数会在续训或评估时自动回填，
 ```
 
 其中 `early_stop_patience` 表示连续多少个 epoch 没有超过 `early_stop_min_delta` 的改进后停止训练；默认值 `0` 表示不启用早停。
+
+## 外部学习式基线：3DMatch/3DLoMatch/ETH 转换
+
+为了让论文中的 MPS-GAF、非学习基线和外部学习式配准方法进入同一张结果表，新增转换脚本只负责做格式归一，不把第三方仓库源码提交进本仓库。推荐工作流是：第三方源码和官方输出放在 `external_src/` 或 `runs/` 下，仓库只保存 adapter、转换脚本、协议记录和小型 summary。
+
+GeoTransformer/Predator 一类方法通常先导出匹配结果，再转换为本项目的 comparison schema：
+
+```bash
+python code/registration/convert_geotransformer_schema.py \
+  --input_dir runs/geotransformer_3dmatch_export \
+  --output_dir runs/geotransformer_3dmatch_schema \
+  --method geotransformer
+```
+
+RoITr 使用官方日志作为输入：
+
+```bash
+python code/registration/convert_roitr_schema.py \
+  --input_dir runs/roitr_official_logs \
+  --output_dir runs/roitr_schema \
+  --method roitr
+```
+
+ETH laser 数据需要先导出到 GeoTransformer 兼容结构，再交给外部方法推理：
+
+```bash
+python code/registration/export_eth_geotransformer_dataset.py \
+  --input_dir datasets/ETH \
+  --output_dir runs/eth_geotransformer_dataset
+```
+
+长实验可以用自动启动脚本统一排队，但命令中的数据集、输出目录、外部仓库和 checkpoint 都必须使用相对路径：
+
+```bash
+python code/registration/auto_launch_predator_standard_runs.py \
+  --workspace . \
+  --output_root runs/predator_standard
+```
+
+如果 MPS-GAF 训练耗时较长，可以让评估脚本等待训练进程结束后再自动启动：
+
+```bash
+python code/registration/auto_eval_mps_gaf_when_done.py \
+  --train_run runs/mps_gaf_learned_svd \
+  --eval_output runs/mps_gaf_learned_svd_eval
+```
+
+这些转换脚本的目标是保证不同来源结果具有一致字段：旋转误差、平移误差、Chamfer distance、耗时、成功标记、样本标识和可选点云预览字段。只要转换后的输出满足 comparison schema，就可以继续接入论文表格和可视化网页。
+
+相关测试位于 `code/registration/tests/` 与仓库根目录 `tests/registration/`：
+
+```bash
+python -m pytest code/registration/tests tests/registration
+```
 
 ## 学习式 MPS-GAF：快速冒烟测试
 

@@ -62,7 +62,7 @@ where \(\Psi(\cdot)\) is the score-fusion function, \(\theta\) is the anomaly de
 
 Individual-level anomaly detection evaluates whether the motion pattern of a single fused entity is unusual without using group context. This design is useful because many abnormal behaviors are visible in the target trajectory itself, such as taking an uncommon route, moving with an unusual speed profile, or exhibiting an irregular motion shape. Because the multimodal fusion module has already produced object-aligned trajectories, this section applies the route-speed-shape detection design to the fused trajectory \(T_i\). As shown in Figure~\ref{fig:chapter5-route-speed-shape-feature}, the fused trajectory is decomposed into route, speed, and shape representations. One LSTM autoencoder detector is trained for each representation, and the detector outputs are fused into an individual anomaly score.
 
-\begin{figure}[htbp]
+\begin{figure}[htb]
   \centering
   \includegraphics[width=\linewidth]{images/chapter5/route_speed_shape_feature_construction.png}
   \caption{Route, speed, and shape feature construction from a fused target trajectory. The fused trajectory is converted into a route sequence by removing the initial offset and resampling along cumulative distance, a speed sequence by frame-wise displacement over elapsed time, and a shape sequence by length normalization, standardization, and principal component projection.}
@@ -110,7 +110,7 @@ The multimodal information enters this stage through the fused trajectory itself
 \subsection{LSTM Autoencoder-Based Detector}
 For each feature branch \(a\in\mathcal{B}\), all valid sequences are collected as \(\{X_i^{(a)}\}\), where \(X_i^{(a)}\in\mathbb{R}^{L_i^{(a)}\times d_a}\), \(L_i^{(a)}\) is the branch-specific sequence length, and \(d_a\) is the feature dimension. Before training, the sequence values are normalized using statistics estimated from the training split. Because different targets have different valid lengths, sequences are padded within each mini-batch and a binary mask \(M_i^{(a)}\) identifies valid time steps. The complete individual-level detection workflow is summarized in Figure~\ref{fig:chapter5-individual-anomaly-workflow}: branch-specific LSTM autoencoders provide reconstruction evidence, embedding-space neighborhoods adjust branch scores, and rank-based ensemble scoring produces the final individual anomaly score.
 
-\begin{figure}[htbp]
+\begin{figure}[htb]
   \centering
   \includegraphics[width=\linewidth]{images/chapter5/individual_anomaly_detection_workflow.png}
   \caption{Individual-level anomaly detection workflow. Route, speed, and shape feature sequences are processed by branch-specific LSTM autoencoders. Masked reconstruction errors are adjusted by embedding-space neighborhoods, and branch-level scores are fused through rank-based ensemble scoring to obtain the individual anomaly score.}
@@ -201,7 +201,7 @@ The max score \(S_{i,\mathrm{max}}^{\mathrm{ind}}\) is retained as a complementa
 
 The individual-level detector evaluates whether a fused trajectory is unusual by itself. Some abnormal behaviors, however, are relational. A target may leave a stable group, move against nearby targets, or appear in a group whose population changes suddenly. To keep this part simple and interpretable, this section uses a lightweight spatio-temporal graph to describe local group relations and computes group anomaly scores from graph-structure changes and group statistics. As summarized in Figure~\ref{fig:chapter5-lightweight-st-graph-events}, fused target states are first organized as target-frame nodes with spatial and temporal edges. Connected components are then tracked as groups, and interpretable object-to-group and group-level event indicators are fused into group anomaly scores. No manually labeled group anomaly categories are required.
 
-\begin{figure}[htbp]
+\begin{figure}[htb]
   \centering
   \includegraphics[width=\linewidth]{images/chapter5/lightweight_spatiotemporal_graph_group_events.png}
   \caption{Lightweight spatio-temporal graph and group event indicators. Fused target states are represented as target-frame nodes. Spatial edges describe local motion-consistent neighborhoods, and temporal edges preserve identity continuity. Connected components define candidate groups, while interpretable indicators describe object-to-group deviations and group-level events such as leaving, motion inconsistency, population change, dispersion change, split, and merge.}
@@ -498,7 +498,7 @@ The test output contains ten video sequences. For each sequence, the final resul
 \subsection{Qualitative Heatmap Results}
 Figure~\ref{fig:chapter5-heatmap-examples} compares the original frames and the corresponding anomaly heatmaps for the ten test sequences used in this chapter. The upper row shows the original aerial frames, and the lower row overlays score-weighted anomaly evidence on the same scenes. Bright regions indicate where model-derived anomaly evidence is accumulated after spatial projection. In sequences with a concentrated response, the heatmap highlights a local road, waterway, or scene region where high-scoring trajectory points appear repeatedly. In sequences with a weaker or more dispersed response, the heatmap remains mostly low-valued, indicating that no dominant spatial hotspot is formed.
 
-\begin{figure}[H]
+\begin{figure}[htb]
   \centering
   \includegraphics[width=0.88\linewidth]{images/chapter5/vt_tiny_mot_heatmap_overview.png}
   \caption{Original frames and anomaly heatmaps for the VT-Tiny-MOT test sequences. Each group contains five sequences. Within each group, the upper row shows the original frames, and the lower row shows the corresponding score-weighted heatmap visualization. The heatmaps visualize model-derived anomaly evidence rather than manually annotated abnormal regions.}

@@ -23,14 +23,16 @@ As shown in Fig.~\ref{fig:tfvpr-single-stage-vpr}, single-stage methods encode e
 
 Two-stage VPR pipelines use a coarse-to-fine retrieval process. As illustrated in Fig.~\ref{fig:tfvpr-two-stage-vpr}, a global descriptor first retrieves candidate reference images, and local feature matching or geometric verification then reranks these candidates. This design can improve robustness under viewpoint and structural changes by combining global scene-level cues with local spatial correspondences. However, both single-stage and two-stage learning-based paradigms often rely on annotated training data, task-specific losses, and hard-negative mining. These requirements are restrictive in newly observed scenes where coordinate labels, place correspondences, or retrieval annotations are unavailable. For the coordinate-missing optical setting in this thesis, the retrieval module must therefore operate without additional scene-specific VPR training.
 
-\begin{figure}[!htbp]
+\begin{figure}[!htb]
   \centering
   \includegraphics[width=0.88\linewidth,height=0.28\textheight,keepaspectratio]{images/chapter3/single_stage_vpr_pipeline.png}
   \caption{Single-stage VPR pipeline. A query image is encoded by a backbone into a compact global descriptor, and reference images are retrieved by nearest-neighbor search \cite{arandjelovic2016netvlad,hausler2021patchnetvlad}.}
   \label{fig:tfvpr-single-stage-vpr}
 \end{figure}
 
-\begin{figure}[!htbp]
+The single-stage pipeline provides a compact baseline for understanding the later design. In contrast, the two-stage pipeline introduces an additional refinement step, which motivates the distinction between coarse reference retrieval and subsequent target-level association in this thesis.
+
+\begin{figure}[!htb]
   \centering
   \includegraphics[width=0.88\linewidth,height=0.28\textheight,keepaspectratio]{images/chapter3/two_stage_vpr_pipeline.png}
   \caption{Two-stage VPR pipeline. A global descriptor first retrieves candidate references, and local feature matching then reranks the candidates to obtain a refined Top-k result for more reliable place recognition.}
@@ -54,7 +56,7 @@ Zero-shot classification methods provide another related perspective. Parameter-
 
 Based on this literature, this chapter adopts TF-VPR as the optical reference retrieval module. As summarized in Fig.~\ref{fig:tfvpr-training-free-benchmark}, its key difference from training-based VPR is that descriptor generation uses a frozen backbone and deterministic aggregation at test time. It does not optimize the backbone or aggregation module on a dedicated VPR training set. The module uses frozen VFM representations and training-free attention mechanisms to retrieve coordinate-known reference images for coordinate-missing optical images. These retrieved references then constrain downstream target association, which links pixel-level observations to target or trajectory identifiers. In this chapter, TF-VPR is used primarily as a scene-level candidate retrieval stage, while target-level correspondence is handled by the downstream association module. In this way, TF-VPR provides the retrieval bridge between coordinate-missing optical images and the multimodal target fusion module developed in the next chapter.
 
-\begin{figure}[!htbp]
+\begin{figure}[!htb]
   \centering
   \includegraphics[width=\linewidth,height=0.38\textheight,keepaspectratio]{images/chapter3/tf_vpr_overview.png}
   \caption{Training-free VPR motivation and descriptor benchmark. TF-VPR differs from training-based VPR by keeping the DINOv2 backbone and aggregation process fixed during deployment, and it compares several frozen-token aggregation choices such as CLS, mean, and GeM-based descriptors \cite{wang2026tfvpr}.}
@@ -69,7 +71,7 @@ The objective of this chapter is to retrieve reliable reference images from \(I_
 \section{TF-VPR Method}
 The TF-VPR module is responsible for image-level candidate reference retrieval. It generates image descriptors from a frozen vision foundation model and refines them using training-free attention mechanisms. Since no additional training or fine-tuning is required, the module is suitable for scenes where labeled VPR training data are unavailable. The overall pipeline is shown in Fig.~\ref{fig:tfvpr-method-framework}: the frozen backbone first extracts patch tokens, TF-GAM refines them through graph-style propagation, TF-CAM aggregates them with prototype-guided cross-attention, and the resulting global descriptor is used for image-level retrieval.
 
-\begin{figure}[!htbp]
+\begin{figure}[!htb]
   \centering
   \includegraphics[width=\linewidth,height=0.40\textheight,keepaspectratio]{images/chapter3/tf_vpr_method.png}
   \caption{TF-VPR framework. The method combines frozen DINOv2 feature extraction, a Training-Free Graph-Attention Module, and a Training-Free Cross-Attention Module to generate global descriptors for training-free visual place recognition \cite{wang2026tfvpr}.}
@@ -231,7 +233,7 @@ The full TF-VPR descriptor adds two training-free modules on top of the frozen b
 \subsection{Main Retrieval Results}
 Tables~\ref{tab:tfvpr-main-results-a} and~\ref{tab:tfvpr-main-results-b} reproduce the main retrieval results reported in the original TF-VPR paper in LaTeX format. The original table is split into two parts for readability. The results report Top-1, Top-5, and Top-10 recall on standard VPR datasets and SVOX cross-condition splits.
 
-\begin{table}[!htbp]
+\begin{table}[htb]
   \centering
   \caption{Main TF-VPR retrieval results on standard VPR datasets, part I \cite{wang2026tfvpr}.}
   \label{tab:tfvpr-main-results-a}
@@ -260,7 +262,9 @@ Tables~\ref{tab:tfvpr-main-results-a} and~\ref{tab:tfvpr-main-results-b} reprodu
   \end{tabular}}
 \end{table}
 
-\begin{table}[!htbp]
+Table~\ref{tab:tfvpr-main-results-a} covers the conventional VPR benchmarks and several long-term or seasonal datasets. It shows the main pattern of the training-free design: the proposed descriptor does not always match supervised descriptors on the easiest splits, but it improves substantially over direct frozen-token pooling. The second part of the table is discussed separately because the SVOX condition splits are easier to read when they are not compressed into the same paragraph of analysis.
+
+\begin{table}[htb]
   \centering
   \caption{Main TF-VPR retrieval results on standard VPR datasets, part II \cite{wang2026tfvpr}.}
   \label{tab:tfvpr-main-results-b}

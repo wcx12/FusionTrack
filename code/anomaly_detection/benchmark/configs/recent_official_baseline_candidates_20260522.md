@@ -32,7 +32,7 @@ This document records the 2024-2026 candidate baselines screened for the FusionT
 Remote result root:
 
 ```text
-/root/autodl-tmp/fusiontrack_recent_official_20260522
+remote_runs/fusiontrack_recent_official_20260522
 ```
 
 The run uses RTX 5090 GPU execution, strict `sample_id` matching for individual rows, and strict `sample_id + window_id` matching for group rows.

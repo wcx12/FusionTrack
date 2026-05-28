@@ -7,3 +7,35 @@ __pycache__/
 server_artifacts/
 output/
 .playwright-cli/
+
+# Thesis build artifacts
+article_content/main.pdf
+article_content/main.aux
+article_content/main.bbl
+article_content/main.bcf
+article_content/main.blg
+article_content/main.fdb_latexmk
+article_content/main.fls
+article_content/main.log
+article_content/main.out
+article_content/main.run.xml
+article_content/main.synctex.gz
+article_content/main.toc
+article_content/main.xdv
+
+# Local data, third-party source drops, model artifacts, and transfer archives
+data/
+datasets/
+remote_runs/
+external_src/
+logs/
+checkpoints/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.pt
+*.pth
+*.pkl
+*.npy
+*.npz

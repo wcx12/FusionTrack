@@ -44,7 +44,7 @@ where \(p_{i,t}^{(m)}\) denotes spatial information, \(v_{i,t}^{(m)}\) denotes m
 
 The detailed completion algorithm used to generate each \(\mathcal{T}^{(m)}\) is not the focus of this chapter. Instead, this chapter assumes that every modality has already produced a collection of reasonably complete trajectories and focuses on how these trajectory-level entities can be aligned across modalities. As illustrated in Fig.~\ref{fig:chapter4-trajectory-completion}, the single-modal completion stage is treated as a functional preparation step: missing or low-confidence segments are identified, spatio-temporal continuity constraints are used to recover a more continuous trajectory, and the resulting completed trajectory set is passed to the following graph matching stage.
 
-\begin{figure}[htbp]
+\begin{figure}[htb]
   \centering
   \includegraphics[width=\linewidth]{images/chapter4/trajectory_completion_original_based.png}
   \caption{Functional illustration of single-modal trajectory completion. Incomplete observations are organized through missing-segment detection and spatio-temporal continuity constraints, producing completed trajectory sets that serve as stable inputs for subsequent cross-modal graph matching.}
@@ -94,7 +94,7 @@ Unlike independent pairwise registration, the present formulation jointly uses a
 
 Therefore, the cross-modal registration problem in this chapter can be summarized as follows: given multiple modality-specific entity sets represented by trajectory embeddings, construct a relational matching framework that refines node features through intra-set and cross-set interaction, evaluates the reliability of cross-modal evidence, and outputs a soft correspondence structure for entity-level alignment.
 
-\begin{figure}[htbp]
+\begin{figure}[htb]
   \centering
   \includegraphics[width=\linewidth]{images/chapter4/multiset_graph_matching_framework.png}
   \caption{Overview of the multi-set graph matching framework. Completed entity trajectories are first encoded into target-level embeddings, then refined through intra-set interaction, cross-set information exchange, and reliability-aware fusion, and finally used to generate soft entity correspondences across modality-specific sets.}
@@ -335,7 +335,7 @@ The bridge between the benchmark setting and the thesis task lies in the matchin
 
 Five metrics are used to evaluate registration quality, following \cite{yew2020rpmnet,wang2019dcp}. Two isotropic metrics are the Mean Isotropic Error of Rotation, denoted as \(\mathrm{MIE(R)}\), and the Mean Isotropic Error of Translation, denoted as \(\mathrm{MIE(t)}\). Two anisotropic metrics are the Mean Absolute Error of Rotation, denoted as \(\mathrm{MAE(R)}\), and the Mean Absolute Error of Translation, denoted as \(\mathrm{MAE(t)}\). In addition, the Corrected Chamfer Distance, denoted as \(\mathrm{CCD}\), measures the geometric discrepancy after registration while suppressing far outliers. In the present chapter, these metrics are used to evaluate the quality and robustness of the underlying registration module that supports cross-modal entity alignment.
 
-The compared methods include classical registration baselines, deep pairwise registration methods, and representative multi-set registration methods, including ICP \cite{besl1992icp}, FGR \cite{zhou2016fgr}, MAC \cite{zhang2023mac}, PointNetLK \cite{aoki2019pointnetlk}, DCP \cite{wang2019dcp}, RPM-Net \cite{yew2020rpmnet}, JRMPC \cite{evangelidis2018joint}, and EMPMR \cite{zhu2020multiviewem}. In particular, the registration framework is implemented on top of RPM-Net \cite{yew2020rpmnet} so that the improvement introduced by multi-set interaction and gated fusion can be evaluated against a strong pairwise backbone. This comparison directly supports the main claim of this chapter: entity-level registration becomes more robust when multiple sets are jointly modeled instead of aligned independently.
+The compared methods include classical registration baselines, deep pairwise registration methods, and representative multi-set registration methods, including ICP \cite{besl1992icp}, FGR \cite{zhou2016fgr}, MAC \cite{zhang2023mac}, PointNetLK \cite{aoki2019pointnetlk}, DCP \cite{wang2019dcp}, RPM-Net \cite{yew2020rpmnet}, JRMPC \cite{evangelidis2018joint}, and EMPMR \cite{zhu2020multiviewem}. In particular, the registration framework is implemented on top of RPM-Net \cite{yew2020rpmnet} so that the improvement introduced by multi-set interaction and gated fusion can be evaluated against a strong pairwise backbone. This comparison directly supports the main claim of this chapter: entity-level registration becomes more robust when multiple sets are jointly modeled instead of aligned independently. Additional dataset-wise benchmark results are reported in Appendix~\ref{chap:appendix-registration-benchmark}; they are kept outside the main chapter so that the main text can focus on the controlled ModelNet40 analysis.
 
 \subsection{Performance Under Standard Conditions}
 Under standard observation conditions, the purpose of the experiment is to examine whether the proposed framework can accurately align multiple source entity sets to the reference set when the observations are relatively complete and the noise level is moderate. In this setting, the main challenge is not severe corruption, but the need to exploit complementary cross-set information better than independent pairwise matching.
@@ -344,7 +344,7 @@ The expected behavior of the proposed framework is as follows. First, the tempor
 
 Quantitatively, the results confirm this expectation. As shown in Table~\ref{tab:chapter4-clean}, the proposed multi-set graph matching framework achieves the best performance on all five metrics under clean conditions, with consistent improvements over the pairwise backbone RPM-Net. Although the gap is not large in this relatively easy setting, the result demonstrates that the explicit use of intra-set structure and cross-set complementarity can still reduce both rotation and translation errors.
 
-\begin{table}[htbp]
+\begin{table}[htb]
   \centering
   \caption{Performance under standard conditions. Bold and underline denote the best and second-best results.}
   \label{tab:chapter4-clean}
@@ -367,7 +367,7 @@ Quantitatively, the results confirm this expectation. As shown in Table~\ref{tab
 
 The qualitative comparison in Fig.~\ref{fig:chapter4-clean} further shows that the jointly modeled source sets can be aligned more coherently to the target set. This observation is consistent with the role assigned to the method in this thesis: before the system aggregates information across modalities, it must first produce a stable correspondence structure, and the result under standard conditions verifies that the proposed framework is capable of doing so.
 
-\begin{figure}[htbp]
+\begin{figure}[htb]
   \centering
   \includegraphics[width=\linewidth]{images/chapter4/registration_standard_conditions.png}
   \caption{Qualitative registration results under standard conditions. Black denotes the target set, while orange and blue denote two source sets.}
@@ -381,7 +381,7 @@ The proposed framework addresses this difficulty in two ways. First, multi-set i
 
 Under noisy conditions, random jitter is injected into both source sets and the target set. The quantitative results in Table~\ref{tab:chapter4-noise} show that the proposed framework still achieves the best performance on all five metrics. Relative to RPM-Net, the improvements are especially visible in the rotation and translation errors, indicating that the interaction modules and gated fusion improve stability under perturbation.
 
-\begin{table}[htbp]
+\begin{table}[htb]
   \centering
   \caption{Performance under noisy conditions. Bold and underline denote the best and second-best results.}
   \label{tab:chapter4-noise}
@@ -404,7 +404,7 @@ Under noisy conditions, random jitter is injected into both source sets and the 
 
 The qualitative result in Fig.~\ref{fig:chapter4-noise} illustrates the same tendency. Even after perturbation, the multi-set framework produces a more coherent alignment than the pairwise strategy because it can integrate complementary evidence from multiple source sets rather than relying on one noisy matching path alone.
 
-\begin{figure}[htbp]
+\begin{figure}[htb]
   \centering
   \includegraphics[width=\linewidth]{images/chapter4/registration_noisy_conditions.png}
   \caption{Qualitative registration results under noisy conditions. Black denotes the target set, while orange and blue denote two source sets.}
@@ -413,7 +413,7 @@ The qualitative result in Fig.~\ref{fig:chapter4-noise} illustrates the same ten
 
 The experiments further evaluate incomplete and partially observed conditions by cropping each set with a randomly oriented halfspace and combining the result with perturbation. This setting is especially relevant to the present thesis, because multimodal target observations are often spatially incomplete or only partially visible. As shown in Table~\ref{tab:chapter4-obstructed}, the proposed multi-set framework again outperforms all baselines under partial visibility.
 
-\begin{table}[htbp]
+\begin{table}[htb]
   \centering
   \caption{Performance under noisy and incomplete observations. Bold and underline denote the best and second-best results.}
   \label{tab:chapter4-obstructed}
@@ -436,7 +436,7 @@ The experiments further evaluate incomplete and partially observed conditions by
 
 The qualitative case in Fig.~\ref{fig:chapter4-crop} shows why the gain is larger in this more difficult setting. The adaptive gate fusion mechanism suppresses inconsistent or weak source evidence and preserves cross-set support from the more reliable local structures. This characteristic is precisely the reason why the method is useful for multimodal target fusion, where incomplete observations are common.
 
-\begin{figure}[htbp]
+\begin{figure}[htb]
   \centering
   \includegraphics[width=\linewidth]{images/chapter4/registration_noisy_incomplete_conditions.png}
   \caption{Qualitative registration results under noisy and incomplete observations. Black denotes the target set, while orange and blue denote two source sets.}
@@ -450,7 +450,9 @@ From a multimodal target fusion viewpoint, the significance of these results is 
 
 The first additional observation concerns the effect of increasing the number of source sets. As shown in Fig.~\ref{fig:chapter4-numsources}, the registration performance consistently improves when more source sets are introduced. This trend verifies the multi-set hypothesis of the present chapter: if the system can exploit complementary structure from multiple sources and selectively suppress unreliable evidence, then registration quality should improve as more informative sets become available.
 
-\begin{figure}[htbp]
+This observation is also relevant to the implementation system described later. In the demonstration workflow, different sensing sources and different experimental outputs may not have identical quality, density, or temporal coverage. A registration module that can aggregate multiple source sets is therefore more suitable than a rigid pairwise matcher, because it can keep useful evidence while reducing the influence of incomplete observations. At the same time, the result should not be read as an unlimited scaling claim. Adding more sources is useful only when they provide complementary and reasonably reliable structure; otherwise, the reliability-aware fusion module is still needed to prevent noisy evidence from degrading the final correspondence.
+
+\begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth]{images/chapter4/registration_source_set_number.png}
   \caption{Registration performance across different numbers of source sets. The result shows that the multi-set interaction framework benefits from increasing source-set complementarity.}
@@ -459,7 +461,7 @@ The first additional observation concerns the effect of increasing the number of
 
 The second observation concerns method generality. The results also show that the multi-set interaction module can improve several representative pairwise backbones. This is important for the present thesis because the cross-modal entity-registration stage should remain modular rather than tied to one single encoder or matcher. Table~\ref{tab:chapter4-backbone} and Fig.~\ref{fig:chapter4-backbone} summarize the evidence that the framework remains effective across multiple backbones under difficult conditions.
 
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
   \caption{Performance gain across different backbone networks under difficult conditions.}
   \label{tab:chapter4-backbone}
@@ -477,7 +479,9 @@ The second observation concerns method generality. The results also show that th
   \end{tabular}
 \end{table}
 
-\begin{figure}[htbp]
+The table gives the quantitative evidence for the modularity of the framework. The following visual comparison complements this evidence by showing the same trend in registration quality under representative backbone choices.
+
+\begin{figure}[htb]
   \centering
   \includegraphics[width=0.9\linewidth]{images/chapter4/registration_backbone_comparison.png}
   \caption{Comparison of the multi-set graph matching framework across different backbones. The result shows that the reliability-aware multi-set interaction mechanism consistently improves several representative pairwise registration networks.}

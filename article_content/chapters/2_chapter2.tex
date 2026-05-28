@@ -20,7 +20,7 @@ The proposed system is organized into six functional layers: multimodal data inp
 
 Fig.~\ref{fig:chapter2-layered-architecture} provides the corresponding layered view. It shows how heterogeneous observations are progressively transformed from raw inputs into target records, reference candidates, fused entities, anomaly evidence, and final situation outputs. The figure also indicates the method layers that are developed in Chapters 3, 4, and 5.
 
-\begin{figure}[H]
+\begin{figure}[htb]
   \centering
   \includegraphics[width=\textwidth]{images/chapter2/chapter2_layered_architecture.png}
   \caption{Layered architecture of the multimodal target fusion and behavior analysis system. Heterogeneous observations are organized through preprocessing, TF-VPR-based optical reference retrieval, entity-level fusion, behavior analysis, and result presentation.}
@@ -41,7 +41,7 @@ The result presentation layer converts the system outputs into interpretable rec
 
 After the structural overview in Fig.~\ref{fig:chapter2-layered-architecture}, Table~\ref{tab:chapter2-module-interface} summarizes the interfaces of the main modules. The table describes each module at the system level. Detailed algorithmic designs are presented in Chapters 3, 4, and 5.
 
-\begin{table}[H]
+\begin{table}[htb]
   \centering
   \caption{Functional interfaces of the main system modules.}
   \label{tab:chapter2-module-interface}
@@ -75,7 +75,7 @@ Existing trajectories provide historical target states and temporal continuity. 
 
 These complementary properties motivate target-level multimodal fusion. Optical images provide semantic and appearance cues. Electromagnetic and SAR observations provide additional sensing evidence. Existing trajectories provide temporal context. At the same time, their heterogeneity requires a unified representation and an explicit cross-modal registration mechanism. Table~\ref{tab:chapter2-data-source} summarizes the main properties of the data sources considered in this thesis.
 
-\begin{table}[htbp]
+\begin{table}[htb]
   \centering
   \caption{Characteristics of multimodal data sources.}
   \label{tab:chapter2-data-source}
@@ -99,7 +99,7 @@ The data condition considered in this thesis includes both coordinate-known and 
 
 As illustrated in Fig.~\ref{fig:chapter2-optical-access}, the access mechanism separates scene-level reference retrieval from target-level association. TF-VPR retrieves coordinate-known reference candidates for a coordinate-missing query and thereby narrows the candidate search space. The downstream association module then uses the pixel-level detections, retrieved references, and existing trajectory records to estimate target-level correspondence and generate an optical trajectory segment or association record.
 
-\begin{figure}[H]
+\begin{figure}[htb]
   \centering
   \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/chapter2/coordinate_missing_optical_access.png}
   \caption{Coordinate-missing optical access mechanism. TF-VPR provides scene-level coordinate-known reference candidates for coordinate-missing optical queries, while the downstream association module uses these candidates to constrain target-level trajectory association and output an optical trajectory segment or association record.}
@@ -232,4 +232,4 @@ This chapter presented the system architecture and data modeling strategy of the
 
 The chapter analyzed the characteristics of optical, electromagnetic, SAR, and existing trajectory data. Their complementary advantages motivate multimodal fusion, but their differences in coordinate systems, sampling rates, feature spaces, and uncertainty require a unified target-level representation. For coordinate-missing optical images, the chapter explained why image-level reference retrieval is needed before target-level association, and why TF-VPR is used as the retrieval module.
 
-Finally, this chapter defined a target-centered state representation and introduced a spatiotemporal graph structure for temporal continuity, spatial neighborhoods, and cross-modal candidate correspondences. These definitions provide the data interface for the following chapters. Chapter 3 focuses on optical reference retrieval with TF-VPR. Chapter 4 develops multimodal target fusion through entity-level registration. Chapter 5 performs behavior analysis based on fused multimodal entities.
+Finally, this chapter defined a target-centered state representation and a spatiotemporal graph structure for temporal continuity, spatial neighborhoods, and cross-modal candidate correspondences. These definitions provide the data interface for Chapter 3's TF-VPR retrieval, Chapter 4's entity-level fusion, and Chapter 5's behavior analysis.

@@ -19,12 +19,14 @@ from __future__ import annotations
 import copy
 import math
 import os
+import pickle
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, Iterator, List, Optional, Sequence
 
 import h5py
 import numpy as np
 import torch
+from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation
 from torch.utils.data import DataLoader, Dataset, Sampler
 
@@ -32,12 +34,16 @@ from torch.utils.data import DataLoader, Dataset, Sampler
 @dataclass
 class MPSGAFDataConfig:
     dataset_path: str
+    dataset_name: str = "modelnet40"
     num_points: int = 1024
     noise_type: str = "crop"
     rot_mag: float = 45.0
     trans_mag: float = 0.5
     partial: Sequence[float] = (0.7, 0.7)
     num_sources_per_ref: int = 10
+    split_root: Optional[str] = None
+    pair_list: Optional[str] = None
+    estimate_normals: bool = True
     train_category_file: Optional[str] = None
     val_category_file: Optional[str] = None
     test_category_file: Optional[str] = None
@@ -60,6 +66,10 @@ def _read_categories(path: Optional[str]) -> Optional[List[str]]:
     with open(path, "r", encoding="utf-8") as handle:
         categories = [line.strip() for line in handle if line.strip()]
     return sorted(categories)
+
+
+def _normalise_dataset_name(name: str) -> str:
+    return name.lower().replace("-", "").replace("_", "")
 
 
 def _seed_from(sample: Dict, key: str, salt: int = 0) -> Optional[int]:
@@ -377,6 +387,360 @@ class ModelNetHdf(Dataset):
         return self.data.shape[0]
 
 
+class ThreeDMatchPairDataset(Dataset):
+    """3DMatch/3DLoMatch pair dataset using GeoTransformer/PREDATOR metadata."""
+
+    def __init__(
+        self,
+        dataset_path: str,
+        metadata_path: str,
+        num_points: int = 1024,
+        base_seed: int = 0,
+        estimate_normals: bool = True,
+    ) -> None:
+        self.root = dataset_path
+        self.metadata_path = metadata_path
+        self.num_points = int(num_points)
+        self.base_seed = int(base_seed)
+        self.estimate_normals = bool(estimate_normals)
+        self.base = self
+        self.num_sources = 1
+        self._point_cache: Dict[str, np.ndarray] = {}
+        if self.num_points < 3:
+            raise ValueError("num_points must be at least 3")
+        if not os.path.isdir(self.root):
+            raise FileNotFoundError(f"3DMatch directory not found: {self.root}")
+        if not os.path.isfile(self.metadata_path):
+            raise FileNotFoundError(f"3DMatch metadata not found: {self.metadata_path}")
+        with open(self.metadata_path, "rb") as handle:
+            self.metadata = pickle.load(handle)
+        if not isinstance(self.metadata, list) or not self.metadata:
+            raise ValueError("3DMatch metadata must be a non-empty list")
+
+    def set_epoch(self, epoch: int) -> None:
+        del epoch
+
+    def __len__(self) -> int:
+        return len(self.metadata)
+
+    def __getitem__(self, item: int) -> Dict:
+        meta = self.metadata[item]
+        ref = self._load_points(meta["pcd0"])
+        src = self._load_points(meta["pcd1"])
+        rng_src = np.random.RandomState((self.base_seed + item * 1_000_003 + 13) % (2**32 - 1))
+        rng_ref = np.random.RandomState((self.base_seed + item * 1_000_003 + 17) % (2**32 - 1))
+        src = self._resample_with_normals(src, rng_src)
+        ref = self._resample_with_normals(ref, rng_ref)
+        rotation = np.asarray(meta["rotation"], dtype=np.float32).reshape(3, 3)
+        translation = np.asarray(meta["translation"], dtype=np.float32).reshape(3)
+        return {
+            "points_src": src,
+            "points_ref": ref,
+            "transform_gt": np.concatenate([rotation, translation[:, None]], axis=1).astype(np.float32),
+            "idx": int(item),
+            "group_ref_idx": int(item),
+            "multi_src_k": 0,
+            "overlap": float(meta.get("overlap", -1.0)),
+            "scene_name": str(meta.get("scene_name", "")),
+            "frag_id0": int(meta.get("frag_id0", -1)),
+            "frag_id1": int(meta.get("frag_id1", -1)),
+        }
+
+    def _load_points(self, relative_path: str) -> np.ndarray:
+        if relative_path in self._point_cache:
+            return self._point_cache[relative_path]
+        path = os.path.join(self.root, relative_path)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"3DMatch point cloud not found: {path}")
+        try:
+            payload = torch.load(path, map_location="cpu", weights_only=False)
+        except TypeError:
+            payload = torch.load(path, map_location="cpu")
+        if isinstance(payload, torch.Tensor):
+            points = payload.detach().cpu().numpy()
+        elif isinstance(payload, np.ndarray):
+            points = payload
+        elif isinstance(payload, dict):
+            points = self._extract_points_from_mapping(payload, path)
+        else:
+            raise TypeError(f"Unsupported point cloud payload type in {path}: {type(payload)!r}")
+        points = np.asarray(points, dtype=np.float32)
+        if points.ndim != 2 or points.shape[1] < 3:
+            raise ValueError(f"Expected point cloud with shape [N, 3+] in {path}")
+        if points.shape[1] >= 6:
+            points = points[:, :6].astype(np.float32)
+        elif not self.estimate_normals:
+            xyz = points[:, :3].astype(np.float32)
+            points = np.concatenate([xyz, np.zeros_like(xyz, dtype=np.float32)], axis=-1).astype(np.float32)
+        else:
+            xyz = points[:, :3].astype(np.float32)
+            points = np.concatenate([xyz, self._estimate_normals(xyz)], axis=-1).astype(np.float32)
+        self._point_cache[relative_path] = points
+        return points
+
+    @staticmethod
+    def _extract_points_from_mapping(payload: Dict, path: str) -> np.ndarray:
+        for key in ("points", "xyz", "pcd", "points_raw"):
+            if key in payload:
+                value = payload[key]
+                return value.detach().cpu().numpy() if isinstance(value, torch.Tensor) else np.asarray(value)
+        raise KeyError(f"Could not find point coordinates in {path}")
+
+    def _resample_with_normals(self, points: np.ndarray, rng: np.random.RandomState) -> np.ndarray:
+        if self.num_points <= points.shape[0]:
+            indices = rng.choice(points.shape[0], self.num_points, replace=False)
+        else:
+            indices = np.concatenate(
+                [
+                    rng.choice(points.shape[0], points.shape[0], replace=False),
+                    rng.choice(points.shape[0], self.num_points - points.shape[0], replace=True),
+                ],
+                axis=0,
+            )
+        sampled = points[indices, :]
+        xyz = sampled[:, :3].astype(np.float32)
+        if sampled.shape[1] >= 6:
+            normals = sampled[:, 3:6].astype(np.float32)
+        else:
+            normals = self._estimate_normals(xyz)
+        return np.concatenate([xyz, normals], axis=-1).astype(np.float32)
+
+    @staticmethod
+    def _estimate_normals(points: np.ndarray, k: int = 16) -> np.ndarray:
+        k = max(3, min(int(k), points.shape[0]))
+        tree = cKDTree(points)
+        _, nn_idx = tree.query(points, k=k)
+        normals = np.empty_like(points, dtype=np.float32)
+        centroid = np.mean(points, axis=0)
+        for idx, neighbours in enumerate(np.asarray(nn_idx)):
+            local = points[neighbours] - points[neighbours].mean(axis=0, keepdims=True)
+            cov = local.T @ local
+            _, vecs = np.linalg.eigh(cov)
+            normal = vecs[:, 0].astype(np.float32)
+            if np.dot(normal, points[idx] - centroid) < 0.0:
+                normal = -normal
+            normals[idx] = normal / (np.linalg.norm(normal) + 1e-8)
+        return normals
+
+
+class KittiPairDataset(Dataset):
+    """KITTI odometry pairs using GeoTransformer metadata and downsampled ``.npy`` scans."""
+
+    def __init__(
+        self,
+        dataset_path: str,
+        metadata_path: str,
+        num_points: int = 1024,
+        base_seed: int = 0,
+        estimate_normals: bool = True,
+    ) -> None:
+        self.root = dataset_path
+        self.metadata_path = metadata_path
+        self.num_points = int(num_points)
+        self.base_seed = int(base_seed)
+        self.estimate_normals = bool(estimate_normals)
+        self.base = self
+        self.num_sources = 1
+        self._point_cache: Dict[str, np.ndarray] = {}
+        if self.num_points < 3:
+            raise ValueError("num_points must be at least 3")
+        if not os.path.isdir(self.root):
+            raise FileNotFoundError(f"KITTI directory not found: {self.root}")
+        if not os.path.isfile(self.metadata_path):
+            raise FileNotFoundError(f"KITTI metadata not found: {self.metadata_path}")
+        with open(self.metadata_path, "rb") as handle:
+            self.metadata = pickle.load(handle)
+        if not isinstance(self.metadata, list) or not self.metadata:
+            raise ValueError("KITTI metadata must be a non-empty list")
+
+    def set_epoch(self, epoch: int) -> None:
+        del epoch
+
+    def __len__(self) -> int:
+        return len(self.metadata)
+
+    def __getitem__(self, item: int) -> Dict:
+        meta = self.metadata[item]
+        ref = self._load_points(meta["pcd0"])
+        src = self._load_points(meta["pcd1"])
+        rng_src = np.random.RandomState((self.base_seed + item * 1_000_003 + 23) % (2**32 - 1))
+        rng_ref = np.random.RandomState((self.base_seed + item * 1_000_003 + 29) % (2**32 - 1))
+        transform = np.asarray(meta["transform"], dtype=np.float32)[:3, :]
+        return {
+            "points_src": self._resample_with_normals(src, rng_src),
+            "points_ref": self._resample_with_normals(ref, rng_ref),
+            "transform_gt": transform,
+            "idx": int(item),
+            "group_ref_idx": int(item),
+            "multi_src_k": 0,
+            "scene_name": str(meta.get("seq_id", "")),
+            "frag_id0": int(meta.get("frame0", -1)),
+            "frag_id1": int(meta.get("frame1", -1)),
+        }
+
+    def _load_points(self, relative_path: str) -> np.ndarray:
+        if relative_path in self._point_cache:
+            return self._point_cache[relative_path]
+        path = os.path.join(self.root, relative_path)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"KITTI point cloud not found: {path}")
+        points = np.asarray(np.load(path), dtype=np.float32)
+        if points.ndim != 2 or points.shape[1] < 3:
+            raise ValueError(f"Expected point cloud with shape [N, 3+] in {path}")
+        points = self._normalise_point_features(points)
+        self._point_cache[relative_path] = points
+        return points
+
+    def _normalise_point_features(self, points: np.ndarray) -> np.ndarray:
+        if points.shape[1] >= 6:
+            return points[:, :6].astype(np.float32)
+        xyz = points[:, :3].astype(np.float32)
+        if self.estimate_normals:
+            normals = ThreeDMatchPairDataset._estimate_normals(xyz)
+        else:
+            normals = np.zeros_like(xyz, dtype=np.float32)
+        return np.concatenate([xyz, normals], axis=-1).astype(np.float32)
+
+    def _resample_with_normals(self, points: np.ndarray, rng: np.random.RandomState) -> np.ndarray:
+        if self.num_points <= points.shape[0]:
+            indices = rng.choice(points.shape[0], self.num_points, replace=False)
+        else:
+            indices = np.concatenate(
+                [
+                    rng.choice(points.shape[0], points.shape[0], replace=False),
+                    rng.choice(points.shape[0], self.num_points - points.shape[0], replace=True),
+                ],
+                axis=0,
+            )
+        return points[indices, :6].astype(np.float32)
+
+
+class ETHPairDataset(Dataset):
+    """ETH laser-registration benchmark pairs from scene ``gt.log`` files."""
+
+    SCENES = ("gazebo_summer", "gazebo_winter", "wood_autmn", "wood_summer")
+
+    def __init__(
+        self,
+        dataset_path: str,
+        num_points: int = 1024,
+        base_seed: int = 0,
+        estimate_normals: bool = True,
+        scene_names: Optional[Sequence[str]] = None,
+    ) -> None:
+        self.root = dataset_path
+        self.num_points = int(num_points)
+        self.base_seed = int(base_seed)
+        self.estimate_normals = bool(estimate_normals)
+        self.scene_names = tuple(scene_names or self.SCENES)
+        self.base = self
+        self.num_sources = 1
+        self.pairs: List[Dict] = []
+        self._point_cache: Dict[str, np.ndarray] = {}
+        if self.num_points < 3:
+            raise ValueError("num_points must be at least 3")
+        if not os.path.isdir(self.root):
+            raise FileNotFoundError(f"ETH directory not found: {self.root}")
+        self._collect_pairs()
+        if not self.pairs:
+            raise ValueError("ETH dataset produced no registration pairs")
+
+    def set_epoch(self, epoch: int) -> None:
+        del epoch
+
+    def __len__(self) -> int:
+        return len(self.pairs)
+
+    def __getitem__(self, item: int) -> Dict:
+        pair = self.pairs[item]
+        rng_src = np.random.RandomState((self.base_seed + item * 1_000_003 + 31) % (2**32 - 1))
+        rng_ref = np.random.RandomState((self.base_seed + item * 1_000_003 + 37) % (2**32 - 1))
+        return {
+            "points_src": self._resample_with_normals(self._load_points(pair["src"]), rng_src),
+            "points_ref": self._resample_with_normals(self._load_points(pair["ref"]), rng_ref),
+            "transform_gt": pair["transform"].astype(np.float32),
+            "idx": int(item),
+            "group_ref_idx": int(item),
+            "multi_src_k": 0,
+            "scene_name": pair["scene"],
+            "frag_id0": int(pair["ref_id"]),
+            "frag_id1": int(pair["src_id"]),
+        }
+
+    def _collect_pairs(self) -> None:
+        for scene in self.scene_names:
+            scene_dir = os.path.join(self.root, scene)
+            if not os.path.isdir(scene_dir):
+                continue
+            log_path = os.path.join(scene_dir, "gt.log")
+            if not os.path.isfile(log_path):
+                continue
+            for ref_id, src_id, transform in self._read_log(log_path):
+                self.pairs.append(
+                    {
+                        "scene": scene,
+                        "ref_id": ref_id,
+                        "src_id": src_id,
+                        "ref": os.path.join(scene, f"Hokuyo_{ref_id}.ply"),
+                        "src": os.path.join(scene, f"Hokuyo_{src_id}.ply"),
+                        "transform": transform[:3, :],
+                    }
+                )
+
+    @staticmethod
+    def _read_log(path: str) -> List[tuple[int, int, np.ndarray]]:
+        pairs: List[tuple[int, int, np.ndarray]] = []
+        with open(path, "r", encoding="utf-8") as handle:
+            lines = [line.strip() for line in handle if line.strip()]
+        idx = 0
+        while idx + 4 < len(lines):
+            header = lines[idx].split()
+            if len(header) < 2:
+                raise ValueError(f"Invalid ETH gt.log header in {path}: {lines[idx]}")
+            ref_id = int(header[0])
+            src_id = int(header[1])
+            matrix = np.asarray(
+                [[float(value) for value in lines[idx + row].split()] for row in range(1, 5)],
+                dtype=np.float32,
+            )
+            pairs.append((ref_id, src_id, matrix))
+            idx += 5
+        return pairs
+
+    def _load_points(self, relative_path: str) -> np.ndarray:
+        if relative_path in self._point_cache:
+            return self._point_cache[relative_path]
+        path = os.path.join(self.root, relative_path)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"ETH point cloud not found: {path}")
+        import open3d as o3d
+
+        pcd = o3d.io.read_point_cloud(path)
+        points = np.asarray(pcd.points, dtype=np.float32)
+        if points.ndim != 2 or points.shape[1] != 3:
+            raise ValueError(f"Expected ETH point cloud with shape [N, 3] in {path}")
+        if self.estimate_normals:
+            normals = ThreeDMatchPairDataset._estimate_normals(points)
+        else:
+            normals = np.zeros_like(points, dtype=np.float32)
+        points = np.concatenate([points, normals], axis=-1).astype(np.float32)
+        self._point_cache[relative_path] = points
+        return points
+
+    def _resample_with_normals(self, points: np.ndarray, rng: np.random.RandomState) -> np.ndarray:
+        if self.num_points <= points.shape[0]:
+            indices = rng.choice(points.shape[0], self.num_points, replace=False)
+        else:
+            indices = np.concatenate(
+                [
+                    rng.choice(points.shape[0], points.shape[0], replace=False),
+                    rng.choice(points.shape[0], self.num_points - points.shape[0], replace=True),
+                ],
+                axis=0,
+            )
+        return points[indices, :6].astype(np.float32)
+
+
 class GroupedBatchSampler(Sampler[List[int]]):
     """Yield full multi-source groups and avoid mixing reference groups."""
 
@@ -479,6 +843,46 @@ def get_transforms(
 
 
 def get_train_datasets(config: MPSGAFDataConfig) -> tuple[RepeatPerReferenceDataset, RepeatPerReferenceDataset]:
+    dataset_name = _normalise_dataset_name(config.dataset_name)
+    if dataset_name in {"3dmatch", "3dlomatch"}:
+        split_root = config.split_root or "external_src/new_baselines/GeoTransformer/data/3DMatch/metadata"
+        return (
+            ThreeDMatchPairDataset(
+                config.dataset_path,
+                os.path.join(split_root, "train.pkl"),
+                num_points=config.num_points,
+                base_seed=config.seed,
+                estimate_normals=config.estimate_normals,
+            ),
+            ThreeDMatchPairDataset(
+                config.dataset_path,
+                os.path.join(split_root, "val.pkl"),
+                num_points=config.num_points,
+                base_seed=config.seed,
+                estimate_normals=config.estimate_normals,
+            ),
+        )
+    if dataset_name in {"kitti", "kittiodometry"}:
+        split_root = config.split_root or "external_src/new_baselines/GeoTransformer/data/Kitti/metadata"
+        return (
+            KittiPairDataset(
+                config.dataset_path,
+                os.path.join(split_root, "train.pkl"),
+                num_points=config.num_points,
+                base_seed=config.seed,
+                estimate_normals=config.estimate_normals,
+            ),
+            KittiPairDataset(
+                config.dataset_path,
+                os.path.join(split_root, "val.pkl"),
+                num_points=config.num_points,
+                base_seed=config.seed,
+                estimate_normals=config.estimate_normals,
+            ),
+        )
+    if dataset_name not in {"modelnet40", "modellonet40"}:
+        raise ValueError(f"Unsupported dataset_name: {config.dataset_name}")
+
     train_transforms, val_transforms = get_transforms(
         config.noise_type,
         config.rot_mag,
@@ -515,6 +919,38 @@ def get_train_datasets(config: MPSGAFDataConfig) -> tuple[RepeatPerReferenceData
 
 
 def get_test_dataset(config: MPSGAFDataConfig) -> RepeatPerReferenceDataset:
+    dataset_name = _normalise_dataset_name(config.dataset_name)
+    if dataset_name in {"3dmatch", "3dlomatch"}:
+        split_root = config.split_root or "external_src/new_baselines/GeoTransformer/data/3DMatch/metadata"
+        metadata_name = "3DLoMatch.pkl" if dataset_name == "3dlomatch" else "3DMatch.pkl"
+        metadata_path = config.pair_list or os.path.join(split_root, metadata_name)
+        return ThreeDMatchPairDataset(
+            config.dataset_path,
+            metadata_path,
+            num_points=config.num_points,
+            base_seed=config.seed,
+            estimate_normals=config.estimate_normals,
+        )
+    if dataset_name in {"kitti", "kittiodometry"}:
+        split_root = config.split_root or "external_src/new_baselines/GeoTransformer/data/Kitti/metadata"
+        metadata_path = config.pair_list or os.path.join(split_root, "test.pkl")
+        return KittiPairDataset(
+            config.dataset_path,
+            metadata_path,
+            num_points=config.num_points,
+            base_seed=config.seed,
+            estimate_normals=config.estimate_normals,
+        )
+    if dataset_name == "eth":
+        return ETHPairDataset(
+            config.dataset_path,
+            num_points=config.num_points,
+            base_seed=config.seed,
+            estimate_normals=config.estimate_normals,
+        )
+    if dataset_name not in {"modelnet40", "modellonet40"}:
+        raise ValueError(f"Unsupported dataset_name: {config.dataset_name}")
+
     _, test_transforms = get_transforms(
         config.noise_type,
         config.rot_mag,
@@ -555,6 +991,9 @@ def make_grouped_dataloader(
 __all__ = [
     "MPSGAFDataConfig",
     "ModelNetHdf",
+    "ThreeDMatchPairDataset",
+    "KittiPairDataset",
+    "ETHPairDataset",
     "RepeatPerReferenceDataset",
     "GroupedBatchSampler",
     "get_train_datasets",

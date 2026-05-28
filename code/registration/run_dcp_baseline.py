@@ -27,6 +27,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run DCP-family models under the MPS-GAF evaluation schema")
     parser.add_argument("--mode", choices=["train", "eval"], required=True)
     parser.add_argument("--dataset_path", required=True)
+    parser.add_argument(
+        "--dataset_name",
+        default="modelnet40",
+        choices=["modelnet40", "modellonet40", "3dmatch", "3dlomatch", "kitti", "eth"],
+    )
+    parser.add_argument("--split_root", default=None)
+    parser.add_argument("--pair_list", default=None)
+    parser.add_argument("--no_estimate_normals", action="store_true")
     parser.add_argument("--output_dir", default="runs/dcp_source2_crop_eval20")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--model_family", choices=["dcp", "prnet", "idam", "rpmnet", "pointnetlk", "omnet"], default="dcp")
@@ -51,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--epochs", type=int, default=180)
     parser.add_argument("--max_train_steps", type=int, default=10)
-    parser.add_argument("--max_eval_batches", type=int, default=20)
+    parser.add_argument("--max_eval_batches", type=int, default=None)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--emb_nn", default="pointnet")
     parser.add_argument("--emb_dims", type=int, default=512)
@@ -94,6 +102,8 @@ def validate_relative_paths(args: argparse.Namespace) -> None:
         "dataset_path",
         "output_dir",
         "checkpoint",
+        "split_root",
+        "pair_list",
         "external_repo",
         "dcp_repo",
         "prnet_repo",
@@ -105,7 +115,7 @@ def validate_relative_paths(args: argparse.Namespace) -> None:
         "val_category_file",
         "test_category_file",
     ):
-        value = getattr(args, key)
+        value = getattr(args, key, None)
         if value is not None and _is_policy_absolute_path(str(value)):
             raise ValueError(f"{key} must be a relative path")
 
@@ -316,12 +326,16 @@ def build_model(args: argparse.Namespace) -> torch.nn.Module:
 def build_data_config(args: argparse.Namespace) -> MPSGAFDataConfig:
     return MPSGAFDataConfig(
         dataset_path=args.dataset_path,
+        dataset_name=getattr(args, "dataset_name", "modelnet40"),
         num_points=args.num_points,
         noise_type=args.noise_type,
         rot_mag=args.rot_mag,
         trans_mag=args.trans_mag,
         partial=tuple(args.partial),
         num_sources_per_ref=args.num_sources_per_ref,
+        split_root=getattr(args, "split_root", None),
+        pair_list=getattr(args, "pair_list", None),
+        estimate_normals=not getattr(args, "no_estimate_normals", False),
         train_category_file=args.train_category_file,
         val_category_file=args.val_category_file,
         test_category_file=args.test_category_file,

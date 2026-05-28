@@ -6,10 +6,10 @@
 
 | 项目 | 状态 | 证据 |
 | --- | --- | --- |
-| 远程结果归档 | 已完成 | `/root/autodl-tmp/fusiontrack_final_results_20260522.tar.gz` 和 `/root/autodl-tmp/fusiontrack_update_results_20260522.tar.gz` |
-| 官方 deep baseline 长预算复跑 | 已完成 | `/root/autodl-tmp/fusiontrack_b3b8599_convergence_20260522` |
+| 远程结果归档 | 已完成 | `server_artifacts/final_results_20260522/fusiontrack_final_results_20260522.tar.gz` 和 `server_artifacts/final_results_20260522/fusiontrack_update_results_20260522.tar.gz` |
+| 官方 deep baseline 长预算复跑 | 已完成 | `remote_runs/fusiontrack_b3b8599_convergence_20260522` |
 | 我们方法增强 | 已完成 | `fusiontrack_individual_ensemble`、`fusiontrack_group_hybrid` 已接入 runner 和默认 protocol matrix |
-| strict validation 复跑 | 已完成 | `/root/autodl-tmp/fusiontrack_b3b8599_methods_20260522` |
+| strict validation 复跑 | 已完成 | `remote_runs/fusiontrack_b3b8599_methods_20260522` |
 | 本地审计归档 | 已完成 | `server_artifacts/final_results_20260522/fusiontrack_update_results_20260522.tar.gz` |
 | 论文主表写作 | 已跳过 | 按用户要求，本轮不做第 3 项 |
 | GitHub 推送 | 未完成 | 本地分支提交存在，但远程 HTTPS 连接 reset/timeout，需网络恢复后重试 |
@@ -54,7 +54,7 @@
 
 ## Enhanced Method 结果
 
-远程路径：`/root/autodl-tmp/fusiontrack_b3b8599_methods_20260522`。
+远程路径：`remote_runs/fusiontrack_b3b8599_methods_20260522`。
 
 ### Individual
 
@@ -80,7 +80,7 @@
 
 ## Long-Budget 官方结果
 
-远程路径：`/root/autodl-tmp/fusiontrack_b3b8599_convergence_20260522`。
+远程路径：`remote_runs/fusiontrack_b3b8599_convergence_20260522`。
 
 | 方法 | 任务 | AUROC | AUPRC | F1 | 收敛状态 |
 | --- | --- | ---: | ---: | ---: | --- |
@@ -99,7 +99,7 @@
 
 ## Recent Official Baseline 补充
 
-远程路径：`/root/autodl-tmp/fusiontrack_recent_official_20260522`。
+远程路径：`remote_runs/fusiontrack_recent_official_20260522`。
 本地归档：`server_artifacts/final_results_20260522/fusiontrack_recent_official_20260522.tar.gz`。
 
 新增 strict official-source 结果均已满足：无重复 label key、无重复 score key、无 missing score key、无 extra score key。个体级使用 `sample_id`，群体级使用 `sample_id + window_id`。
@@ -124,7 +124,7 @@
 
 ## CETrajAD Full-Coverage 补跑
 
-远程路径：`/root/autodl-tmp/fusiontrack_cetrajad_fullcoverage_20260522`。
+远程路径：`remote_runs/fusiontrack_cetrajad_fullcoverage_20260522`。
 本地归档：`server_artifacts/final_results_20260522/fusiontrack_cetrajad_fullcoverage_20260522.tar.gz`。
 
 原始 CETrajAD official-source run 输出 `770/829` score，缺失 `59` 个 `sample_id`，strict evaluation 失败。补跑时保持官方 CETrajAD 源码和模型外部调用不变，只在 FusionTrack adapter 侧对短轨迹/退化轨迹做 full-coverage 正则化，进入官方 preprocessing 前将 raw points 限制到 256，并使用 `coordinate_scale=1.0` 避免官方 shape 重采样产生极长序列。

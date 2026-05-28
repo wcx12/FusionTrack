@@ -1,48 +1,67 @@
 \chapter{System Implementation and Integrated Demonstration}
 
-\section{Implementation Environment}
-This chapter presents a concise implementation and demonstration of the framework developed in the preceding chapters. The prototype connects three main functions: TF-VPR-based optical reference retrieval in Chapter 3, multimodal entity-level fusion in Chapter 4, and behavior analysis in Chapter 5. Its purpose is not to introduce another algorithm, but to show how the modules are organized into a complete workflow.
+\section{Implementation Overview and Environment}
+This chapter describes the implementation prototype of the multimodal target fusion and behavior analysis system. The purpose of this chapter is not to introduce a new algorithm, but to show how the system architecture defined in Chapter 2 and the methods developed in Chapters 3, 4, and 5 are organized into a runnable demonstration system.
 
-The system is implemented as an offline processing prototype. Its inputs are modality-specific target positions and trajectory fragments. All observations are converted into the unified target-centered representation introduced in Chapter 2, which records position, time, source modality, confidence, and validity state. After this conversion, different sensing sources can enter the same fusion and visualization process.
+The system environment is summarized in Table~\ref{tab:chapter6-env}. The implementation uses Python scripts for data processing, result adaptation, metric aggregation, and visualization payload generation. The demonstration interface is implemented as a static web page using HTML, CSS, and JavaScript. It can be opened locally in a browser or deployed as a static page for public demonstration. The experimental scripts are designed to use project-relative paths when transferring artifacts, so that the system is not bound to one fixed local directory.
 
-\section{Implementation of Key Modules}
-The optical preparation module follows Chapter 3. Ordinary optical observations are converted into target centers or trajectory fragments directly. For coordinate-missing optical images, TF-VPR retrieves Top-\(k\) coordinate-known references and provides a constrained candidate set for downstream target association. In this way, coordinate-missing optical observations can be connected to the existing trajectory system without treating VPR as direct coordinate estimation.
-
-The fusion module follows the role defined in Chapter 4. It first associates target positions from different modalities within the same frame or a short time window, and then connects fused candidates across consecutive frames. A target that can be continuously associated is treated as more reliable, while a target that fails to obtain temporal support is gradually weakened.
-
-The existence update and noise-suppression module is used in the demonstration. If a candidate point is not associated for ten consecutive frames, the system removes it as noise. The remaining fused targets can then be passed to the behavior analysis module in Chapter 5 for route, speed, shape, and group-relation analysis.
-
-\section{System Workflow}
-The runtime workflow is straightforward. The system reads target positions from different modalities, converts them into unified target records, performs spatial association within each frame, performs temporal association between adjacent frames, removes candidates that remain unmatched for ten consecutive frames, and outputs the remaining fused target set. When behavior analysis is required, this fused set is further organized into trajectories and sent to the anomaly analysis module described in Chapter 5.
-
-\section{Integrated Demonstration}
-The integrated demonstration uses a recorded visualization to show the target fusion process. The display is divided into several visual regions. The two panels on the left represent target positions obtained from two different modalities. These panels show that each modality observes a set of candidate object positions, but the observations are not yet fused. Because each modality may contain missed detections, localization error, or isolated false points, using either panel alone is not sufficient for stable target understanding.
-
-The large panel on the right shows the fused result. In this panel, color depth represents the existence state of a candidate target. A darker color indicates that the target has been continuously supported by association evidence and is therefore more likely to be a real persistent object. This visual design is consistent with the temporal association rule described above. When a target can be associated across adjacent frames, its existence state is maintained; when it fails to be associated, its reliability decreases.
-
-Some cross-shaped points disappear during the demonstration. This disappearance is not a display error, but the result of the noise-suppression rule. If a point cannot be associated for ten consecutive frames, the system regards it as an unreliable detection and removes it from the maintained fused target set. This behavior reflects the logic of the implemented fusion module: spatial association first combines the two modalities within a frame, and temporal association then checks whether the fused candidate remains consistent over time.
-
-The lower-right part of the visualization further illustrates the filtering result. The image with a white border indicates the points removed at a certain moment, while the image without the white border shows the remaining target positions after these removed points have been erased. This comparison makes the effect of the filtering rule more direct. The retained points correspond to candidates with stronger temporal continuity, whereas the removed points correspond to detections that fail to obtain enough cross-frame support.
-
-\begin{table}[htbp]
+\begin{table}[H]
   \centering
-  \caption{Interpretation of the integrated demonstration display.}
-  \label{tab:chapter6-demo-display}
-  \begin{tabular}{p{0.28\linewidth}p{0.62\linewidth}}
+  \caption{Implementation environment of the demonstration system.}
+  \label{tab:chapter6-env}
+  \setlength{\tabcolsep}{4pt}
+  \renewcommand{\arraystretch}{0.95}
+  \small
+  \begin{tabular}{p{0.24\linewidth}p{0.64\linewidth}}
     \toprule
-    Display region & Meaning \\
+    Component & Implementation description \\
     \midrule
-    Left two panels & Target positions obtained from two different modalities before fusion. \\
-    Right large panel & Fused target result after spatial and temporal association. Darker color indicates higher existence confidence. \\
-    Removed points & Candidate points removed because they are not associated for ten consecutive frames. \\
-    Lower-right comparison & White-bordered view marks removed points, while the view without the border shows the remaining positions after filtering. \\
+    Offline processing & Python-based scripts for reading datasets, adapting experimental outputs, computing metrics, and generating visualization records. \\
+    Data artifacts & Sequence metadata, trajectory records, anomaly labels or protocols, method scores, registration diagnostics, and frame-level visualization payloads. \\
+    Demonstration interface & Static browser-based page implemented with HTML, CSS, and JavaScript. \\
+    Deployment mode & Local browser preview and static-page deployment, such as GitHub Pages. \\
+    Path organization & Relative project paths are used for generated artifacts to improve portability across local and remote environments. \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-This demonstration verifies the main implementation logic rather than introducing a new quantitative experiment. The quantitative and methodological evidence has already been discussed in Chapters 3, 4, and 5. Here, the purpose is to show that the modules can be connected in a coherent workflow: modality-specific observations are first displayed separately, spatial association produces a fused frame-level result, temporal association maintains persistent targets, and long-term unmatched points are removed as noise. The final output is a cleaner fused target set that can support subsequent trajectory-level and behavior-level analysis.
+The implemented system follows the six functional layers introduced in Chapter 2: multimodal data input, preprocessing, optical reference retrieval, entity-level fusion, behavior analysis, and result presentation. In the prototype, algorithmic experiments and result generation are performed offline. The system then organizes the generated trajectories, anomaly scores, registration diagnostics, heatmaps, and explanation records into a unified visualization package. This design allows the experimental algorithms to be updated independently while keeping the presentation interface stable.
+
+This environment summary defines the engineering boundary of the prototype. The following module description then explains how the implementation corresponds to the architectural layers introduced earlier.
+
+\section{Open-source Repository and Reproducibility}
+The implementation code, thesis source files, experimental scripts, and visualization materials of this project are organized in a public GitHub repository: \url{https://github.com/wcx12/FusionTrack}. The repository is used as the reproducibility entry for the implemented system. It provides the LaTeX source of the thesis, anomaly detection benchmark scripts, VPR and registration modules, static visualization materials, and workflow files for document building.
+
+The open-source package is organized around the same modular boundary as the system implementation. The benchmark code defines data protocols, result adapters, metric computation, and key-audit rules. The visualization materials provide the static demonstration page and generated result files used for thesis presentation. The repository does not include large raw datasets, server credentials, private configuration files, or absolute local paths. This separation keeps the public materials inspectable while avoiding dependence on one local machine or remote server account.
+
+\section{Implementation of Main Modules}
+To keep the implementation consistent with the system model in Chapter 2, the prototype maps each architectural layer to a concrete system module. The data input and preprocessing modules form the entry of the system. They read the available dataset sequences and experimental results, then normalize them into records indexed by sequence, frame, target, method, and score. This organization follows the target-centered representation defined in Chapter 2 and makes later result comparison more direct.
+
+The optical reference retrieval module corresponds to Chapter 3. In the system implementation, TF-VPR is treated as a reference retrieval component for coordinate-missing optical images. Its output is used as a scene-level constraint or as an experimental result interface, rather than as a direct target identity decision.
+
+The entity-level fusion and registration module corresponds to Chapter 4. The implementation preserves the registration and fusion outputs in a form suitable for inspection, including correspondence-related records, fused trajectory information, and diagnostic indicators. These outputs support the later behavior analysis module.
+
+The behavior analysis module corresponds to Chapter 5. It organizes individual anomaly results, group anomaly results, fused anomaly evidence, event explanations, and situation heatmaps. The module does not only output a scalar score; it also preserves the visual and textual evidence required for interpreting abnormal behavior.
+
+The result presentation module finally converts these records into an interactive demonstration interface. It presents metrics, dynamic visualization, method comparison, explanation records, language switching, and report export, so that the outputs of the previous modules can be inspected in a unified page.
+
+\section{System Workflow}
+The runtime workflow of the implemented system is organized around experimental result loading and visualization generation. First, the system reads dataset metadata, frame resources, trajectory records, and method outputs. Second, the result adaptation module converts these files into a unified format. Third, the metric module summarizes sequence-level and method-level indicators. Fourth, the visualization module generates the dynamic payload used by the web interface, including original frames, trajectory overlays, heatmaps, and combined views. Finally, the static page loads these records and provides interactive inspection.
+
+In compact form, the workflow consists of data and result loading, unified result adaptation, metric aggregation, visualization payload generation, and web-based demonstration with export.
+
+This workflow separates algorithm execution from result presentation. Therefore, when a stronger detector, fusion method, or registration algorithm is added later, it only needs to provide outputs in the agreed result format. The visualization layer can then reuse the same interface to display the updated results.
+
+\section{Integrated Demonstration Interface}
+The integrated demonstration interface is designed to support thesis presentation and result inspection. The top part of the interface provides method selection, sequence selection, language switching, and core indicators. These controls allow the user to compare different methods and inspect the results of different sequences without changing the underlying data files.
+
+The central visualization area provides four synchronized views: the original video, the anomaly heatmap, the trajectory view, and the combined heatmap-trajectory view. The original video keeps the scene context visible. The heatmap view shows where abnormal evidence is concentrated. The trajectory view highlights target movement patterns. The combined view is used as the default display because it presents spatial risk and target motion at the same time.
+
+The system also separates different result types. Individual-level results focus on abnormal behavior of a single target, such as route deviation or motion irregularity. Group-level results focus on relational changes among multiple targets, such as leaving, merging, splitting, or neighborhood restructuring. Registration diagnostics are presented separately to avoid mixing cross-modal alignment quality with video anomaly detection results.
+
+In addition to dynamic visualization, the interface provides explanation records, protocol information, data audit information, and result export. These functions make the system more suitable for thesis demonstration: the main page can remain concise during presentation, while detailed evidence can still be expanded when needed.
 
 \section{Chapter Summary}
-This chapter presented a simplified implementation description and an integrated demonstration of the proposed system. The implementation connects the TF-VPR-based optical reference retrieval module, the multimodal target fusion module, and the behavior analysis module into a single processing workflow. In the demonstrated fusion process, target positions from two modalities are first associated spatially, then associated temporally across consecutive frames. Candidate targets that persist across frames obtain stronger existence evidence, while points that fail to be associated for ten consecutive frames are removed as noise.
+This chapter presented the implementation prototype and integrated demonstration of the proposed system. Different from Chapter 2, which defines the system architecture and data model, this chapter focuses on how the architecture is realized in an offline processing and web-based presentation workflow.
 
-Compared with the preceding method chapters, this chapter intentionally avoids additional complex modeling. Its main function is to explain how the earlier modules are used together and how the video demonstration should be interpreted. The demonstration shows that the system can transform separate modality-specific target positions into a cleaner fused target result, which provides the necessary input for subsequent trajectory analysis and behavior understanding.
+The implemented prototype connects the TF-VPR reference retrieval interface, entity-level fusion and registration outputs, individual and group anomaly analysis results, and situation heatmap visualization. Through unified result adaptation and static web presentation, the system provides a runnable demonstration for the methods developed in the previous chapters. The prototype also keeps the result interface modular, allowing later algorithmic improvements to be integrated without redesigning the whole visualization system.

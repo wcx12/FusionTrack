@@ -60,8 +60,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dataset_path",
         required=True,
-        help="Path to modelnet40_ply_hdf5_2048 (recommend repository-relative path)",
+        help="Path to the dataset root (recommend repository-relative path)",
     )
+    parser.add_argument(
+        "--dataset_name",
+        default="modelnet40",
+        choices=["modelnet40", "modellonet40", "3dmatch", "3dlomatch", "kitti", "eth"],
+    )
+    parser.add_argument("--split_root", default=None)
+    parser.add_argument("--pair_list", default=None)
+    parser.add_argument("--no_estimate_normals", action="store_true")
     parser.add_argument(
         "--dataset_split",
         default="test",
@@ -90,7 +98,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--groups_per_batch", type=int, default=1)
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--max_eval_batches", type=int, default=20)
+    parser.add_argument("--max_eval_batches", type=int, default=None)
     parser.add_argument("--icp_iterations", type=int, default=20)
     parser.add_argument("--icp_tolerance", type=float, default=1e-6)
     parser.add_argument("--icp_trim_fraction", type=float, default=0.7)
@@ -122,6 +130,41 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--teaser_normal_max_nn", type=int, default=30)
     parser.add_argument("--teaser_feature_max_nn", type=int, default=100)
     parser.add_argument("--teaser_max_correspondences", type=int, default=512)
+    parser.add_argument("--turboreg_voxel_size", type=float, default=0.05)
+    parser.add_argument("--turboreg_normal_radius", type=float, default=0.1)
+    parser.add_argument("--turboreg_feature_radius", type=float, default=0.25)
+    parser.add_argument("--turboreg_normal_max_nn", type=int, default=30)
+    parser.add_argument("--turboreg_feature_max_nn", type=int, default=100)
+    parser.add_argument("--turboreg_max_correspondences", type=int, default=6000)
+    parser.add_argument("--turboreg_max_n", type=int, default=7000)
+    parser.add_argument("--turboreg_tau_length_consis", type=float, default=0.012)
+    parser.add_argument("--turboreg_num_pivot", type=int, default=2000)
+    parser.add_argument("--turboreg_radiu_nms", type=float, default=0.15)
+    parser.add_argument("--turboreg_tau_inlier", type=float, default=0.1)
+    parser.add_argument("--turboreg_metric", default="IN", choices=["IN", "MAE", "MSE"])
+    parser.add_argument("--turboreg_device", default=None)
+    parser.add_argument("--mac_voxel_size", type=float, default=0.05)
+    parser.add_argument("--mac_normal_radius", type=float, default=0.1)
+    parser.add_argument("--mac_feature_radius", type=float, default=0.25)
+    parser.add_argument("--mac_normal_max_nn", type=int, default=30)
+    parser.add_argument("--mac_feature_max_nn", type=int, default=100)
+    parser.add_argument("--mac_max_correspondences", type=int, default=512)
+    parser.add_argument("--mac_compatibility_distance", type=float, default=0.05)
+    parser.add_argument("--mac_max_seeds", type=int, default=64)
+    parser.add_argument("--mac_refine_iterations", type=int, default=10)
+    parser.add_argument("--mac_refine_trim_fraction", type=float, default=0.7)
+    parser.add_argument("--sc2_voxel_size", type=float, default=0.05)
+    parser.add_argument("--sc2_normal_radius", type=float, default=0.1)
+    parser.add_argument("--sc2_feature_radius", type=float, default=0.25)
+    parser.add_argument("--sc2_normal_max_nn", type=int, default=30)
+    parser.add_argument("--sc2_feature_max_nn", type=int, default=100)
+    parser.add_argument("--sc2_max_correspondences", type=int, default=512)
+    parser.add_argument("--sc2_compatibility_distance", type=float, default=0.05)
+    parser.add_argument("--sc2_max_selected_correspondences", type=int, default=96)
+    parser.add_argument("--sc2_power_iterations", type=int, default=10)
+    parser.add_argument("--sc2_refine_iterations", type=int, default=10)
+    parser.add_argument("--sc2_refine_trim_fraction", type=float, default=0.7)
+    parser.add_argument("--kiss_voxel_size", type=float, default=0.05)
     parser.add_argument("--super4pcs_binary", default=None)
     parser.add_argument("--super4pcs_overlap", type=float, default=0.4)
     parser.add_argument("--super4pcs_delta", type=float, default=0.05)
@@ -144,6 +187,8 @@ def parse_args() -> argparse.Namespace:
 def validate_relative_paths(args: argparse.Namespace) -> None:
     for key in (
         "dataset_path",
+        "split_root",
+        "pair_list",
         "output_dir",
         "super4pcs_binary",
         "goicp_binary",
@@ -151,7 +196,7 @@ def validate_relative_paths(args: argparse.Namespace) -> None:
         "val_category_file",
         "test_category_file",
     ):
-        value = getattr(args, key)
+        value = getattr(args, key, None)
         if value is not None and _is_policy_absolute_path(str(value)):
             raise ValueError(
                 f"{key} is configured as an absolute path. Use a relative path per benchmark policy."
@@ -178,11 +223,28 @@ def _json_safe(value: object) -> object:
     return value
 
 
+def _as_numpy_rotation(matrix) -> np.ndarray:
+    if hasattr(matrix, "detach"):
+        return matrix[:3, :3].detach().cpu().numpy()
+    if hasattr(matrix, "value"):
+        return np.asarray(matrix.value, dtype=float)[:3, :3]
+    return np.asarray(matrix, dtype=float)[:3, :3]
+
+
+def _project_rotation(rotation: np.ndarray) -> np.ndarray:
+    u, _, vh = np.linalg.svd(rotation)
+    projected = u @ vh
+    if np.linalg.det(projected) < 0.0:
+        u[:, -1] *= -1.0
+        projected = u @ vh
+    return projected
+
+
 def rotation_error_deg(pred: torch.Tensor, target: torch.Tensor) -> float:
-    pred = pred[:3, :3]
-    target = target[:3, :3]
-    residual = target.t() @ pred
-    trace = residual[0, 0] + residual[1, 1] + residual[2, 2]
+    pred_rot = _project_rotation(_as_numpy_rotation(pred))
+    target_rot = _project_rotation(_as_numpy_rotation(target))
+    residual = target_rot.T @ pred_rot
+    trace = np.trace(residual)
     value = 0.5 * (trace - 1.0)
     value = max(min(float(value), 1.0), -1.0)
     return float(math.degrees(math.acos(value)))
@@ -241,7 +303,6 @@ def update_metrics(
     acc["success_sum"] += float(success)
     if not valid:
         acc["failures"] += 1.0
-        return
 
     acc["count"] += 1.0
     acc["rotation_error_deg_sum"] += rot
@@ -279,7 +340,7 @@ def finalize_metrics(acc: Dict[str, float]) -> Dict[str, float]:
 
     return {
         "num_pairs": int(attempts),
-        "num_successful_pairs": int(count),
+        "num_successful_pairs": int(attempts - failures),
         "num_failed_pairs": failures,
         "rotation_error_deg_mean": acc["rotation_error_deg_sum"] / count,
         "rotation_error_deg_rmse": math.sqrt(acc["rotation_error_deg_sq_sum"] / count),
@@ -410,6 +471,57 @@ def _benchmark_methods_case(
                 "max_correspondences": args.teaser_max_correspondences,
             }
             result = run_non_learning_baseline(method, src, ref, **kwargs)
+        elif method in {"turboreg", "turbo_reg"}:
+            kwargs = {
+                "voxel_size": args.turboreg_voxel_size,
+                "normal_radius": args.turboreg_normal_radius,
+                "feature_radius": args.turboreg_feature_radius,
+                "normal_max_nn": args.turboreg_normal_max_nn,
+                "feature_max_nn": args.turboreg_feature_max_nn,
+                "max_correspondences": args.turboreg_max_correspondences,
+                "max_n": args.turboreg_max_n,
+                "tau_length_consis": args.turboreg_tau_length_consis,
+                "num_pivot": args.turboreg_num_pivot,
+                "radiu_nms": args.turboreg_radiu_nms,
+                "tau_inlier": args.turboreg_tau_inlier,
+                "metric": args.turboreg_metric,
+                "device": args.turboreg_device,
+            }
+            result = run_non_learning_baseline(method, src, ref, **kwargs)
+        elif method in {"mac", "mac_fpfh", "maximal_clique"}:
+            kwargs = {
+                "voxel_size": args.mac_voxel_size,
+                "normal_radius": args.mac_normal_radius,
+                "feature_radius": args.mac_feature_radius,
+                "normal_max_nn": args.mac_normal_max_nn,
+                "feature_max_nn": args.mac_feature_max_nn,
+                "max_correspondences": args.mac_max_correspondences,
+                "compatibility_distance": args.mac_compatibility_distance,
+                "max_seeds": args.mac_max_seeds,
+                "refine_iterations": args.mac_refine_iterations,
+                "refine_trim_fraction": args.mac_refine_trim_fraction,
+            }
+            result = run_non_learning_baseline(method, src, ref, **kwargs)
+        elif method in {"sc2_pcr", "sc2pcr", "sc2_pcr_fpfh"}:
+            kwargs = {
+                "voxel_size": args.sc2_voxel_size,
+                "normal_radius": args.sc2_normal_radius,
+                "feature_radius": args.sc2_feature_radius,
+                "normal_max_nn": args.sc2_normal_max_nn,
+                "feature_max_nn": args.sc2_feature_max_nn,
+                "max_correspondences": args.sc2_max_correspondences,
+                "compatibility_distance": args.sc2_compatibility_distance,
+                "max_selected_correspondences": args.sc2_max_selected_correspondences,
+                "power_iterations": args.sc2_power_iterations,
+                "refine_iterations": args.sc2_refine_iterations,
+                "refine_trim_fraction": args.sc2_refine_trim_fraction,
+            }
+            result = run_non_learning_baseline(method, src, ref, **kwargs)
+        elif method in {"kiss_matcher", "kissmatcher", "kiss"}:
+            kwargs = {
+                "voxel_size": args.kiss_voxel_size,
+            }
+            result = run_non_learning_baseline(method, src, ref, **kwargs)
         elif method == "super4pcs":
             kwargs = {
                 "binary_path": args.super4pcs_binary,
@@ -449,12 +561,16 @@ def _benchmark_methods_case(
 def benchmark_methods(args: argparse.Namespace) -> Dict[str, object]:
     data_config = MPSGAFDataConfig(
         dataset_path=args.dataset_path,
+        dataset_name=getattr(args, "dataset_name", "modelnet40"),
         num_points=args.num_points,
         noise_type=args.noise_type,
         rot_mag=args.rot_mag,
         trans_mag=args.trans_mag,
         partial=tuple(args.partial),
         num_sources_per_ref=args.num_sources_per_ref,
+        split_root=getattr(args, "split_root", None),
+        pair_list=getattr(args, "pair_list", None),
+        estimate_normals=not getattr(args, "no_estimate_normals", False),
         train_category_file=args.train_category_file,
         val_category_file=args.val_category_file,
         test_category_file=args.test_category_file,
@@ -500,16 +616,17 @@ def benchmark_methods(args: argparse.Namespace) -> Dict[str, object]:
                     pred_tgt = transform_se3(
                         pred.unsqueeze(0), points_src[sample_idx][..., :3].unsqueeze(0)
                     )[0]
-                    gt_tgt = transform_se3(gt.unsqueeze(0), points_src[sample_idx][..., :3].unsqueeze(0))[0]
                     chamfer = chamfer_distance_numpy(pred_tgt, points_ref[sample_idx][:, :3])
                     rot = rotation_error_deg(pred, gt)
                     trans = translation_error(pred, gt)
                     success = int(rot <= args.success_rotation_deg and trans <= args.success_translation)
                 else:
-                    pred_tgt = points_ref[sample_idx][:, :3]
-                    rot = 0.0
-                    trans = 0.0
-                    chamfer = 0.0
+                    pred_tgt = transform_se3(
+                        pred.unsqueeze(0), points_src[sample_idx][..., :3].unsqueeze(0)
+                    )[0]
+                    chamfer = chamfer_distance_numpy(pred_tgt, points_ref[sample_idx][:, :3])
+                    rot = rotation_error_deg(pred, gt)
+                    trans = translation_error(pred, gt)
                     success = 0
 
                 update_metrics(
@@ -522,10 +639,10 @@ def benchmark_methods(args: argparse.Namespace) -> Dict[str, object]:
                         "sample_idx": int(sample_idx),
                         "group_ref_idx": int(group_refs[sample_idx].item()),
                         "method": method,
-                        "rotation_error_deg": None if not valid else float(rot),
-                        "translation_error": None if not valid else float(trans),
+                        "rotation_error_deg": float(rot),
+                        "translation_error": float(trans),
                         "success": bool(success),
-                        "chamfer_distance": None if not valid else float(chamfer),
+                        "chamfer_distance": float(chamfer),
                         "runtime_sec": float(result.runtime_sec),
                         "skipped": bool(not valid),
                         "error": error_msg,

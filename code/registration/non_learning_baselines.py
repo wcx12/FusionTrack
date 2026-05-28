@@ -13,7 +13,9 @@ Baseline methods:
 - FPFH + Fast Global Registration (Open3D optional)
 - Generalized ICP (Open3D optional)
 - CPD via Gaussian Mixture Model (pycpd optional)
-- TEASER++ / Super4PCS / Go-ICP (optional external optional dependencies)
+- FPFH + MAC / SC2-PCR style spatial compatibility filtering (Open3D optional)
+- KISS-Matcher robust global registration (kiss-matcher optional)
+- TEASER++ / TurboReg / Super4PCS / Go-ICP (optional external dependencies)
 """
 
 from __future__ import annotations
@@ -155,6 +157,19 @@ def _load_pycpd() -> object:
             "pycpd is not installed. Install it to enable CPD baselines: `pip install pycpd`."
         ) from exc
     return RigidRegistration
+
+
+def _load_kiss_matcher() -> object:
+    """Import KISS-Matcher lazily for its optional robust registration baseline."""
+
+    try:
+        import kiss_matcher as km  # type: ignore
+    except Exception as exc:
+        raise RuntimeError(
+            "kiss-matcher is not installed. Install it to enable KISS-Matcher: "
+            "`pip install kiss-matcher`."
+        ) from exc
+    return km
 
 
 def _repo_root() -> Path:
@@ -377,7 +392,7 @@ def _fpfh_correspondences(
     src_points = np.asarray(src_down.points, dtype=np.float32)
     ref_points = np.asarray(ref_down.points, dtype=np.float32)
     if src_desc.shape[0] < 3 or ref_desc.shape[0] < 3:
-        raise RuntimeError("FPFH downsampling produced too few descriptors for TEASER++")
+        raise RuntimeError("FPFH downsampling produced too few descriptors")
 
     feature_tree = cKDTree(ref_desc)
     distances, nn_idx = feature_tree.query(src_desc, k=1)
@@ -385,6 +400,258 @@ def _fpfh_correspondences(
     if max_correspondences > 0:
         order = order[: max(3, min(int(max_correspondences), order.shape[0]))]
     return src_points[order], ref_points[nn_idx[order]], np.asarray(distances[order], dtype=np.float32)
+
+
+def _spatial_compatibility(
+    src_corr: PointCloud,
+    ref_corr: PointCloud,
+    compatibility_distance: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    if compatibility_distance <= 0.0:
+        raise ValueError("compatibility_distance must be > 0")
+    src = _as_float32(src_corr)[:, :3]
+    ref = _as_float32(ref_corr)[:, :3]
+    if src.shape != ref.shape or src.shape[0] < 3:
+        raise ValueError("Spatial compatibility requires at least 3 paired correspondences")
+
+    src_dist = np.linalg.norm(src[:, None, :] - src[None, :, :], axis=-1)
+    ref_dist = np.linalg.norm(ref[:, None, :] - ref[None, :, :], axis=-1)
+    dist_diff = np.abs(src_dist - ref_dist)
+    adjacency = dist_diff <= float(compatibility_distance)
+    np.fill_diagonal(adjacency, False)
+    return adjacency, dist_diff.astype(np.float32)
+
+
+def _greedy_largest_clique(
+    adjacency: np.ndarray,
+    descriptor_distances: np.ndarray,
+    max_seeds: int,
+) -> np.ndarray:
+    if adjacency.ndim != 2 or adjacency.shape[0] != adjacency.shape[1]:
+        raise ValueError("adjacency must be a square matrix")
+    n_corr = adjacency.shape[0]
+    if n_corr < 3:
+        return np.arange(n_corr, dtype=np.int64)
+
+    degrees = adjacency.sum(axis=1)
+    descriptor_distances = np.asarray(descriptor_distances, dtype=np.float32).reshape(-1)
+    if descriptor_distances.shape[0] != n_corr:
+        descriptor_distances = np.zeros((n_corr,), dtype=np.float32)
+
+    ranked = sorted(range(n_corr), key=lambda idx: (-int(degrees[idx]), float(descriptor_distances[idx])))
+    descriptor_ranked = sorted(range(n_corr), key=lambda idx: float(descriptor_distances[idx]))
+    seeds = []
+    for idx in [*ranked, *descriptor_ranked]:
+        if idx not in seeds:
+            seeds.append(idx)
+        if len(seeds) >= max(1, int(max_seeds)):
+            break
+
+    best: List[int] = []
+    best_descriptor_mean = float("inf")
+    for seed in seeds:
+        clique = [int(seed)]
+        candidates = np.flatnonzero(adjacency[seed])
+        while candidates.size:
+            local_degree = adjacency[np.ix_(candidates, candidates)].sum(axis=1)
+            order = sorted(
+                range(candidates.size),
+                key=lambda pos: (
+                    -int(local_degree[pos]),
+                    -int(degrees[candidates[pos]]),
+                    float(descriptor_distances[candidates[pos]]),
+                ),
+            )
+            next_idx = int(candidates[order[0]])
+            clique.append(next_idx)
+            candidates = candidates[adjacency[next_idx, candidates]]
+
+        descriptor_mean = float(np.mean(descriptor_distances[clique])) if clique else float("inf")
+        if len(clique) > len(best) or (len(clique) == len(best) and descriptor_mean < best_descriptor_mean):
+            best = clique
+            best_descriptor_mean = descriptor_mean
+
+    return np.asarray(best, dtype=np.int64)
+
+
+def mac_baseline(
+    src_xyz: PointCloud,
+    ref_xyz: PointCloud,
+    voxel_size: float = 0.05,
+    normal_radius: float = 0.1,
+    feature_radius: float = 0.25,
+    normal_max_nn: int = 30,
+    feature_max_nn: int = 100,
+    max_correspondences: int = 512,
+    compatibility_distance: float = 0.05,
+    max_seeds: int = 64,
+    refine_iterations: int = 10,
+    refine_trim_fraction: float = 0.7,
+) -> BaselineResult:
+    """FPFH + maximal-clique spatial compatibility registration.
+
+    This is a dependency-light project implementation inspired by MAC-style
+    robust correspondence filtering. It uses FPFH nearest-neighbor matches as
+    input correspondences and estimates a pose from a greedy maximal clique, so
+    results should be reported as `mac_fpfh`, not as official MAC with learned
+    descriptors.
+    """
+
+    start = time.perf_counter()
+    src_corr, ref_corr, desc_dist = _fpfh_correspondences(
+        src_xyz,
+        ref_xyz,
+        voxel_size=voxel_size,
+        normal_radius=normal_radius,
+        feature_radius=feature_radius,
+        normal_max_nn=normal_max_nn,
+        feature_max_nn=feature_max_nn,
+        max_correspondences=max_correspondences,
+    )
+    adjacency, _ = _spatial_compatibility(src_corr, ref_corr, compatibility_distance)
+    clique = _greedy_largest_clique(adjacency, desc_dist, max_seeds=max_seeds)
+    fallback = bool(clique.shape[0] < 3)
+    if fallback:
+        clique = np.argsort(desc_dist)[:3]
+    transform = weighted_kabsch(src_corr[clique], ref_corr[clique])
+
+    if refine_iterations > 0:
+        result = point_to_point_icp(
+            src_xyz,
+            ref_xyz,
+            iterations=refine_iterations,
+            trim_fraction=refine_trim_fraction,
+            init_transform=transform,
+        )
+        transform = result.transform
+        refine_meta = result.meta
+    else:
+        refine_meta = {}
+
+    meta: Dict[str, float | int | bool | str] = {
+        "method": "mac_fpfh",
+        "num_correspondences": int(src_corr.shape[0]),
+        "clique_size": int(clique.shape[0]),
+        "compatibility_distance": float(compatibility_distance),
+        "max_seeds": int(max_seeds),
+        "fallback": fallback,
+        "descriptor_distance_mean": float(np.mean(desc_dist)),
+    }
+    meta.update({f"refine_{key}": value for key, value in refine_meta.items()})
+    return BaselineResult(transform=transform, runtime_sec=float(time.perf_counter() - start), meta=meta)
+
+
+def sc2_pcr_baseline(
+    src_xyz: PointCloud,
+    ref_xyz: PointCloud,
+    voxel_size: float = 0.05,
+    normal_radius: float = 0.1,
+    feature_radius: float = 0.25,
+    normal_max_nn: int = 30,
+    feature_max_nn: int = 100,
+    max_correspondences: int = 512,
+    compatibility_distance: float = 0.05,
+    max_selected_correspondences: int = 96,
+    power_iterations: int = 10,
+    refine_iterations: int = 10,
+    refine_trim_fraction: float = 0.7,
+) -> BaselineResult:
+    """FPFH + second-order spatial compatibility registration.
+
+    This follows the SC2-PCR idea of using second-order spatial compatibility to
+    score correspondences, but keeps the implementation lightweight and tied to
+    FPFH correspondences for this benchmark.
+    """
+
+    start = time.perf_counter()
+    src_corr, ref_corr, desc_dist = _fpfh_correspondences(
+        src_xyz,
+        ref_xyz,
+        voxel_size=voxel_size,
+        normal_radius=normal_radius,
+        feature_radius=feature_radius,
+        normal_max_nn=normal_max_nn,
+        feature_max_nn=feature_max_nn,
+        max_correspondences=max_correspondences,
+    )
+    _, dist_diff = _spatial_compatibility(src_corr, ref_corr, compatibility_distance)
+    first_order = np.clip(1.0 - (dist_diff / float(compatibility_distance)) ** 2, 0.0, 1.0)
+    np.fill_diagonal(first_order, 0.0)
+    second_order = (first_order @ first_order) * first_order
+    scores = np.ones((second_order.shape[0],), dtype=np.float32) / max(1, second_order.shape[0])
+    for _ in range(max(1, int(power_iterations))):
+        scores = second_order @ scores
+        norm = float(np.linalg.norm(scores))
+        if norm <= 1e-12:
+            break
+        scores = (scores / norm).astype(np.float32)
+    if not np.isfinite(scores).all() or float(scores.max(initial=0.0)) <= 0.0:
+        scores = 1.0 / (desc_dist + 1e-6)
+
+    keep = max(3, min(int(max_selected_correspondences), src_corr.shape[0]))
+    selected = np.argsort(-scores)[:keep]
+    weights = np.clip(scores[selected], 1e-6, None).astype(np.float32)
+    transform = weighted_kabsch(src_corr[selected], ref_corr[selected], weights=weights)
+
+    if refine_iterations > 0:
+        result = point_to_point_icp(
+            src_xyz,
+            ref_xyz,
+            iterations=refine_iterations,
+            trim_fraction=refine_trim_fraction,
+            init_transform=transform,
+        )
+        transform = result.transform
+        refine_meta = result.meta
+    else:
+        refine_meta = {}
+
+    meta: Dict[str, float | int | bool | str] = {
+        "method": "sc2_pcr_fpfh",
+        "num_correspondences": int(src_corr.shape[0]),
+        "selected_correspondences": int(selected.shape[0]),
+        "compatibility_distance": float(compatibility_distance),
+        "power_iterations": int(power_iterations),
+        "score_mean": float(np.mean(scores)),
+        "descriptor_distance_mean": float(np.mean(desc_dist)),
+    }
+    meta.update({f"refine_{key}": value for key, value in refine_meta.items()})
+    return BaselineResult(transform=transform, runtime_sec=float(time.perf_counter() - start), meta=meta)
+
+
+def kiss_matcher_baseline(
+    src_xyz: PointCloud,
+    ref_xyz: PointCloud,
+    voxel_size: float = 0.05,
+) -> BaselineResult:
+    """KISS-Matcher robust global point-cloud registration.
+
+    KISS-Matcher estimates a rigid transform directly from the source and
+    reference coordinates. It is exposed as an optional dependency because the
+    package ships native extensions.
+    """
+
+    if voxel_size <= 0.0:
+        raise ValueError("voxel_size must be > 0")
+
+    start = time.perf_counter()
+    km = _load_kiss_matcher()
+    config = km.KISSMatcherConfig(float(voxel_size))
+    matcher = km.KISSMatcher(config)
+    result = matcher.estimate(_as_float32(src_xyz)[:, :3], _as_float32(ref_xyz)[:, :3])
+
+    rotation = np.asarray(result.rotation, dtype=np.float32)
+    translation = np.asarray(result.translation, dtype=np.float32).reshape(3)
+    transform = _as_rigid_transform(np.concatenate([rotation, translation[:, None]], axis=1))
+    meta: Dict[str, float | int | bool | str] = {
+        "method": "kiss_matcher",
+        "voxel_size": float(voxel_size),
+    }
+    if hasattr(matcher, "get_num_rotation_inliers"):
+        meta["num_rotation_inliers"] = int(matcher.get_num_rotation_inliers())
+    if hasattr(matcher, "get_num_final_inliers"):
+        meta["num_final_inliers"] = int(matcher.get_num_final_inliers())
+    return BaselineResult(transform=transform, runtime_sec=float(time.perf_counter() - start), meta=meta)
 
 
 def _rotation_matrix_from_so3(axis_angle: np.ndarray, max_angle: float) -> np.ndarray:
@@ -941,16 +1208,17 @@ def cpd_rigid(
         w=w,
         max_iterations=max(1, int(max_iterations)),
         tolerance=max(0.0, float(tolerance)),
+        scale=False,
     )
     _, (scale, rot, trans) = reg.register()
     if not np.isfinite(rot).all() or not np.isfinite(trans).all():
         raise RuntimeError("CPD produced invalid transform")
-    # pycpd uses column-vector convention: x' = s * x @ R + t
-    transform = np.concatenate([scale * rot.T.astype(np.float32), trans.astype(np.float32)[:, None]], axis=1)
+    # pycpd uses column-vector convention: x' = x @ R + t.
+    transform = np.concatenate([rot.T.astype(np.float32), trans.astype(np.float32)[:, None]], axis=1)
     return BaselineResult(
         transform=transform,
         runtime_sec=float(time.perf_counter() - start),
-        meta={"method": "cpd", "scale": float(scale), "w": float(w)},
+        meta={"method": "cpd", "scale": float(scale), "scale_disabled": True, "w": float(w)},
     )
 
 
@@ -1025,6 +1293,82 @@ def teaserpp_baseline(
             "method": "teaserpp",
             "num_correspondences": int(src_corr.shape[0]),
             "noise_bound": float(noise_bound),
+            "descriptor_distance_mean": float(np.mean(desc_dist)),
+        },
+    )
+
+
+def turboreg_baseline(
+    src_xyz: PointCloud,
+    ref_xyz: PointCloud,
+    voxel_size: float = 0.05,
+    normal_radius: float = 0.1,
+    feature_radius: float = 0.25,
+    normal_max_nn: int = 30,
+    feature_max_nn: int = 100,
+    max_correspondences: int = 6000,
+    max_n: int = 7000,
+    tau_length_consis: float = 0.012,
+    num_pivot: int = 2000,
+    radiu_nms: float = 0.15,
+    tau_inlier: float = 0.1,
+    metric: str = "IN",
+    device: str | None = None,
+) -> BaselineResult:
+    """TurboReg robust estimator over FPFH nearest-neighbor correspondences."""
+
+    try:
+        import torch
+        import turboreg_gpu  # type: ignore
+    except Exception as exc:
+        raise RuntimeError(
+            "TurboReg Python binding is not importable. Install it from "
+            "`external_src/new_baselines/TurboReg/bindings` first."
+        ) from exc
+
+    metric = str(metric).upper()
+    if metric not in {"IN", "MAE", "MSE"}:
+        raise ValueError("TurboReg metric must be one of IN, MAE, or MSE")
+
+    start = time.perf_counter()
+    src_corr, ref_corr, desc_dist = _fpfh_correspondences(
+        src_xyz,
+        ref_xyz,
+        voxel_size=voxel_size,
+        normal_radius=normal_radius,
+        feature_radius=feature_radius,
+        normal_max_nn=normal_max_nn,
+        feature_max_nn=feature_max_nn,
+        max_correspondences=max_correspondences,
+    )
+    max_n = max(int(max_n), int(src_corr.shape[0]))
+    run_device = torch.device(device or ("cuda:0" if torch.cuda.is_available() else "cpu"))
+    src_tensor = torch.as_tensor(src_corr, dtype=torch.float32, device=run_device)
+    ref_tensor = torch.as_tensor(ref_corr, dtype=torch.float32, device=run_device)
+
+    solver = turboreg_gpu.TurboRegGPU(
+        max_n,
+        float(tau_length_consis),
+        int(num_pivot),
+        float(radiu_nms),
+        float(tau_inlier),
+        metric,
+    )
+    transform_4x4 = solver.run_reg(src_tensor, ref_tensor).detach().cpu().numpy()
+    transform = _convert_open3d_to_row_transform(np.asarray(transform_4x4, dtype=np.float32))
+    return BaselineResult(
+        transform=transform,
+        runtime_sec=float(time.perf_counter() - start),
+        meta={
+            "method": "turboreg",
+            "num_correspondences": int(src_corr.shape[0]),
+            "max_n": int(max_n),
+            "tau_length_consis": float(tau_length_consis),
+            "num_pivot": int(num_pivot),
+            "radiu_nms": float(radiu_nms),
+            "tau_inlier": float(tau_inlier),
+            "metric": metric,
+            "device": str(run_device),
             "descriptor_distance_mean": float(np.mean(desc_dist)),
         },
     )
@@ -1215,6 +1559,14 @@ def run_non_learning_baseline(
         return cpd_rigid(src_xyz, ref_xyz, **kwargs)
     if name in {"teaserpp", "teaser++", "teaser"}:
         return teaserpp_baseline(src_xyz, ref_xyz, **kwargs)
+    if name in {"turboreg", "turbo_reg"}:
+        return turboreg_baseline(src_xyz, ref_xyz, **kwargs)
+    if name in {"mac", "mac_fpfh", "maximal_clique"}:
+        return mac_baseline(src_xyz, ref_xyz, **kwargs)
+    if name in {"sc2_pcr", "sc2pcr", "sc2_pcr_fpfh"}:
+        return sc2_pcr_baseline(src_xyz, ref_xyz, **kwargs)
+    if name in {"kiss_matcher", "kissmatcher", "kiss"}:
+        return kiss_matcher_baseline(src_xyz, ref_xyz, **kwargs)
     if name in {"super4pcs", "super4pcs_ransac", "super4pcs_baseline"}:
         return super4pcs_baseline(src_xyz, ref_xyz, **kwargs)
     if name in {"goicp", "go_icp"}:
@@ -1237,6 +1589,16 @@ def baseline_method_names() -> List[str]:
         "cpd",
         "cpd_rigid",
         "teaserpp",
+        "turboreg",
+        "mac",
+        "mac_fpfh",
+        "maximal_clique",
+        "sc2_pcr",
+        "sc2pcr",
+        "sc2_pcr_fpfh",
+        "kiss_matcher",
+        "kissmatcher",
+        "kiss",
         "super4pcs",
         "goicp",
     ]

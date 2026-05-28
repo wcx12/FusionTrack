@@ -1,0 +1,304 @@
+{
+  "artifact_root": "code/registration/server_artifacts/20260526_new_baselines",
+  "metric_schema": "pose_metric = rotation_error_deg_mean + 50 * translation_error_mean",
+  "notes": [
+    "TurboReg and TEASER++ use the project FPFH nearest-neighbor correspondence path, not TurboReg's official FCGF/PREDATOR correspondence setting.",
+    "PointRegGPT GeoTransformer-16w uses the GeoTransformer architecture and metadata with the 160k checkpoint from the PointRegGPT release package.",
+    "PointRegGPT GeoTransformer-2w uses the same export path with the 20k checkpoint from the PointRegGPT release package.",
+    "GeoTransformer ETH uses the 3DMatch checkpoint on the official ETH gt.log pairs converted to the GeoTransformer data schema with 2048 sampled points per source/reference, so it is a cross-dataset generalization check rather than ETH-specific training.",
+    "PointRegGPT GeoTransformer-16w and 2w ETH use the same ETH conversion with the PointRegGPT 160k and 20k checkpoints, so they are cross-dataset generalization checks rather than ETH-specific training.",
+    "An ETH inverse-transform diagnostic did not improve GeoTransformer or PointRegGPT pose metrics, so the weak ETH learned results are not explained by a source/reference direction inversion.",
+    "CPD was rerun on ModelNet with pycpd similarity scale disabled so it is evaluated as a rigid baseline.",
+    "FPFH-RANSAC on ETH uses a capped 5000-iteration budget because the default 100000-iteration run was too slow.",
+    "ETH CPD with a capped 10-iteration budget ran for more than 10 minutes without producing a full summary and was stopped.",
+    "Overly complex methods or datasets are intentionally left as empty records instead of blocking the current benchmark.",
+    "MPS-GAF ModelNet40 source-2/crop convergence training is still running; an automatic final-eval watcher is staged and will evaluate the best checkpoint after the training process exits."
+  ],
+  "results": {
+    "modelnet40_source2_crop_eval20": {
+      "mps_gaf_short_retrain_smoke": {
+        "pose_metric": 37.61936730146408,
+        "rotation_error_deg_mean": 23.29257583618164,
+        "translation_error_mean": 0.2865358293056488,
+        "chamfer_distance_mean": 0.026797741651535034,
+        "num_pairs": 80,
+        "note": "3-epoch short retrain on the new server; use as path/schema smoke, not as the converged ModelNet result."
+      },
+      "cpd_rigid_fixed": {
+        "pose_metric": 38.10927041936534,
+        "rotation_error_deg_mean": 25.327650943938487,
+        "translation_error_mean": 0.255632389508537,
+        "chamfer_distance_mean": 0.021126135527265433,
+        "num_pairs": 160,
+        "success_rate": 0.475
+      },
+      "turboreg": {
+        "pose_metric": 71.23460472476667,
+        "rotation_error_deg_mean": 53.87493091055889,
+        "translation_error_mean": 0.34719347628415564,
+        "chamfer_distance_mean": 0.05507251758754137,
+        "num_pairs": 160,
+        "success_rate": 0.51875
+      },
+      "teaserpp": {
+        "pose_metric": 100.46301601957308,
+        "rotation_error_deg_mean": 77.71345152847712,
+        "translation_error_mean": 0.45499128982191905,
+        "chamfer_distance_mean": 0.07579439389555773,
+        "num_pairs": 160,
+        "success_rate": 0.30625
+      },
+      "mac_fpfh_eval20_20260527": {
+        "pose_metric": 103.2285771692066,
+        "rotation_error_deg_mean": 81.69811655155607,
+        "translation_error_mean": 0.43060921235301064,
+        "chamfer_distance_mean": 0.04881759583731764,
+        "num_pairs": 160,
+        "success_rate": 0.35,
+        "runtime_sec_mean": 0.07035827590152621,
+        "note": "Project FPFH-correspondence implementation of MAC-style maximal-clique filtering; 20 batches with groups_per_batch=4."
+      },
+      "sc2_pcr_fpfh_eval20_20260527": {
+        "pose_metric": 90.8814166226679,
+        "rotation_error_deg_mean": 71.5735697471413,
+        "translation_error_mean": 0.3861569375105319,
+        "chamfer_distance_mean": 0.037587706651174814,
+        "num_pairs": 160,
+        "success_rate": 0.3625,
+        "runtime_sec_mean": 0.04261325192637742,
+        "note": "Project FPFH-correspondence implementation of SC2-PCR-style second-order spatial compatibility; 20 batches with groups_per_batch=4."
+      },
+      "kiss_matcher_eval20_20260527": {
+        "pose_metric": 114.93090303387929,
+        "rotation_error_deg_mean": 86.17464005778514,
+        "translation_error_mean": 0.575125259521883,
+        "chamfer_distance_mean": 0.17000721239310224,
+        "num_pairs": 160,
+        "success_rate": 0.075,
+        "runtime_sec_mean": 0.09619918398093433,
+        "note": "Official kiss-matcher Python package wrapped in the project benchmark; 20 batches with groups_per_batch=4."
+      }
+    },
+    "3dmatch": {
+      "pointreggpt_geotrans_16w": {
+        "pose_metric": 12.701464905222664,
+        "rotation_error_deg_mean": 5.387255320568682,
+        "translation_error_mean": 0.14628419169307966,
+        "chamfer_distance_mean": 0.3832714798817381,
+        "num_pairs": 1623
+      },
+      "pointreggpt_geotrans_2w": {
+        "pose_metric": 13.413051787756604,
+        "rotation_error_deg_mean": 5.635540970998251,
+        "translation_error_mean": 0.15555021633516708,
+        "chamfer_distance_mean": 0.37842754040131854,
+        "num_pairs": 1623
+      },
+      "turboreg": {
+        "pose_metric": 204.59485540326756,
+        "rotation_error_deg_mean": 87.25249629283688,
+        "translation_error_mean": 2.3468471822086134,
+        "chamfer_distance_mean": 0.6054106823109017,
+        "num_pairs": 1623,
+        "success_rate": 0.1947011706715958
+      },
+      "teaserpp": {
+        "pose_metric": 236.52172057546136,
+        "rotation_error_deg_mean": 99.9068886064468,
+        "translation_error_mean": 2.732296639380291,
+        "chamfer_distance_mean": 0.6476788621044931,
+        "num_pairs": 1623,
+        "success_rate": 0.11460258780036968
+      },
+      "mac_fpfh_20260527": {
+        "pose_metric": 193.8105215323585,
+        "rotation_error_deg_mean": 85.77822512608091,
+        "translation_error_mean": 2.160645928125552,
+        "chamfer_distance_mean": 0.31390756284614346,
+        "num_pairs": 1623,
+        "success_rate": 0.26124460874922983,
+        "runtime_sec_mean": 0.0938568945609157,
+        "note": "Official GeoTransformer 3DMatch metadata with PREDATOR indoor point clouds; project FPFH-correspondence MAC variant."
+      },
+      "sc2_pcr_fpfh_20260527": {
+        "pose_metric": 171.61265577862963,
+        "rotation_error_deg_mean": 75.10988020595,
+        "translation_error_mean": 1.9300555114535924,
+        "chamfer_distance_mean": 0.2422555914993363,
+        "num_pairs": 1623,
+        "success_rate": 0.2797288971041282,
+        "runtime_sec_mean": 0.10180641336163399,
+        "note": "Official GeoTransformer 3DMatch metadata with PREDATOR indoor point clouds; project FPFH-correspondence SC2-PCR variant."
+      },
+      "kiss_matcher_20260527": {
+        "pose_metric": 143.36078161764175,
+        "rotation_error_deg_mean": 58.484130704204574,
+        "translation_error_mean": 1.6975330182687436,
+        "chamfer_distance_mean": 0.644083799588886,
+        "num_pairs": 1623,
+        "success_rate": 0.3672211953173136,
+        "runtime_sec_mean": 0.10758431486725734,
+        "note": "Official GeoTransformer 3DMatch metadata with PREDATOR indoor point clouds; official kiss-matcher package wrapped in project schema."
+      }
+    },
+    "3dlomatch": {
+      "pointreggpt_geotrans_16w": {
+        "pose_metric": 43.91496634804061,
+        "rotation_error_deg_mean": 19.109319664401273,
+        "translation_error_mean": 0.4961129336727867,
+        "chamfer_distance_mean": 1.1983021758998424,
+        "num_pairs": 1781
+      },
+      "pointreggpt_geotrans_2w": {
+        "pose_metric": 49.5702503006478,
+        "rotation_error_deg_mean": 22.181903529983845,
+        "translation_error_mean": 0.5477669354132791,
+        "chamfer_distance_mean": 1.1993733420687982,
+        "num_pairs": 1781
+      },
+      "turboreg": {
+        "pose_metric": 264.65510295026286,
+        "rotation_error_deg_mean": 118.47334818806792,
+        "translation_error_mean": 2.923635095243898,
+        "chamfer_distance_mean": 0.8537183269849994,
+        "num_pairs": 1781,
+        "success_rate": 0.011229646266142616
+      },
+      "teaserpp": {
+        "pose_metric": 273.1806916635072,
+        "rotation_error_deg_mean": 120.5577455398388,
+        "translation_error_mean": 3.0524589224733676,
+        "chamfer_distance_mean": 0.8436460697647981,
+        "num_pairs": 1781,
+        "success_rate": 0.008983717012914094
+      },
+      "mac_fpfh_20260527": {
+        "pose_metric": 259.6595320962389,
+        "rotation_error_deg_mean": 119.97619275544149,
+        "translation_error_mean": 2.793666786815948,
+        "chamfer_distance_mean": 0.475110752264363,
+        "num_pairs": 1781,
+        "success_rate": 0.025266704098820886,
+        "runtime_sec_mean": 0.08798503450702108,
+        "note": "Official GeoTransformer 3DLoMatch metadata with PREDATOR indoor point clouds; project FPFH-correspondence MAC variant."
+      },
+      "sc2_pcr_fpfh_20260527": {
+        "pose_metric": 255.50030860769658,
+        "rotation_error_deg_mean": 118.51589338443515,
+        "translation_error_mean": 2.7396883044652287,
+        "chamfer_distance_mean": 0.3701380802175173,
+        "num_pairs": 1781,
+        "success_rate": 0.022459292532285232,
+        "runtime_sec_mean": 0.10341349100837341,
+        "note": "Official GeoTransformer 3DLoMatch metadata with PREDATOR indoor point clouds; project FPFH-correspondence SC2-PCR variant."
+      },
+      "kiss_matcher_20260527": {
+        "pose_metric": 245.42790605182677,
+        "rotation_error_deg_mean": 109.37379345862213,
+        "translation_error_mean": 2.7210822518640927,
+        "chamfer_distance_mean": 1.1819110874218395,
+        "num_pairs": 1781,
+        "success_rate": 0.04604154969118473,
+        "runtime_sec_mean": 0.10440480089728113,
+        "note": "Official GeoTransformer 3DLoMatch metadata with PREDATOR indoor point clouds; official kiss-matcher package wrapped in project schema."
+      }
+    },
+    "eth": {
+      "icp_point_to_plane": {
+        "pose_metric": 139.08792432388321,
+        "rotation_error_deg_mean": 55.664689252249616,
+        "translation_error_mean": 1.6684647014326721,
+        "chamfer_distance_mean": 2.960459126935433,
+        "num_pairs": 713,
+        "success_rate": 0.3576437587657784
+      },
+      "geotransformer_eth_2048": {
+        "pose_metric": 287.79248230125563,
+        "rotation_error_deg_mean": 119.91532154022467,
+        "translation_error_mean": 3.3575432152206197,
+        "chamfer_distance_mean": 17.397184558344087,
+        "num_pairs": 713
+      },
+      "pointreggpt_geotrans_16w_eth_2048": {
+        "pose_metric": 345.7054648594276,
+        "rotation_error_deg_mean": 97.92190492050115,
+        "translation_error_mean": 4.9556711987785285,
+        "chamfer_distance_mean": 23.100963560092676,
+        "num_pairs": 713
+      },
+      "pointreggpt_geotrans_2w_eth_2048": {
+        "pose_metric": 273.83159099975035,
+        "rotation_error_deg_mean": 120.91030777585075,
+        "translation_error_mean": 3.0584256644779924,
+        "chamfer_distance_mean": 17.519855692298968,
+        "num_pairs": 713
+      },
+      "fpfh_ransac_5k": {
+        "pose_metric": 147.95898923347843,
+        "rotation_error_deg_mean": 59.17917492203025,
+        "translation_error_mean": 1.7755962862289638,
+        "chamfer_distance_mean": 3.112890089670037,
+        "num_pairs": 713,
+        "success_rate": 0.029453015427769985
+      },
+      "turboreg": {
+        "pose_metric": 237.77782754517943,
+        "rotation_error_deg_mean": 107.60294039045263,
+        "translation_error_mean": 2.603497743094536,
+        "chamfer_distance_mean": 11.737143234609722,
+        "num_pairs": 713,
+        "success_rate": 0.023842917251051893
+      },
+      "teaserpp": {
+        "pose_metric": 400.82730546048134,
+        "rotation_error_deg_mean": 121.11155449317867,
+        "translation_error_mean": 5.594315019346053,
+        "chamfer_distance_mean": 14.453300360376002,
+        "num_pairs": 713,
+        "success_rate": 0.0
+      }
+    }
+  },
+  "deferred_or_empty_records": {
+    "cast": {
+      "result": {},
+      "reason": "CUDA-extension/dependency stack is too heavy for the current server scope."
+    },
+    "cofinet": {
+      "result": {},
+      "reason": "Official environment/checkpoint staging is not available in the current scope."
+    },
+    "regtr": {
+      "result": {},
+      "reason": "Official environment/checkpoint staging is not available in the current scope."
+    },
+    "pointdsc": {
+      "result": {},
+      "reason": "CUDA-extension dependency risk is high on a server without nvcc."
+    },
+    "buffer_x": {
+      "result": {},
+      "reason": "Full evaluation requires CUDA extensions plus large official preprocessed data beyond the current disk budget."
+    },
+    "integer": {
+      "result": {},
+      "reason": "Official environment/checkpoint staging is not available in the current scope and the method targets KITTI/nuScenes."
+    },
+    "official_mac_descriptor_pipeline": {
+      "result": {},
+      "reason": "Current reported row is the same-schema MAC-FPFH variant."
+    },
+    "official_sc2_pcr_pipeline": {
+      "result": {},
+      "reason": "Current reported row is the same-schema SC2-PCR-FPFH variant."
+    },
+    "kitti": {
+      "result": {},
+      "reason": "Point clouds are not staged and disk budget is limited."
+    },
+    "eth_cpd_full_budget": {
+      "result": {},
+      "reason": "Capped CPD was already too slow on ETH."
+    }
+  }
+}

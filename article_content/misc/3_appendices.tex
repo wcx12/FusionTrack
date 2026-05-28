@@ -1,0 +1,161 @@
+\chapter{Additional Registration Benchmark Results}
+\label{chap:appendix-registration-benchmark}
+
+This appendix collects the extended registration results that are not required for the main argument of Chapter 4 but are useful for checking the behavior of the registration module across datasets. All tables use the same source-to-reference convention. Rotation error is reported in degrees, translation error is the Euclidean translation error, and Chamfer distance is computed after applying the predicted transformation. The scalar pose metric is
+\begin{equation}
+  \mathrm{Pose}= \mathrm{RRE} + 50 \times \mathrm{RTE}.
+\end{equation}
+Lower values indicate better performance. A missing Chamfer entry means that the corresponding official log did not provide point-level outputs needed for this metric.
+
+\section{ModelNet40 Source-2/Crop Protocol}
+
+Table~\ref{tab:appendix-modelnet40-registration} reports the ModelNet40 source-2/crop results. The learned rows use the completed full-set evaluation, while the non-learning rows use the protocol-aligned 20-batch validation subset. The two groups therefore should not be read as having identical sample counts, but they do share the same transformation direction and metric definitions. The latest long MPS-GAF convergence run is not included here because its final evaluation had not been completed when this appendix was prepared.
+
+This protocol is kept in the appendix rather than the main chapter because it is mainly used as supporting evidence. The main body only needs the conclusion that MPS-GAF remains competitive on the intended object-level source-2/crop setting. The appendix gives the detailed rows so that the comparison with learning-based and non-learning baselines can be checked directly without interrupting the main argument.
+
+When reading the table, the most relevant comparison is between MPS-GAF and RPM-Net because both are evaluated on the same completed learning-based split. The non-learning rows are retained as calibration baselines for local registration behavior, so their smaller pair count should be interpreted as a protocol note rather than as a direct full-set ranking.
+
+\begin{table}[H]
+  \centering
+  \caption{ModelNet40 source-2/crop registration results.}
+  \label{tab:appendix-modelnet40-registration}
+  \scriptsize
+  \begin{tabular}{llrrrrr}
+    \toprule
+    Method & Type & Pairs & Pose & RRE & RTE & Chamfer \\
+    \midrule
+    MPS-GAF & learning & 4936 & \textbf{15.875} & \textbf{9.982} & 0.118 & 0.033 \\
+    RPM-Net & learning & 4936 & 16.242 & 10.428 & \textbf{0.116} & 0.036 \\
+    DCP-DGCNN & learning & 4936 & 40.356 & 24.094 & 0.325 & 0.057 \\
+    PointNetLK & learning & 4936 & 47.444 & 31.708 & 0.315 & 0.041 \\
+    PRNet-DGCNN & learning & 4936 & 51.879 & 31.763 & 0.402 & 0.077 \\
+    IDAM-GNN & learning & 4936 & 56.648 & 37.875 & 0.375 & 0.075 \\
+    OMNet & learning & 4936 & 173.830 & 127.799 & 0.921 & 1.034 \\
+    ICP point-to-point & non-learning & 160 & 34.662 & 22.619 & 0.241 & 0.024 \\
+    ICP point-to-plane & non-learning & 160 & 36.604 & 25.401 & 0.224 & 0.059 \\
+    CPD rigid & non-learning & 160 & 38.109 & 25.328 & 0.256 & \textbf{0.021} \\
+    Trimmed ICP & non-learning & 160 & 38.148 & 24.658 & 0.270 & 0.041 \\
+    SC2-PCR-FPFH & non-learning & 160 & 90.881 & 71.574 & 0.386 & 0.038 \\
+    MAC-FPFH & non-learning & 160 & 103.229 & 81.698 & 0.431 & 0.049 \\
+    KISS-Matcher & non-learning & 160 & 114.931 & 86.175 & 0.575 & 0.170 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The ModelNet40 result is the clearest completed evidence for the proposed method. MPS-GAF and RPM-Net have similar translation error, but MPS-GAF gives the lower pose metric because its rotation error is smaller. The ICP and CPD rows remain useful local-registration references, especially for Chamfer distance, but their pose errors are higher under the two-source crop setting. The recent robust estimators based on FPFH correspondences are weaker in this object-level protocol, which suggests that the correspondence stage is the limiting factor for those rows.
+
+\section{3DMatch}
+
+Table~\ref{tab:appendix-3dmatch-registration} reports the 3DMatch results. This benchmark uses indoor fragment pairs rather than object-level ModelNet shapes. The stronger rows are therefore the methods designed for this benchmark family, especially GeoTransformer-style models. The MPS-GAF rows are included as adapter-based generalization checks.
+
+This table is mainly used to show the cross-domain behavior of the registration module. It separates object-level performance from indoor-fragment performance and prevents the main chapter from overclaiming a single method as universally strongest across all registration protocols.
+
+\begin{table}[H]
+  \centering
+  \caption{3DMatch registration results.}
+  \label{tab:appendix-3dmatch-registration}
+  \scriptsize
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{llrrrrr}
+    \toprule
+    Method & Type & Pairs & Pose & RRE & RTE & Chamfer \\
+    \midrule
+    PointRegGPT GeoTransformer-16w & learning & 1623 & \textbf{12.701} & 5.387 & 0.146 & 0.383 \\
+    RoITr & learning & 1623 & 12.850 & \textbf{5.038} & 0.156 & n/a \\
+    PointRegGPT GeoTransformer-2w & learning & 1623 & 13.413 & 5.636 & 0.156 & 0.378 \\
+    GeoTransformer & learning & 1623 & 14.310 & 6.010 & 0.166 & 0.382 \\
+    RPM-Net & learning & 1623 & 75.478 & 31.375 & 0.882 & 0.171 \\
+    MPS-GAF no-normals & learning & 1623 & 87.580 & 35.224 & 1.047 & 0.238 \\
+    ICP point-to-point & non-learning & 1623 & 90.941 & 37.234 & 1.074 & \textbf{0.157} \\
+    KISS-Matcher & non-learning & 1623 & 143.361 & 58.484 & 1.698 & 0.644 \\
+    SC2-PCR-FPFH & non-learning & 1623 & 171.613 & 75.110 & 1.930 & 0.242 \\
+    MAC-FPFH & non-learning & 1623 & 193.811 & 85.778 & 2.161 & 0.314 \\
+    TurboReg & non-learning & 1623 & 204.595 & 87.252 & 2.347 & 0.605 \\
+    TEASER++ & non-learning & 1623 & 236.522 & 99.907 & 2.732 & 0.648 \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+The 3DMatch table shows a clear domain effect. GeoTransformer, PointRegGPT, and RoITr are much stronger than the ModelNet-oriented learned baselines and the FPFH-driven robust estimators. MPS-GAF is close to simple ICP in pose but does not reach the indoor-fragment methods. This is not a contradiction with the ModelNet40 result; it reflects a change in data distribution, overlap pattern, and descriptor requirement.
+
+\section{3DLoMatch}
+
+Table~\ref{tab:appendix-3dlomatch-registration} reports the low-overlap 3DLoMatch results. This split is more difficult than 3DMatch because the valid common region between fragments is smaller. The same pattern appears, but the gap between specialized indoor-fragment methods and general adapters becomes larger.
+
+The low-overlap setting is included because it is a useful stress test for correspondence quality. If a method relies too heavily on dense overlap or stable local neighborhoods, the degradation on this split becomes visible in both rotation and translation errors.
+
+\begin{table}[H]
+  \centering
+  \caption{3DLoMatch registration results.}
+  \label{tab:appendix-3dlomatch-registration}
+  \scriptsize
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{llrrrrr}
+    \toprule
+    Method & Type & Pairs & Pose & RRE & RTE & Chamfer \\
+    \midrule
+    PointRegGPT GeoTransformer-16w & learning & 1781 & \textbf{43.915} & \textbf{19.109} & \textbf{0.496} & 1.198 \\
+    RoITr & learning & 1781 & 49.261 & 22.016 & 0.545 & n/a \\
+    PointRegGPT GeoTransformer-2w & learning & 1781 & 49.570 & 22.182 & 0.548 & 1.199 \\
+    GeoTransformer & learning & 1781 & 52.085 & 23.064 & 0.580 & 1.173 \\
+    DCP-DGCNN & learning & 1781 & 132.011 & 58.091 & 1.478 & 0.344 \\
+    RPM-Net & learning & 1781 & 139.609 & 61.549 & 1.561 & \textbf{0.260} \\
+    MPS-GAF no-normals & learning & 1781 & 159.735 & 68.663 & 1.821 & 0.390 \\
+    ICP point-to-point & non-learning & 1781 & 163.244 & 70.714 & 1.851 & 0.324 \\
+    KISS-Matcher & non-learning & 1781 & 245.428 & 109.374 & 2.721 & 1.182 \\
+    SC2-PCR-FPFH & non-learning & 1781 & 255.500 & 118.516 & 2.740 & 0.370 \\
+    MAC-FPFH & non-learning & 1781 & 259.660 & 119.976 & 2.794 & 0.475 \\
+    TurboReg & non-learning & 1781 & 264.655 & 118.473 & 2.924 & 0.854 \\
+    TEASER++ & non-learning & 1781 & 273.181 & 120.558 & 3.052 & 0.844 \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+The MPS-GAF row remains slightly better than point-to-point ICP in pose, but it is far behind the 3DMatch-family networks. Low overlap makes the correspondence problem more dependent on benchmark-specific descriptors and robust correspondence filtering. The result is still useful because it marks the current boundary of the method: the multi-source mechanism helps in the controlled object setting, but it does not by itself solve low-overlap indoor fragment registration.
+
+\section{ETH Laser Benchmark}
+
+Table~\ref{tab:appendix-eth-registration} reports the ETH laser benchmark results. These rows should be read as cross-dataset generalization tests. The learned models were not trained specifically on ETH, and the point sampling differs from the indoor-fragment setting.
+
+The ETH rows are therefore not used to replace the main ModelNet40 conclusion. They are included to clarify the current boundary of the implementation and to show that classical local registration can still be stronger when the scan statistics differ substantially from the learning-based training domain.
+
+\begin{table}[H]
+  \centering
+  \caption{ETH laser benchmark registration results.}
+  \label{tab:appendix-eth-registration}
+  \scriptsize
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{llrrrrr}
+    \toprule
+    Method & Type & Pairs & Pose & RRE & RTE & Chamfer \\
+    \midrule
+    ICP point-to-point & non-learning & 713 & \textbf{130.479} & 56.305 & \textbf{1.483} & \textbf{2.491} \\
+    ICP point-to-plane & non-learning & 713 & 139.088 & 55.665 & 1.668 & 2.960 \\
+    RANSAC-ICP & non-learning & 713 & 140.915 & 58.550 & 1.647 & 2.669 \\
+    Trimmed ICP & non-learning & 713 & 144.889 & 57.732 & 1.743 & 2.933 \\
+    Identity / FPFH-RANSAC 5k & non-learning & 713 & 147.959 & 59.179 & 1.776 & 3.113 \\
+    MPS-GAF PPF & learning & 713 & 154.034 & 58.881 & 1.903 & 2.936 \\
+    RPM-Net & learning & 713 & 154.968 & 57.363 & 1.952 & 2.716 \\
+    MPS-GAF no-normals & learning & 713 & 176.900 & 57.272 & 2.393 & 3.115 \\
+    TurboReg & non-learning & 713 & 237.778 & 107.603 & 2.603 & 11.737 \\
+    GeoTransformer & learning & 713 & 287.792 & 119.915 & 3.358 & 17.397 \\
+    PointRegGPT GeoTransformer-16w & learning & 713 & 345.705 & 97.922 & 4.956 & 23.101 \\
+    TEASER++ & non-learning & 713 & 400.827 & 121.112 & 5.594 & 14.453 \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+ETH gives a different conclusion from ModelNet40. The completed rows are led by ICP variants, while the learned rows are weaker. The most likely reason is not a single implementation error: the same source-to-reference metric convention was used, and the inverse-transform diagnostic did not improve the learned rows. The result is better understood as a cross-domain limitation. ETH laser scans have different density, scale, and surface statistics from the object-level ModelNet40 setting and from the 3DMatch indoor fragments.
+
+Overall, the appendix supports a narrower claim than a single aggregate table would suggest. MPS-GAF is strong on the intended ModelNet40 source-2/crop protocol and has completed checks on 3DMatch, 3DLoMatch, and ETH. On indoor fragment benchmarks, methods trained around the 3DMatch family remain stronger. On ETH, classical local registration is still the most reliable among the completed rows. These results clarify where the current method is effective and where dataset-specific adaptation is still needed.
+
+\chapter{Source Code and Reproducibility Materials}
+\label{chap:appendix-source-code}
+
+The source code and related reproducibility materials of this thesis are publicly available at \url{https://github.com/wcx12/FusionTrack}. This appendix summarizes the role of the repository so that the relationship between the written thesis, experimental code, and demonstration system can be inspected directly.
+
+The repository contains five main types of materials. The \texttt{article\_content/} directory stores the LaTeX source files, figures, references, and build configuration of the thesis. The \texttt{code/anomaly\_detection/benchmark/} directory stores the benchmark implementation for individual and group anomaly analysis, including protocol definitions, method adapters, metric computation, and result checking scripts. The \texttt{code/vpr/} directory stores the visual place recognition related implementation used by the coordinate-missing optical access module. The \texttt{code/registration/} directory stores the registration and fusion related code used by the entity-level fusion experiments. The \texttt{visualization\_results/} directory stores the static web demonstration and generated visualization materials used in the system presentation.
+
+The open-source package is intended to support three forms of inspection. First, the thesis source can be rebuilt to check whether the written report, figures, tables, and references are consistent. Second, the benchmark scripts can be used to inspect the evaluation protocol and reproduce or extend the anomaly detection experiments after the required data are prepared. Third, the visualization materials provide a browser-based demonstration entry for checking the integrated output of the system, including sequence-level results, trajectory overlays, heatmaps, and explanation records.
+
+Some materials are intentionally excluded from the public repository. Large raw datasets, server-side temporary artifacts, private credentials, local absolute paths, and machine-specific configuration files are not version controlled. These files are either too large, environment-dependent, or unsuitable for public release. The public repository therefore focuses on source code, reproducibility scripts, thesis source files, and shareable visualization artifacts.

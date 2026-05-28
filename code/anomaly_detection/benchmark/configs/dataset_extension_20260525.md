@@ -212,4 +212,10 @@ test_tracking_observation_adapters.py: 3 passed
 test_prepare_tracking_dataset_protocol.py: 1 passed
 ```
 
-下一阶段需要把选定数据集放到服务器上，先运行 converter 生成 `observations_<split>.csv`，再运行通用 protocol runner，最后用同一套 benchmark matrix 跑学习类和非学习类方法，并补齐收敛记录。
+2026-05-25 服务器阶段记录已经补充到：
+
+```text
+code/anomaly_detection/benchmark/configs/dataset_extension_server_results_20260525.md
+```
+
+该阶段完成了 MOT17 与 SportsMOT 的通用协议、标准矩阵、official-source GPU baseline 收敛补跑和 strict key audit。M3OT 仍因官方 Figshare 访问返回 HTTP 403，不能声明完成。

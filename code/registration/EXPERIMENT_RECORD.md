@@ -11,7 +11,7 @@ making another model-level change.
 Unless noted otherwise, the experiments below use the same small training node:
 
 - Dataset: real ModelNet40 HDF5, `modelnet40_ply_hdf5_2048`
-- Server dataset path: `/root/autodl-tmp/datasets/modelnet40_ply_hdf5_2048`
+- Server dataset path: `datasets/modelnet40_ply_hdf5_2048`
 - Noise type: `crop`
 - Number of source variants per reference: `2`
 - Batch grouping: `groups_per_batch=1`, so each batch contains 2 source-reference pairs sharing one reference
@@ -135,7 +135,7 @@ Current best MPS-GAF configuration:
 ```bash
 python -u mps_gaf_run.py \
   --mode train \
-  --dataset_path /root/autodl-tmp/datasets/modelnet40_ply_hdf5_2048 \
+  --dataset_path datasets/modelnet40_ply_hdf5_2048 \
   --noise_type crop \
   --num_sources_per_ref 2 \
   --groups_per_batch 1 \
@@ -155,7 +155,7 @@ python -u mps_gaf_run.py \
 
 Best checkpoint:
 
-`/root/autodl-tmp/runs/mps_gaf_ablate_no_self_full_gate_m8_src2_50e/mps_gaf_best.pt`
+`runs/mps_gaf_ablate_no_self_full_gate_m8_src2_50e/mps_gaf_best.pt`
 
 Best metrics:
 
@@ -194,11 +194,11 @@ Protocol remained the same as the 50-epoch runs except `epochs=200`.
 
 Artifacts:
 
-- MPS-GAF log: `/root/autodl-tmp/runs/mps_gaf_best_full_no_self_gate_m8_src2_200e.log`
-- MPS-GAF best checkpoint: `/root/autodl-tmp/runs/mps_gaf_best_full_no_self_gate_m8_src2_200e/mps_gaf_best.pt`
-- MPS-GAF latest checkpoint: `/root/autodl-tmp/runs/mps_gaf_best_full_no_self_gate_m8_src2_200e/mps_gaf_latest.pt`
-- RPM-Net log: `/root/autodl-tmp/runs/rpmnet_src2_200e.log`
-- RPM-Net latest checkpoint: `/root/autodl-tmp/runs/rpmnet_src2_200e/rpmnet_latest.pt`
+- MPS-GAF log: `runs/mps_gaf_best_full_no_self_gate_m8_src2_200e.log`
+- MPS-GAF best checkpoint: `runs/mps_gaf_best_full_no_self_gate_m8_src2_200e/mps_gaf_best.pt`
+- MPS-GAF latest checkpoint: `runs/mps_gaf_best_full_no_self_gate_m8_src2_200e/mps_gaf_latest.pt`
+- RPM-Net log: `runs/rpmnet_src2_200e.log`
+- RPM-Net latest checkpoint: `runs/rpmnet_src2_200e/rpmnet_latest.pt`
 
 Interpretation:
 
@@ -226,8 +226,8 @@ The tested command used:
 ```bash
 python -u mps_gaf_run.py \
   --mode train \
-  --dataset_path /root/autodl-tmp/datasets/modelnet40_ply_hdf5_2048 \
-  --output_dir /root/autodl-tmp/runs/mps_gaf_best_gate_m8_stabilized_src2_200e \
+  --dataset_path datasets/modelnet40_ply_hdf5_2048 \
+  --output_dir runs/mps_gaf_best_gate_m8_stabilized_src2_200e \
   --noise_type crop \
   --num_sources_per_ref 2 \
   --groups_per_batch 1 \
@@ -259,11 +259,11 @@ Result:
 
 Artifacts:
 
-- Stabilized log: `/root/autodl-tmp/runs/mps_gaf_best_gate_m8_stabilized_src2_200e.log`
+- Stabilized log: `runs/mps_gaf_best_gate_m8_stabilized_src2_200e.log`
 - Stabilized best checkpoint:
-  `/root/autodl-tmp/runs/mps_gaf_best_gate_m8_stabilized_src2_200e/mps_gaf_best.pt`
+  `runs/mps_gaf_best_gate_m8_stabilized_src2_200e/mps_gaf_best.pt`
 - Stabilized latest checkpoint:
-  `/root/autodl-tmp/runs/mps_gaf_best_gate_m8_stabilized_src2_200e/mps_gaf_latest.pt`
+  `runs/mps_gaf_best_gate_m8_stabilized_src2_200e/mps_gaf_latest.pt`
 
 Interpretation:
 
@@ -347,8 +347,8 @@ Current best configuration:
 ```bash
 python -u mps_gaf_run.py \
   --mode train \
-  --dataset_path /root/autodl-tmp/datasets/modelnet40_ply_hdf5_2048 \
-  --output_dir /root/autodl-tmp/runs/mps_gaf_chamfer_w050_no_self_gate_m8_stabilized_src2_200e \
+  --dataset_path datasets/modelnet40_ply_hdf5_2048 \
+  --output_dir runs/mps_gaf_chamfer_w050_no_self_gate_m8_stabilized_src2_200e \
   --noise_type crop \
   --num_sources_per_ref 2 \
   --groups_per_batch 1 \
@@ -374,11 +374,11 @@ python -u mps_gaf_run.py \
 Current best artifacts:
 
 - Log:
-  `/root/autodl-tmp/runs/mps_gaf_chamfer_w050_no_self_gate_m8_stabilized_src2_200e.log`
+  `runs/mps_gaf_chamfer_w050_no_self_gate_m8_stabilized_src2_200e.log`
 - Best checkpoint:
-  `/root/autodl-tmp/runs/mps_gaf_chamfer_w050_no_self_gate_m8_stabilized_src2_200e/mps_gaf_best.pt`
+  `runs/mps_gaf_chamfer_w050_no_self_gate_m8_stabilized_src2_200e/mps_gaf_best.pt`
 - Latest checkpoint:
-  `/root/autodl-tmp/runs/mps_gaf_chamfer_w050_no_self_gate_m8_stabilized_src2_200e/mps_gaf_latest.pt`
+  `runs/mps_gaf_chamfer_w050_no_self_gate_m8_stabilized_src2_200e/mps_gaf_latest.pt`
 
 Interpretation:
 
@@ -428,8 +428,8 @@ Current best by validation Chamfer:
 ```bash
 python -u mps_gaf_run.py \
   --mode train \
-  --dataset_path /root/autodl-tmp/datasets/modelnet40_ply_hdf5_2048 \
-  --output_dir /root/autodl-tmp/runs/mps_gaf_bestsearch_w050_trim08_eval20_src2_200e \
+  --dataset_path datasets/modelnet40_ply_hdf5_2048 \
+  --output_dir runs/mps_gaf_bestsearch_w050_trim08_eval20_src2_200e \
   --noise_type crop \
   --num_sources_per_ref 2 \
   --groups_per_batch 1 \
@@ -456,11 +456,11 @@ python -u mps_gaf_run.py \
 Artifacts:
 
 - Log:
-  `/root/autodl-tmp/runs/mps_gaf_bestsearch_w050_trim08_eval20_src2_200e.log`
+  `runs/mps_gaf_bestsearch_w050_trim08_eval20_src2_200e.log`
 - Best checkpoint:
-  `/root/autodl-tmp/runs/mps_gaf_bestsearch_w050_trim08_eval20_src2_200e/mps_gaf_best.pt`
+  `runs/mps_gaf_bestsearch_w050_trim08_eval20_src2_200e/mps_gaf_best.pt`
 - Latest checkpoint:
-  `/root/autodl-tmp/runs/mps_gaf_bestsearch_w050_trim08_eval20_src2_200e/mps_gaf_latest.pt`
+  `runs/mps_gaf_bestsearch_w050_trim08_eval20_src2_200e/mps_gaf_latest.pt`
 
 Interpretation:
 
@@ -496,8 +496,8 @@ The best MPS-GAF pose-oriented configuration found so far is:
 ```bash
 python -u mps_gaf_run.py \
   --mode train \
-  --dataset_path /root/autodl-tmp/datasets/modelnet40_ply_hdf5_2048 \
-  --output_dir /root/autodl-tmp/runs/mps_gaf_pose_pose_w010_t010_eval20_src2_200e \
+  --dataset_path datasets/modelnet40_ply_hdf5_2048 \
+  --output_dir runs/mps_gaf_pose_pose_w010_t010_eval20_src2_200e \
   --noise_type crop \
   --num_sources_per_ref 2 \
   --groups_per_batch 1 \
@@ -535,11 +535,11 @@ Results on the 20-batch validation protocol:
 Artifacts:
 
 - Log:
-  `/root/autodl-tmp/runs/mps_gaf_pose_pose_w010_t010_eval20_src2_200e.log`
+  `runs/mps_gaf_pose_pose_w010_t010_eval20_src2_200e.log`
 - Pose-selected best checkpoint:
-  `/root/autodl-tmp/runs/mps_gaf_pose_pose_w010_t010_eval20_src2_200e/mps_gaf_best.pt`
+  `runs/mps_gaf_pose_pose_w010_t010_eval20_src2_200e/mps_gaf_best.pt`
 - Latest checkpoint:
-  `/root/autodl-tmp/runs/mps_gaf_pose_pose_w010_t010_eval20_src2_200e/mps_gaf_latest.pt`
+  `runs/mps_gaf_pose_pose_w010_t010_eval20_src2_200e/mps_gaf_latest.pt`
 
 Interpretation:
 
@@ -617,9 +617,9 @@ Interpretation:
 Artifacts:
 
 - Entropy SVD log:
-  `/root/autodl-tmp/runs/mps_gaf_pose_svd_entropy_eval20_src2_200e.log`
+  `runs/mps_gaf_pose_svd_entropy_eval20_src2_200e.log`
 - Entropy SVD checkpoint:
-  `/root/autodl-tmp/runs/mps_gaf_pose_svd_entropy_eval20_src2_200e/mps_gaf_best.pt`
+  `runs/mps_gaf_pose_svd_entropy_eval20_src2_200e/mps_gaf_best.pt`
 
 ### Geometric Refinement
 
@@ -642,9 +642,9 @@ Best MPS-GAF result found so far for Rot/Trans:
 ```bash
 python -u mps_gaf_run.py \
   --mode eval \
-  --dataset_path /root/autodl-tmp/datasets/modelnet40_ply_hdf5_2048 \
-  --output_dir /root/autodl-tmp/runs/mps_geo_w000_p010_plane40_trim0.7_a10 \
-  --checkpoint /root/autodl-tmp/runs/mps_gaf_pose_geo_w000_p010_eval20_src2_200e/mps_gaf_best.pt \
+  --dataset_path datasets/modelnet40_ply_hdf5_2048 \
+  --output_dir runs/mps_geo_w000_p010_plane40_trim0.7_a10 \
+  --checkpoint runs/mps_gaf_pose_geo_w000_p010_eval20_src2_200e/mps_gaf_best.pt \
   --noise_type crop \
   --num_sources_per_ref 2 \
   --groups_per_batch 1 \
@@ -689,9 +689,9 @@ Interpretation:
 Artifacts:
 
 - MPS best refined summary:
-  `/root/autodl-tmp/runs/mps_geo_w000_p010_plane40_trim0.7_a10/eval_summary.json`
+  `runs/mps_geo_w000_p010_plane40_trim0.7_a10/eval_summary.json`
 - RPM sanity-check summary:
-  `/root/autodl-tmp/runs/rpmnet_final_icp_eval.json`
+  `runs/rpmnet_final_icp_eval.json`
 
 ### Train-Time Geometry and Correspondence Losses
 
@@ -751,11 +751,11 @@ Interpretation:
 Artifacts:
 
 - Training logs:
-  `/root/autodl-tmp/runs/mps_trainloss_geo_plane50_corr001_120e.log`
-  `/root/autodl-tmp/runs/mps_trainloss_geo_plane50_120e.log`
-  `/root/autodl-tmp/runs/mps_trainloss_mat_entropy_plane50_corr001_120e.log`
+  `runs/mps_trainloss_geo_plane50_corr001_120e.log`
+  `runs/mps_trainloss_geo_plane50_120e.log`
+  `runs/mps_trainloss_mat_entropy_plane50_corr001_120e.log`
 - Refined-eval summary:
-  `/root/autodl-tmp/runs/eval_trainloss_icp.out`
+  `runs/eval_trainloss_icp.out`
 
 ### Learned SVD Inlier Weighting
 
@@ -786,9 +786,9 @@ Best learned configuration so far:
 ```bash
 python -u mps_gaf_run.py \
   --mode train \
-  --dataset_path /root/autodl-tmp/datasets/modelnet40_ply_hdf5_2048 \
-  --output_dir /root/autodl-tmp/runs/mps_learned_entropy_ft_entropy_i005_180e \
-  --checkpoint /root/autodl-tmp/runs/mps_gaf_pose_svd_entropy_eval20_src2_200e/mps_gaf_best.pt \
+  --dataset_path datasets/modelnet40_ply_hdf5_2048 \
+  --output_dir runs/mps_learned_entropy_ft_entropy_i005_180e \
+  --checkpoint runs/mps_gaf_pose_svd_entropy_eval20_src2_200e/mps_gaf_best.pt \
   --noise_type crop \
   --num_sources_per_ref 2 \
   --groups_per_batch 1 \
@@ -851,10 +851,10 @@ Interpretation:
 Artifacts:
 
 - Learned checkpoint:
-  `/root/autodl-tmp/runs/mps_learned_entropy_ft_entropy_i005_180e/mps_gaf_best.pt`
+  `runs/mps_learned_entropy_ft_entropy_i005_180e/mps_gaf_best.pt`
 - Raw training log:
-  `/root/autodl-tmp/runs/mps_learned_entropy_ft_entropy_i005_180e.log`
+  `runs/mps_learned_entropy_ft_entropy_i005_180e.log`
 - Refined summaries:
-  `/root/autodl-tmp/runs/mps_learned_entropy_ft_entropy_i005_180e_plane5_trim0.7/eval_summary.json`
-  `/root/autodl-tmp/runs/mps_learned_entropy_ft_entropy_i005_180e_plane10_trim0.7/eval_summary.json`
-  `/root/autodl-tmp/runs/mps_learned_entropy_ft_entropy_i005_180e_plane20_trim0.7/eval_summary.json`
+  `runs/mps_learned_entropy_ft_entropy_i005_180e_plane5_trim0.7/eval_summary.json`
+  `runs/mps_learned_entropy_ft_entropy_i005_180e_plane10_trim0.7/eval_summary.json`
+  `runs/mps_learned_entropy_ft_entropy_i005_180e_plane20_trim0.7/eval_summary.json`

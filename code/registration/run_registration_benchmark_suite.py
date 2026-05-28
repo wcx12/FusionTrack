@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Dict, List, Sequence
 
 
@@ -71,6 +71,14 @@ def parse_args() -> argparse.Namespace:
         help="Dataset path, relative to repository root.",
     )
     parser.add_argument(
+        "--dataset_name",
+        default="modelnet40",
+        choices=["modelnet40", "modellonet40", "3dmatch", "3dlomatch", "kitti", "eth"],
+    )
+    parser.add_argument("--split_root", default=None)
+    parser.add_argument("--pair_list", default=None)
+    parser.add_argument("--no_estimate_normals", action="store_true")
+    parser.add_argument(
         "--dataset_split",
         default="test",
         choices=["test", "train"],
@@ -126,8 +134,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def validate_relative_paths(args: argparse.Namespace) -> None:
-    for key in ("dataset_path", "output_root"):
-        if Path(getattr(args, key)).is_absolute():
+    for key in ("dataset_path", "split_root", "pair_list", "output_root"):
+        value = getattr(args, key, None)
+        if value is not None and (
+            Path(value).is_absolute()
+            or PurePosixPath(value).is_absolute()
+            or PureWindowsPath(value).is_absolute()
+        ):
             raise ValueError(
                 f"{key} is configured as an absolute path. Use a relative path per benchmark policy."
             )
@@ -138,9 +151,11 @@ def _build_case_args(args: argparse.Namespace, case: Dict[str, object]) -> List[
     assert isinstance(partial, Sequence)
     assert isinstance(partial[0], (int, float))
     assert isinstance(partial[1], (int, float))
-    return [
+    case_args = [
         "--dataset_path",
         str(args.dataset_path),
+        "--dataset_name",
+        args.dataset_name,
         "--dataset_split",
         args.dataset_split,
         "--output_dir",
@@ -195,6 +210,13 @@ def _build_case_args(args: argparse.Namespace, case: Dict[str, object]) -> List[
         "--fpfh_ransac_max_iterations",
         str(args.fpfh_ransac_max_iterations),
     ]
+    if args.split_root is not None:
+        case_args.extend(["--split_root", args.split_root])
+    if args.pair_list is not None:
+        case_args.extend(["--pair_list", args.pair_list])
+    if args.no_estimate_normals:
+        case_args.append("--no_estimate_normals")
+    return case_args
 
 
 def run_benchmark_cases(args: argparse.Namespace) -> List[Dict[str, object]]:

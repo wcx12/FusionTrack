@@ -2,6 +2,10 @@
 
 Date: 2026-05-23
 
+> Superseded note: this page records the first protocol-aligned 40-pair run.
+> The current main comparison uses the corrected 160-pair source-2/crop eval20
+> protocol recorded in `code/registration/benchmark_status_20260526.md`.
+
 Remote run: `runs/mps_gaf_nonlearn_schema_source2_crop_eval20_full`
 
 ## Protocol

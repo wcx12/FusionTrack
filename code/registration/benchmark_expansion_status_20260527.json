@@ -1,0 +1,322 @@
+{
+  "date": "2026-05-27",
+  "path_policy": "All recorded filesystem paths are repository-relative.",
+  "protocol_source_record": "code/registration/benchmark_protocol_sources_20260527.md",
+  "active_jobs": {
+    "mps_gaf_modelnet_source2_crop_converged_20260527": {
+      "status": "running",
+      "uses_gpu": true,
+      "artifact": "runs/mps_gaf_modelnet_source2_crop_converged_20260527",
+      "protocol": "ModelNet40 source-2/crop, 20 validation batches, no max_train_steps, early stopping enabled"
+    },
+    "mps_gaf_modelnet_source2_crop_converged_eval_20260527": {
+      "status": "waiting_for_train_exit",
+      "uses_gpu": true,
+      "artifact": "runs/mps_gaf_modelnet_source2_crop_converged_eval_20260527",
+      "protocol": "Automatically evaluates the best MPS-GAF checkpoint after the convergence run exits, using ModelNet40 source-2/crop and 20 validation batches"
+    },
+    "predator_official_data_download": {
+      "status": "done",
+      "uses_gpu": false,
+      "artifact": "runs/data_downloads/predator_data_aria2.log",
+      "protocol": "Official PREDATOR data package for standard 3DMatch/3DLoMatch metadata"
+    },
+    "auto_launch_predator_standard_runs": {
+      "status": "done",
+      "uses_gpu": false,
+      "artifact": "runs/predator_standard_20260527/auto_launch.log",
+      "protocol": "Uses official GeoTransformer 3DMatch/3DLoMatch metadata with PREDATOR point clouds and launches mac,sc2_pcr,kiss_matcher"
+    },
+    "mac_sc2_modelnet_source2_crop_eval20_20260527": {
+      "status": "done",
+      "uses_gpu": false,
+      "artifact": "runs/mac_sc2_modelnet_source2_crop_eval20_20260527",
+      "protocol": "ModelNet40 source-2/crop, 20 evaluation batches"
+    },
+    "mac_sc2_modelnet_source2_crop_eval20_g4_20260527": {
+      "status": "done",
+      "uses_gpu": false,
+      "artifact": "runs/mac_sc2_modelnet_source2_crop_eval20_g4_20260527",
+      "protocol": "ModelNet40 source-2/crop, 20 evaluation batches, groups_per_batch=4, 160 pairs"
+    },
+    "kiss_modelnet_source2_crop_eval20_g4_20260527": {
+      "status": "done",
+      "uses_gpu": false,
+      "artifact": "runs/kiss_modelnet_source2_crop_eval20_g4_20260527",
+      "protocol": "ModelNet40 source-2/crop, 20 evaluation batches, groups_per_batch=4, 160 pairs"
+    }
+  },
+  "added_baselines": {
+    "mac": {
+      "display_name": "MAC-FPFH",
+      "source": "3D Registration with Maximal Cliques, CVPR 2023 / TPAMI extension",
+      "implementation": "FPFH nearest-neighbor correspondences plus greedy maximal-clique spatial compatibility filtering",
+      "reporting_caveat": "Same-input project implementation, not official learned-descriptor MAC"
+    },
+    "sc2_pcr": {
+      "display_name": "SC2-PCR-FPFH",
+      "source": "SC2-PCR spatial compatibility, CVPR 2022",
+      "implementation": "FPFH nearest-neighbor correspondences plus second-order spatial compatibility scoring",
+      "reporting_caveat": "Same-input project implementation, not official descriptor pipeline"
+    },
+    "kiss_matcher": {
+      "display_name": "KISS-Matcher",
+      "source": "KISS-Matcher, ICRA 2025 / Quatro++ IJRR 2024 line",
+      "implementation": "Official PyPI package wrapped as an optional robust global registration baseline",
+      "reporting_caveat": "Uses the project point-cloud inputs and source-2/crop protocol, not KISS-Matcher's official LiDAR benchmark setup"
+    }
+  },
+  "smoke_results": {
+    "modelnet40_source2_crop_1batch_256pts": {
+      "artifact": "code/registration/server_artifacts/20260527_expansion/runs/mac_sc2_modelnet_source2_crop_smoke_20260527/comparison_schema_summary.json",
+      "mac": {
+        "pose_metric": 47.142649484053614,
+        "rotation_error_deg_mean": 38.19675654657221,
+        "translation_error_mean": 0.17891785874962807,
+        "chamfer_distance_mean": 0.04682942293584347,
+        "num_pairs": 2
+      },
+      "sc2_pcr": {
+        "pose_metric": 103.87913765959357,
+        "rotation_error_deg_mean": 88.3319654000542,
+        "translation_error_mean": 0.3109434451907873,
+        "chamfer_distance_mean": 0.046493078116327524,
+        "num_pairs": 2
+      },
+      "kiss_matcher": {
+        "pose_metric": 107.5060137475531,
+        "rotation_error_deg_mean": 88.03888716946052,
+        "translation_error_mean": 0.3893425315618515,
+        "chamfer_distance_mean": 0.17537227272987366,
+        "num_pairs": 2
+      }
+    }
+  },
+  "eval20_results": {
+    "modelnet40_source2_crop": {
+      "artifact": "code/registration/server_artifacts/20260527_expansion/runs/mac_sc2_modelnet_source2_crop_eval20_20260527/comparison_schema_summary.json",
+      "mac": {
+        "pose_metric": 104.11568643747758,
+        "rotation_error_deg_mean": 85.56311062002949,
+        "translation_error_mean": 0.3710515163489617,
+        "chamfer_distance_mean": 0.05090569371823221,
+        "num_pairs": 40,
+        "success_rate": 0.35,
+        "runtime_sec_mean": 0.09940593857318163
+      },
+      "sc2_pcr": {
+        "pose_metric": 78.31049319198272,
+        "rotation_error_deg_mean": 63.25682281445396,
+        "translation_error_mean": 0.3010734075505752,
+        "chamfer_distance_mean": 0.039143066428368914,
+        "num_pairs": 40,
+        "success_rate": 0.425,
+        "runtime_sec_mean": 0.04124076226726174
+      }
+    },
+    "modelnet40_source2_crop_g4": {
+      "artifact": "code/registration/server_artifacts/20260527_expansion/runs/mac_sc2_modelnet_source2_crop_eval20_g4_20260527/comparison_schema_summary.json",
+      "mac": {
+        "pose_metric": 103.2285771692066,
+        "rotation_error_deg_mean": 81.69811655155607,
+        "translation_error_mean": 0.43060921235301064,
+        "chamfer_distance_mean": 0.04881759583731764,
+        "num_pairs": 160,
+        "success_rate": 0.35,
+        "runtime_sec_mean": 0.07035827590152621
+      },
+      "sc2_pcr": {
+        "pose_metric": 90.8814166226679,
+        "rotation_error_deg_mean": 71.5735697471413,
+        "translation_error_mean": 0.3861569375105319,
+        "chamfer_distance_mean": 0.037587706651174814,
+        "num_pairs": 160,
+        "success_rate": 0.3625,
+        "runtime_sec_mean": 0.04261325192637742
+      },
+      "kiss_matcher": {
+        "pose_metric": 114.93090303387929,
+        "rotation_error_deg_mean": 86.17464005778514,
+        "translation_error_mean": 0.575125259521883,
+        "chamfer_distance_mean": 0.17000721239310224,
+        "num_pairs": 160,
+        "success_rate": 0.075,
+        "runtime_sec_mean": 0.09619918398093433
+      }
+    }
+  },
+  "standard_dataset_results": {
+    "3dmatch": {
+      "artifact": "code/registration/server_artifacts/20260527_expansion/runs/predator_standard_20260527/3dmatch_mac_sc2_pcr_kiss_matcher/comparison_schema_summary.json",
+      "protocol": "Official GeoTransformer 3DMatch metadata with PREDATOR indoor point clouds, 1623 pairs",
+      "mac": {
+        "pose_metric": 193.8105215323585,
+        "rotation_error_deg_mean": 85.77822512608091,
+        "translation_error_mean": 2.160645928125552,
+        "chamfer_distance_mean": 0.31390756284614346,
+        "num_pairs": 1623,
+        "success_rate": 0.26124460874922983,
+        "runtime_sec_mean": 0.0938568945609157
+      },
+      "sc2_pcr": {
+        "pose_metric": 171.61265577862963,
+        "rotation_error_deg_mean": 75.10988020595,
+        "translation_error_mean": 1.9300555114535924,
+        "chamfer_distance_mean": 0.2422555914993363,
+        "num_pairs": 1623,
+        "success_rate": 0.2797288971041282,
+        "runtime_sec_mean": 0.10180641336163399
+      },
+      "kiss_matcher": {
+        "pose_metric": 143.36078161764175,
+        "rotation_error_deg_mean": 58.484130704204574,
+        "translation_error_mean": 1.6975330182687436,
+        "chamfer_distance_mean": 0.644083799588886,
+        "num_pairs": 1623,
+        "success_rate": 0.3672211953173136,
+        "runtime_sec_mean": 0.10758431486725734
+      }
+    },
+    "3dlomatch": {
+      "artifact": "code/registration/server_artifacts/20260527_expansion/runs/predator_standard_20260527/3dlomatch_mac_sc2_pcr_kiss_matcher/comparison_schema_summary.json",
+      "protocol": "Official GeoTransformer 3DLoMatch metadata with PREDATOR indoor point clouds, 1781 pairs",
+      "mac": {
+        "pose_metric": 259.6595320962389,
+        "rotation_error_deg_mean": 119.97619275544149,
+        "translation_error_mean": 2.793666786815948,
+        "chamfer_distance_mean": 0.475110752264363,
+        "num_pairs": 1781,
+        "success_rate": 0.025266704098820886,
+        "runtime_sec_mean": 0.08798503450702108
+      },
+      "sc2_pcr": {
+        "pose_metric": 255.50030860769658,
+        "rotation_error_deg_mean": 118.51589338443515,
+        "translation_error_mean": 2.7396883044652287,
+        "chamfer_distance_mean": 0.3701380802175173,
+        "num_pairs": 1781,
+        "success_rate": 0.022459292532285232,
+        "runtime_sec_mean": 0.10341349100837341
+      },
+      "kiss_matcher": {
+        "pose_metric": 245.42790605182677,
+        "rotation_error_deg_mean": 109.37379345862213,
+        "translation_error_mean": 2.7210822518640927,
+        "chamfer_distance_mean": 1.1819110874218395,
+        "num_pairs": 1781,
+        "success_rate": 0.04604154969118473,
+        "runtime_sec_mean": 0.10440480089728113
+      }
+    }
+  },
+  "standard_dataset_protocols": {
+    "3dmatch": "Use official/PREDATOR/GeoTransformer metadata; do not introduce a custom split.",
+    "3dlomatch": "Use official low-overlap metadata from the 3DMatch benchmark family; do not introduce a custom split.",
+    "eth": "Use the four-scene ETH laser benchmark gt.log pairs as a generalization test.",
+    "kitti": "Use GeoTransformer-style odometry metadata if point clouds are staged; common split is sequences 00-05 train, 06-07 validation, 08-10 test."
+  },
+  "constraints": [
+    "No nvcc on the current server, so CUDA-extension methods remain dependency-gated.",
+    "Full learned convergence requires early-stop/plateau evidence or completed epoch budget plus final eval.",
+    "PREDATOR data download was switched to resumable multi-connection aria2c and should resume from the partial archive if interrupted.",
+    "The downloaded PREDATOR data package did not include 3DMatch.pkl or 3DLoMatch.pkl, so the auto-launcher now fetches the official GeoTransformer metadata instead of generating a custom split.",
+    "Overly complex methods or datasets are allowed to remain as empty records instead of blocking the current benchmark."
+  ],
+  "latest_monitoring": {
+    "mps_gaf_modelnet_source2_crop_converged_20260527": {
+      "status": "running_not_converged",
+      "latest_epoch": 93,
+      "latest_selection_metric": 1.6574983075261116,
+      "best_selection_metric": 1.653604120016098,
+      "best_validation": {
+        "rotation_error_deg_mean": 1.0896316766738892,
+        "translation_error_mean": 0.011279448866844177,
+        "chamfer_distance_mean": 0.04218617454171181,
+        "num_pairs": 80
+      },
+      "epochs_since_best": 6,
+      "note": "Not converged; do not run final eval or claim convergence until early stop/plateau evidence or completed budget."
+    },
+    "mps_gaf_modelnet_source2_crop_converged_eval_20260527": {
+      "status": "waiting_for_train_exit",
+      "artifact": "runs/mps_gaf_modelnet_source2_crop_converged_eval_20260527",
+      "watcher_pid_record": "runs/mps_gaf_modelnet_source2_crop_converged_eval_20260527/auto_eval.pid",
+      "status_log": "runs/mps_gaf_modelnet_source2_crop_converged_eval_20260527/auto_eval_status.jsonl",
+      "note": "Watcher is active and will run final eval only after the training process exits."
+    },
+    "predator_standard_3dmatch_mac_sc2_kiss": {
+      "status": "done",
+      "artifact": "runs/predator_standard_20260527/3dmatch_mac_sc2_pcr_kiss_matcher",
+      "methods": [
+        "mac",
+        "sc2_pcr",
+        "kiss_matcher"
+      ],
+      "metadata": "datasets/predator_official/data/indoor/metadata/3DMatch.pkl",
+      "note": "Full 1623-pair CPU evaluation completed and was synced into server_artifacts."
+    },
+    "predator_standard_3dlomatch_mac_sc2_kiss": {
+      "status": "done",
+      "artifact": "runs/predator_standard_20260527/3dlomatch_mac_sc2_pcr_kiss_matcher",
+      "methods": [
+        "mac",
+        "sc2_pcr",
+        "kiss_matcher"
+      ],
+      "metadata": "datasets/predator_official/data/indoor/metadata/3DLoMatch.pkl",
+      "note": "Full 1781-pair CPU evaluation completed and was synced into server_artifacts."
+    }
+  },
+  "deferred_or_empty_records": {
+    "cast": {
+      "status": "skipped_empty_record",
+      "result": {},
+      "reason": "Requires a heavier CUDA-extension/dependency stack than the current server provides; skipped per simplified benchmark scope."
+    },
+    "cofinet": {
+      "status": "skipped_empty_record",
+      "result": {},
+      "reason": "Requires separate official environment/checkpoint staging; skipped unless the environment is already available."
+    },
+    "regtr": {
+      "status": "skipped_empty_record",
+      "result": {},
+      "reason": "Requires separate official environment/checkpoint staging; skipped unless the environment is already available."
+    },
+    "pointdsc": {
+      "status": "skipped_empty_record",
+      "result": {},
+      "reason": "CUDA-extension dependency risk is high on a server without nvcc; skipped per simplified benchmark scope."
+    },
+    "buffer_x": {
+      "status": "skipped_empty_record",
+      "result": {},
+      "reason": "ICCV 2025 zero-shot method, but full evaluation requires CUDA extensions plus large official preprocessed data beyond the current disk budget."
+    },
+    "integer": {
+      "status": "skipped_empty_record",
+      "result": {},
+      "reason": "NeurIPS 2024 unsupervised outdoor method; official repository still requires separate cleaned environment/checkpoint staging and targets KITTI/nuScenes rather than the current ModelNet source-2/crop schema."
+    },
+    "official_mac_descriptor_pipeline": {
+      "status": "skipped_empty_record",
+      "result": {},
+      "reason": "Current completed row is MAC-FPFH in the project schema; official descriptor pipeline is not required for the current comparison."
+    },
+    "official_sc2_pcr_pipeline": {
+      "status": "skipped_empty_record",
+      "result": {},
+      "reason": "Current completed row is SC2-PCR-FPFH in the project schema; official reproduction is not required for the current comparison."
+    },
+    "kitti": {
+      "status": "skipped_empty_record",
+      "result": {},
+      "reason": "KITTI point clouds are not staged and disk budget is limited; skip until a dedicated data volume is available."
+    },
+    "eth_cpd_full_budget": {
+      "status": "skipped_empty_record",
+      "result": {},
+      "reason": "The capped ETH CPD attempt was already too slow, so the full-budget CPD run is skipped."
+    }
+  }
+}

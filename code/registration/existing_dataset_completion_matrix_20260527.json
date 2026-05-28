@@ -1,0 +1,204 @@
+{
+  "scope": {
+    "date": "2026-05-27",
+    "datasets": [
+      "modelnet40_source2_crop",
+      "3dmatch",
+      "3dlomatch",
+      "eth"
+    ],
+    "policy": "Only existing datasets and already-integrated methods are in scope. Complex, slow, dependency-heavy, or new-method cells are explicit null records."
+  },
+    "server_check": {
+        "gpu": "48 GB vGPU",
+        "data_disk_gb": 50,
+        "python": "3.12",
+        "torch": "2.8 CUDA 12.8",
+        "nvcc": false,
+        "server_registration_tests": "36 passed",
+        "local_registration_tests_latest": "41 passed"
+  },
+  "status_labels": {
+    "done": "Numeric result exists in the shared comparison schema or report.",
+    "partial": "Comparable RRE/RTE/pose exists, but at least one field such as Chamfer is unavailable.",
+    "null": "Intentionally empty under the skip policy.",
+    "smoke": "Runnable path/schema check, not a converged result."
+  },
+  "matrix": {
+    "MPS-GAF": {
+      "modelnet40_source2_crop": {
+        "status": "smoke",
+        "primary_result": "done full-set converged result remains the main ModelNet evidence",
+        "smoke_result": {
+          "pose_metric": 37.61936730146408,
+          "rotation_error_deg_mean": 23.29257583618164,
+          "translation_error_mean": 0.2865358293056488,
+          "chamfer_distance_mean": 0.026797741651535034,
+          "num_pairs": 80,
+          "note": "3-epoch short retrain, 20 batches with groups_per_batch=2; not a converged replacement.",
+          "artifact": "code/registration/server_artifacts/20260526_new_baselines/runs/mps_gaf_modelnet_eval20_retrain_eval/comparison_schema_summary.json"
+        }
+      },
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "RPMNet": {
+      "modelnet40_source2_crop": {
+        "status": "null",
+        "reason": "Eval20 checkpoint/external repo unavailable locally; full-set converged result remains available."
+      },
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "DCP-DGCNN": {
+      "modelnet40_source2_crop": {
+        "status": "null",
+        "reason": "Eval20 checkpoint/external repo unavailable locally; full-set converged result remains available."
+      },
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "PointNetLK": {
+      "modelnet40_source2_crop": {
+        "status": "null",
+        "reason": "Eval20 checkpoint/external repo unavailable locally; full-set converged result remains available."
+      },
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "PRNet-DGCNN": {
+      "modelnet40_source2_crop": {
+        "status": "null",
+        "reason": "Eval20 checkpoint/external repo unavailable locally; full-set converged result remains available."
+      },
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "IDAM-GNN": {
+      "modelnet40_source2_crop": {
+        "status": "null",
+        "reason": "Eval20 checkpoint/external repo unavailable locally; full-set converged result remains available."
+      },
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "OMNet": {
+      "modelnet40_source2_crop": {
+        "status": "null",
+        "reason": "Eval20 checkpoint/external repo unavailable locally; full-set converged result remains available."
+      },
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "GeoTransformer": {
+      "modelnet40_source2_crop": {
+        "status": "partial",
+        "reason": "Only official ModelNet protocol exists; source-2/crop adapter is out of scope."
+      },
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "RoITr": {
+      "modelnet40_source2_crop": {
+        "status": "null",
+        "reason": "Source-2/crop adapter is out of scope."
+      },
+      "3dmatch": {
+        "status": "partial",
+        "reason": "RRE/RTE/pose converted; Chamfer unavailable from official logs."
+      },
+      "3dlomatch": {
+        "status": "partial",
+        "reason": "RRE/RTE/pose converted; Chamfer unavailable from official logs."
+      },
+      "eth": {
+        "status": "null",
+        "reason": "Existing RoITr runtime/data are not available on the current server without extra extension/environment work."
+      }
+    },
+    "PointRegGPT GeoTransformer-16w": {
+      "modelnet40_source2_crop": {"status": "null", "reason": "Source-2/crop adapter is out of scope."},
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "PointRegGPT GeoTransformer-2w": {
+      "modelnet40_source2_crop": {"status": "null", "reason": "Source-2/crop adapter is out of scope."},
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "classical_core": {
+      "methods": [
+        "Identity",
+        "ICP point-to-point",
+        "ICP point-to-plane",
+        "Trimmed ICP",
+        "GICP",
+        "RANSAC-ICP",
+        "FPFH-FGR",
+        "FPFH-RANSAC"
+      ],
+      "modelnet40_source2_crop": {"status": "done"},
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "CPD rigid": {
+      "modelnet40_source2_crop": {"status": "done"},
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "null", "reason": "Full ETH run timed out under reduced budget."}
+    },
+    "TurboReg": {
+      "modelnet40_source2_crop": {"status": "done"},
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "TEASER++": {
+      "modelnet40_source2_crop": {"status": "done"},
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "done"}
+    },
+    "MAC-FPFH": {
+      "modelnet40_source2_crop": {"status": "done"},
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "null", "reason": "ETH data is not staged on the current server."}
+    },
+    "SC2-PCR-FPFH": {
+      "modelnet40_source2_crop": {"status": "done"},
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "null", "reason": "ETH data is not staged on the current server."}
+    },
+    "KISS-Matcher": {
+      "modelnet40_source2_crop": {"status": "done"},
+      "3dmatch": {"status": "done"},
+      "3dlomatch": {"status": "done"},
+      "eth": {"status": "null", "reason": "ETH data is not staged on the current server."}
+    },
+    "Super4PCS": {
+      "modelnet40_source2_crop": {"status": "done"},
+      "3dmatch": {"status": "null", "reason": "Binary not available on the current server."},
+      "3dlomatch": {"status": "null", "reason": "Binary not available on the current server."},
+      "eth": {"status": "null", "reason": "Binary not available on the current server."}
+    },
+    "Go-ICP": {
+      "modelnet40_source2_crop": {"status": "null", "reason": "Too slow for the current completion matrix."},
+      "3dmatch": {"status": "null", "reason": "Too slow for the current completion matrix."},
+      "3dlomatch": {"status": "null", "reason": "Too slow for the current completion matrix."},
+      "eth": {"status": "null", "reason": "Too slow for the current completion matrix."}
+    }
+  }
+}

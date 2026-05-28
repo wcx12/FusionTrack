@@ -1,0 +1,16 @@
+{
+  "3DLoMatch": {
+    "pairs": 1781,
+    "pose_metric": 49.26147327582876,
+    "rotation_error_deg_mean": 22.015917034999784,
+    "translation_error_mean": 0.5449111248165796
+  },
+  "3DMatch": {
+    "pairs": 1623,
+    "pose_metric": 12.850242866636004,
+    "rotation_error_deg_mean": 5.037629416481693,
+    "translation_error_mean": 0.15625226900308622
+  },
+  "metric": "pose_metric = rotation_error_deg_mean + 50 * translation_error_mean",
+  "source": "RoITr official 2500-correspondence RANSAC est_traj logs converted against official benchmark gt.log files"
+}

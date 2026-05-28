@@ -363,7 +363,7 @@ holdout 协议用于最终确认。
 当前 holdout 多种子输出：
 
 ```text
-/root/autodl-tmp/fusiontrack_holdout_multiseed_combined_20260522/
+remote_runs/fusiontrack_holdout_multiseed_combined_20260522/
 ```
 
 本地归档：
@@ -1022,8 +1022,8 @@ configs/final_experiment_settings.md
 
 ```bash
 python code/anomaly_detection/benchmark/runners/prepare_vt_tiny_mot_protocol.py \
-  --data-root /root/FusionTrack/data/VT-Tiny-MOT \
-  --output-root /root/autodl-tmp/fusiontrack_val_strict/protocol \
+  --data-root data/VT-Tiny-MOT \
+  --output-root remote_runs/fusiontrack_val_strict/protocol \
   --seed 42
 ```
 
@@ -1035,16 +1035,16 @@ python code/anomaly_detection/benchmark/runners/prepare_vt_tiny_mot_protocol.py 
 
 ```bash
 python code/anomaly_detection/benchmark/runners/run_benchmark_matrix.py \
-  --matrix /root/autodl-tmp/fusiontrack_val_strict/protocol/individual_val_matrix.json \
-  --result-root /root/autodl-tmp/fusiontrack_val_strict/results/individual
+  --matrix remote_runs/fusiontrack_val_strict/protocol/individual_val_matrix.json \
+  --result-root remote_runs/fusiontrack_val_strict/results/individual
 ```
 
 群体级示例：
 
 ```bash
 python code/anomaly_detection/benchmark/runners/run_benchmark_matrix.py \
-  --matrix /root/autodl-tmp/fusiontrack_val_strict/protocol/group_val_matrix.json \
-  --result-root /root/autodl-tmp/fusiontrack_val_strict/results/group
+  --matrix remote_runs/fusiontrack_val_strict/protocol/group_val_matrix.json \
+  --result-root remote_runs/fusiontrack_val_strict/results/group
 ```
 
 ### 9.3 运行分数网格搜索
@@ -1053,8 +1053,8 @@ python code/anomaly_detection/benchmark/runners/run_benchmark_matrix.py \
 
 ```bash
 python code/anomaly_detection/benchmark/runners/run_fusiontrack_score_grid.py \
-  --summary /root/autodl-tmp/fusiontrack_improved_methods_v2_20260522/results/individual/summary.csv \
-  --output-root /root/autodl-tmp/fusiontrack_improved_methods_v2_20260522/score_grid_fast
+  --summary remote_runs/fusiontrack_improved_methods_v2_20260522/results/individual/summary.csv \
+  --output-root remote_runs/fusiontrack_improved_methods_v2_20260522/score_grid_fast
 ```
 
 score-grid 只用于 validation 选择权重。
@@ -1065,9 +1065,9 @@ score-grid 只用于 validation 选择权重。
 
 ```bash
 python code/anomaly_detection/benchmark/runners/run_fusiontrack_holdout_multiseed.py \
-  --data-root /root/FusionTrack/data/VT-Tiny-MOT \
-  --output-root /root/autodl-tmp/fusiontrack_holdout_multiseed_20260522 \
-  --combined-output-root /root/autodl-tmp/fusiontrack_holdout_multiseed_combined_20260522 \
+  --data-root data/VT-Tiny-MOT \
+  --output-root remote_runs/fusiontrack_holdout_multiseed_20260522 \
+  --combined-output-root remote_runs/fusiontrack_holdout_multiseed_combined_20260522 \
   --seeds 42,43,44 \
   --train-source-split train \
   --eval-source-split test
@@ -1094,9 +1094,9 @@ TMUX_SESSION=fusiontrack_val \
 MODE=val \
 GPU_ID=0 \
 SEED=42 \
-DATA_ROOT=/root/FusionTrack/data/VT-Tiny-MOT \
-OUTPUT_ROOT=/root/autodl-tmp/fusiontrack_val_strict/protocol \
-RESULT_ROOT=/root/autodl-tmp/fusiontrack_val_strict/results \
+DATA_ROOT=data/VT-Tiny-MOT \
+OUTPUT_ROOT=remote_runs/fusiontrack_val_strict/protocol \
+RESULT_ROOT=remote_runs/fusiontrack_val_strict/results \
 bash code/anomaly_detection/benchmark/runners/run_server_gpu_experiments.sh
 ```
 
@@ -1119,7 +1119,7 @@ tmux attach -t fusiontrack_val
 结果路径：
 
 ```text
-/root/autodl-tmp/fusiontrack_improved_methods_v2_20260522/results
+remote_runs/fusiontrack_improved_methods_v2_20260522/results
 ```
 
 个体级：

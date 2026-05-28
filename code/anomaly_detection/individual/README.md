@@ -97,7 +97,7 @@ code/anomaly_detection/datasets/VT-Tiny-MOT/
 Windows PowerShell 示例：
 
 ```powershell
-cd D:\HuaweiMoveData\Users\Cory\Desktop\MTF-BA
+cd path/to/MTF-BA
 python -m venv .venv
 .venv\Scripts\activate
 python -m pip install --upgrade pip
